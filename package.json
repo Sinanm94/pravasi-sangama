@@ -1,0 +1,18 @@
+{
+  "name": "pravasi-sangama",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": ["packages/*", "backend", "frontend"],
+  "scripts": {
+    "build:shared": "npm run build -w @pravasi/shared",
+    "dev:shared": "npm run dev -w @pravasi/shared",
+    "dev:api": "npm run dev -w @pravasi/backend",
+    "dev:web": "npm run dev -w @pravasi/frontend",
+    "db:migrate": "npm run db:migrate -w @pravasi/backend",
+    "db:seed": "npm run db:seed -w @pravasi/backend",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

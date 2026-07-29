@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#062B59" />
+    <title>Offline · PRAVASI SANGAMA Gate</title>
+    <!-- Self-contained by necessity: this page renders when nothing loads. -->
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        background: #f9fafb;
+        color: #111827;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+          system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .card {
+        width: 100%;
+        max-width: 24rem;
+        padding: 2.5rem 2rem;
+        text-align: center;
+        background: #fff;
+        border-radius: 1.5rem;
+        box-shadow: 0 8px 30px rgb(0 0 0 / 0.04);
+        outline: 1px solid rgb(17 24 39 / 0.04);
+      }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 3.5rem;
+        height: 3.5rem;
+        margin-bottom: 1.5rem;
+        border-radius: 999px;
+        background: rgb(128 0 0 / 0.06);
+        color: #062B59;
+      }
+      h1 {
+        margin: 0;
+        font-size: 1.375rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+      }
+      p {
+        margin: 0.75rem 0 0;
+        font-size: 0.9375rem;
+        line-height: 1.55;
+        color: #6b7280;
+      }
+      .note {
+        margin-top: 1.5rem;
+        padding: 0.875rem 1rem;
+        border-left: 3px solid #d4af37;
+        border-radius: 0.75rem;
+        background: rgb(212 175 55 / 0.08);
+        font-size: 0.8125rem;
+        line-height: 1.5;
+        color: #4b5563;
+        text-align: left;
+      }
+      button {
+        margin-top: 1.5rem;
+        width: 100%;
+        padding: 0.875rem 1.5rem;
+        border: 0;
+        border-radius: 1rem;
+        background: #062B59;
+        color: #fff;
+        font-size: 0.875rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        cursor: pointer;
+        transition: transform 0.2s, background 0.2s;
+      }
+      button:active { transform: scale(0.98); }
+      button:hover { background: #031F43; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <span class="badge" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" stroke-width="2.25" stroke-linecap="round">
+          <path d="M1 1l22 22" />
+          <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+          <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+          <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+          <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+          <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+          <path d="M12 20h.01" />
+        </svg>
+      </span>
+
+      <h1>No connection</h1>
+      <p>This page has not been saved for offline use.</p>
+
+      <div class="note">
+        <strong>Scans already taken are safe.</strong> They are stored on this
+        device and will sync automatically once the network returns.
+      </div>
+
+      <button type="button" onclick="window.location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

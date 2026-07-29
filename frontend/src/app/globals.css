@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Official brand palette — CLAUDE.md §5.3.
+       Montserrat is loaded via next/font in app/layout.tsx, not @import: it is
+       self-hosted, so the gate PWA still renders correctly with no network. */
+    --brand-navy: #062b59;
+    --brand-navy-dark: #031f43;
+    --brand-gold: #d4af37;
+    --brand-gold-light: #f7e7b5;
+    --brand-grey: #e6e6e6;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Scanner: no accidental text selection or long-press callouts while
+     tapping through verdict overlays. */
+  .scanner-surface {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/**
+ * Tickets are printed and saved as PDF constantly (CLAUDE.md §6.2). Without
+ * these, browsers strip the navy ticket fill and print a white rectangle.
+ */
+@media print {
+  html,
+  body {
+    background: #fff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 12mm;
+  }
+}

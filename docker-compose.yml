@@ -1,0 +1,36 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pravasi-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: pravasi
+      POSTGRES_PASSWORD: pravasi
+      POSTGRES_DB: pravasi_sangama
+      # Deterministic collation — keeps ORDER BY identical to production.
+      POSTGRES_INITDB_ARGS: '--locale=C --encoding=UTF8'
+    ports:
+      - '5432:5432'
+    volumes:
+      - pravasi_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `npm run db:migrate` fails confusingly if it beats Postgres to ready.
+      test: ['CMD-SHELL', 'pg_isready -U pravasi -d pravasi_sangama']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  # Optional: browse the schema at http://localhost:8080
+  # Handy for eyeballing scan_logs during the gate tests.
+  adminer:
+    image: adminer:latest
+    container_name: pravasi-adminer
+    restart: unless-stopped
+    ports:
+      - '8080:8080'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pravasi_pgdata:
