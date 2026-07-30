@@ -24,9 +24,13 @@ export function AuthShell({ children }: { children?: React.ReactNode }) {
     <div className="flex min-h-dvh items-center justify-center bg-gray-50 px-4 py-10 font-sans antialiased">
       <div className="w-full max-w-sm">
         {/* Above the card, on the page background — not inside the navy
-            band, which already carries the KCF wordmark and would double up. */}
-        <div className="mb-6 flex justify-center">
-          <Logo className="h-16 w-16" />
+            band, which already carries the KCF wordmark and would double up.
+            Margin lives on the Logo itself (not this wrapper) so there is
+            only one mb-6 in play — stacking one on each would double the gap
+            above the card, since margin on a flex item still adds to the
+            wrapper's own auto height. */}
+        <div className="flex justify-center">
+          <Logo className="mb-6 h-24 w-24" />
         </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">

@@ -40,6 +40,9 @@ export const metadata: Metadata = {
     // Stops iOS turning ticket and mobile numbers into tap-to-call links.
     telephone: false,
   },
+  icons: {
+    icon: '/Pravasi-Sangama.svg',
+  },
 };
 
 export const viewport: Viewport = {
