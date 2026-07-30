@@ -170,9 +170,11 @@ function report() {
     console.log(`\n${line}`);
     console.log('  SEED COMPLETE — development credentials');
     console.log(line);
-    console.log('\n  SUPERUSERS — sign in with EMAIL (spec §4)');
+    // The login form's field is "Username"; the short form and the full
+    // seeded email both work (findSuperuserByUsername matches either).
+    console.log('\n  SUPERUSERS — sign in with USERNAME (or email)');
     for (const su of SUPERUSERS) {
-        console.log(`    ${su.email}  /  ${SUPERUSER_PASSWORD}`);
+        console.log(`    ${su.username}  (or ${su.email})  /  ${SUPERUSER_PASSWORD}`);
     }
     console.log(`\n  DIVISION   ${DIVISION.name} (${DIVISION.code})`);
     console.log('\n  UNITS — step 1 of agent login');

@@ -298,11 +298,11 @@ export async function superuserLogin(
   input: SuperuserLoginInput,
   ctx: RequestContext,
 ): Promise<LoginResult> {
-  const user = await repo.findSuperuserByEmail(input.email);
+  const user = await repo.findSuperuserByUsername(input.username);
 
   if (!user) {
     await verifyAgainstDummy(input.password);
-    throw unauthorized('Invalid email or password');
+    throw unauthorized('Invalid username or password');
   }
 
   if (!user.is_active) {
@@ -318,7 +318,7 @@ export async function superuserLogin(
       action: 'SUPERUSER_LOGIN_FAILED',
       ip: ctx.ip,
     });
-    throw unauthorized('Invalid email or password');
+    throw unauthorized('Invalid username or password');
   }
 
   const ttlMinutes = env.SUPERUSER_TOKEN_TTL_MINUTES;

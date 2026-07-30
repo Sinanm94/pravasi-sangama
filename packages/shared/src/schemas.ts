@@ -62,14 +62,16 @@ export type AgentLoginInput = z.infer<typeof AgentLoginSchema>;
 /* Auth — superuser                                                    */
 /* ------------------------------------------------------------------ */
 
-/** Spec §4: superusers are identified by email, and there are exactly three. */
+/**
+ * Spec §4: exactly three superusers. The UI's field is labelled "Username"
+ * and sends the key below — but the stored login identity can be either the
+ * short username (`admin1`) or the full seeded email
+ * (`admin1@pravasisangama.com`); `findSuperuserByUsername` matches on both.
+ * So this is NOT `.email()`-validated: a plain username must not be
+ * rejected here for not looking like an address.
+ */
 export const SuperuserLoginSchema = z.object({
-  email: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .email('Enter a valid email address')
-    .max(180),
+  username: z.string().trim().min(1, 'Enter your username').max(180),
   password: z.string().min(8).max(128),
 });
 

@@ -202,10 +202,10 @@ export async function agentLogin(input, pending, rawToken, ctx) {
 /* Superuser — single step, no unit scoping (§3.1)                     */
 /* =================================================================== */
 export async function superuserLogin(input, ctx) {
-    const user = await repo.findSuperuserByEmail(input.email);
+    const user = await repo.findSuperuserByUsername(input.username);
     if (!user) {
         await verifyAgainstDummy(input.password);
-        throw unauthorized('Invalid email or password');
+        throw unauthorized('Invalid username or password');
     }
     if (!user.is_active) {
         await verifyAgainstDummy(input.password);
@@ -219,7 +219,7 @@ export async function superuserLogin(input, ctx) {
             action: 'SUPERUSER_LOGIN_FAILED',
             ip: ctx.ip,
         });
-        throw unauthorized('Invalid email or password');
+        throw unauthorized('Invalid username or password');
     }
     const ttlMinutes = env.SUPERUSER_TOKEN_TTL_MINUTES;
     const expiresAt = minutesFromNow(ttlMinutes);

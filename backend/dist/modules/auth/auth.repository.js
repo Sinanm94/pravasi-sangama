@@ -30,14 +30,18 @@ export async function findAgentByMobileOrEmail(identifier) {
     return rows[0] ?? null;
 }
 /**
- * Spec §4 identifies superusers by email. `username` is still matched so the
- * three seeded accounts keep working if someone types the short form.
+ * The login form's field is `username`, but this matches EITHER the short
+ * username (`admin1`) or the full seeded email (`admin1@pravasisangama.com`)
+ * against whatever string comes in — spec §4 originally identified
+ * superusers by email, and this keeps that still working for anyone who
+ * types the full address out of habit, at zero extra cost (one indexed OR,
+ * both sides already backed by a unique index).
  */
-export async function findSuperuserByEmail(email) {
+export async function findSuperuserByUsername(usernameOrEmail) {
     const { rows } = await query(`SELECT id, username, password_hash, name, is_active
        FROM superusers
-      WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($1)
-      LIMIT 1`, [email]);
+      WHERE LOWER(username) = LOWER($1) OR LOWER(email) = LOWER($1)
+      LIMIT 1`, [usernameOrEmail]);
     return rows[0] ?? null;
 }
 export async function touchSuperuserLogin(id) {

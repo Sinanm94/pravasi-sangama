@@ -35,16 +35,23 @@ export declare const AgentLoginSchema: z.ZodObject<{
     password: string;
 }>;
 export type AgentLoginInput = z.infer<typeof AgentLoginSchema>;
-/** Spec §4: superusers are identified by email, and there are exactly three. */
+/**
+ * Spec §4: exactly three superusers. The UI's field is labelled "Username"
+ * and sends the key below — but the stored login identity can be either the
+ * short username (`admin1`) or the full seeded email
+ * (`admin1@pravasisangama.com`); `findSuperuserByUsername` matches on both.
+ * So this is NOT `.email()`-validated: a plain username must not be
+ * rejected here for not looking like an address.
+ */
 export declare const SuperuserLoginSchema: z.ZodObject<{
-    email: z.ZodString;
+    username: z.ZodString;
     password: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     password: string;
-    email: string;
+    username: string;
 }, {
     password: string;
-    email: string;
+    username: string;
 }>;
 export type SuperuserLoginInput = z.infer<typeof SuperuserLoginSchema>;
 export declare const AgentSignupSchema: z.ZodEffects<z.ZodObject<{
@@ -65,29 +72,29 @@ export declare const AgentSignupSchema: z.ZodEffects<z.ZodObject<{
     unit_code: string;
     mobile_number: string;
     password: string;
-    email: string;
     name: string;
+    email: string;
     confirm_password: string;
 }, {
     unit_code: string;
     mobile_number: string;
     password: string;
-    email: string;
     name: string;
+    email: string;
     confirm_password: string;
 }>, {
     unit_code: string;
     mobile_number: string;
     password: string;
-    email: string;
     name: string;
+    email: string;
     confirm_password: string;
 }, {
     unit_code: string;
     mobile_number: string;
     password: string;
-    email: string;
     name: string;
+    email: string;
     confirm_password: string;
 }>;
 export type AgentSignupInput = z.infer<typeof AgentSignupSchema>;
