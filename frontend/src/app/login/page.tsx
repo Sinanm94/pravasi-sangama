@@ -4,28 +4,56 @@ import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
-import { ArrowLeft, Building2, Loader2, ShieldCheck, User } from 'lucide-react';
-import type { SessionResponse } from '@pravasi/shared';
+import {
+  ArrowLeft,
+  Building2,
+  CheckCircle2,
+  Mail,
+  ScanLine,
+  ShieldCheck,
+  User,
+  UserPlus,
+} from 'lucide-react';
+import {
+  AGENT_PASSWORD_MIN_LENGTH,
+  type PublicUnit,
+  type SessionResponse,
+} from '@pravasi/shared';
 import { useAuthStore } from '@/store/useAuthStore';
 import { screenVariants, springSurface } from '@/lib/motion';
+import {
+  apiGet,
+  apiPost,
+  errorCode,
+  errorMessage,
+} from '@/lib/apiClient';
+import {
+  AuthHeader,
+  AuthOutcome,
+  AuthShell,
+  Field,
+  SelectField,
+  SubtleButton,
+  Submit,
+} from '@/components/ui/AuthShell';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
+type Tab = 'login' | 'signup' | 'forgot';
 
-/** Official palette (§5.3). Navy is the action colour; gold accents navy. */
-const NAVY = '#062B59';
-const GOLD = '#D4AF37';
-
-type Surface = 'agent' | 'superuser';
+const TABS: Array<{ id: Tab; label: string }> = [
+  { id: 'login', label: 'Agent Login' },
+  { id: 'signup', label: 'First-Time' },
+  { id: 'forgot', label: 'Forgot' },
+];
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<Shell />}>
+    <Suspense fallback={<AuthShell />}>
       <LoginFlow />
     </Suspense>
   );
 }
 
-/* ------------------------------------------------------------------ */
+/* ================================================================== */
 
 function LoginFlow() {
   const router = useRouter();
@@ -36,10 +64,9 @@ function LoginFlow() {
   const hydrate = useAuthStore((s) => s.hydrate);
   const login = useAuthStore((s) => s.login);
   const setUnitPending = useAuthStore((s) => s.setUnitPending);
-  const unitName = useAuthStore((s) => s.userData?.unitName);
 
-  const [surface, setSurface] = useState<Surface>('agent');
-  const [busy, setBusy] = useState(false);
+  const [tab, setTab] = useState<Tab>('login');
+  const [adminMode, setAdminMode] = useState(false);
 
   const next = params.get('next');
 
@@ -47,334 +74,591 @@ function LoginFlow() {
     if (status === 'idle') void hydrate();
   }, [status, hydrate]);
 
-  /* The two-step split is the whole point: a live unit session means the
-   * location is already authenticated and only the person is missing. Shift
-   * changes land here and re-run step 2 alone. */
+  /* A live unit session means the location is authenticated and only the
+   * person is missing — shift changes land here and re-run step 2 alone. */
   const step: 'unit' | 'agent' =
     role === 'UNIT_PENDING' || params.get('step') === 'agent' ? 'agent' : 'unit';
 
-  const post = async <T,>(path: string, body: unknown): Promise<T> => {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body),
+  // Mid-session, the only sensible action is finishing step 2.
+  useEffect(() => {
+    if (role === 'UNIT_PENDING') setTab('login');
+  }, [role]);
+
+  const showTabs = step === 'unit' && !adminMode;
+
+  return (
+    <AuthShell>
+      {adminMode ? (
+        <AdminForm
+          onDone={(session) => {
+            login(session);
+            router.replace(next ?? '/dashboard');
+          }}
+          onBack={() => setAdminMode(false)}
+        />
+      ) : (
+        <>
+          {showTabs && (
+            <div className="-mt-1 flex rounded-full bg-gray-100 p-1">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setTab(t.id)}
+                  className="relative flex-1 rounded-full px-2 py-2 text-[12px] font-medium transition-colors duration-200"
+                >
+                  {tab === t.id && (
+                    <motion.span
+                      layoutId="login-tab-pill"
+                      transition={springSurface}
+                      className="absolute inset-0 rounded-full bg-white shadow-sm"
+                    />
+                  )}
+                  <span
+                    className={`relative z-10 ${
+                      tab === t.id ? 'text-gray-900' : 'text-gray-500'
+                    }`}
+                  >
+                    {t.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${tab}-${step}`}
+              variants={screenVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              transition={springSurface}
+            >
+              {tab === 'login' && (
+                <AgentLoginForm
+                  step={step}
+                  onUnit={setUnitPending}
+                  onAgent={async (session) => {
+                    login(session);
+                    await hydrate();
+                    router.replace(next ?? '/ticketing');
+                  }}
+                  onChangeUnit={async () => {
+                    await apiPost('/auth/logout').catch(() => {});
+                    useAuthStore.getState().logout();
+                    router.replace('/login');
+                  }}
+                />
+              )}
+
+              {tab === 'signup' && <SignupForm onBack={() => setTab('login')} />}
+              {tab === 'forgot' && <ForgotForm onBack={() => setTab('login')} />}
+            </motion.div>
+          </AnimatePresence>
+
+          {showTabs && (
+            <div className="mt-6 space-y-2.5 border-t border-gray-100 pt-5">
+              <SubtleButton icon={ShieldCheck} onClick={() => setAdminMode(true)}>
+                Administrator sign in
+              </SubtleButton>
+              <SubtleButton
+                icon={ScanLine}
+                onClick={() => router.push('/scanner/login')}
+              >
+                Gate scanner sign in
+              </SubtleButton>
+            </div>
+          )}
+        </>
+      )}
+    </AuthShell>
+  );
+}
+
+/* ================================================================== */
+/* Tab 1 — Agent login (two-step, §3.2)                                */
+/* ================================================================== */
+
+function AgentLoginForm({
+  step,
+  onUnit,
+  onAgent,
+  onChangeUnit,
+}: {
+  step: 'unit' | 'agent';
+  onUnit: (s: SessionResponse) => void;
+  onAgent: (s: SessionResponse) => Promise<void>;
+  onChangeUnit: () => Promise<void>;
+}) {
+  const unitName = useAuthStore((s) => s.userData?.unitName);
+
+  const [unitCode, setUnitCode] = useState('');
+  const [pin, setPin] = useState('');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submitUnit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      const session = await apiPost<SessionResponse>('/auth/unit-login', {
+        unit_code: unitCode,
+        pin,
+      });
+      onUnit(session);
+      toast.success('Unit authenticated', { description: session.unit?.name });
+    } catch (err) {
+      toast.error('Unit sign in failed', { description: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await onAgent(
+        await apiPost<SessionResponse>('/auth/agent-login', {
+          mobile_number: identifier,
+          password,
+        }),
+      );
+    } catch (err) {
+      /* The approval states get their own words. "Sign in failed" would send
+       * an agent hunting for a typo that isn't there. */
+      const code = errorCode(err);
+
+      if (code === 'AGENT_PENDING_APPROVAL') {
+        toast.warning('Awaiting approval', {
+          description: 'An administrator must approve your account first.',
+          duration: 7000,
+        });
+      } else if (code === 'AGENT_REJECTED') {
+        toast.error('Registration declined', {
+          description: 'Contact the event administrator.',
+          duration: 7000,
+        });
+      } else {
+        const message = errorMessage(err);
+        toast.error(
+          message.includes('not assigned') ? 'Wrong unit' : 'Sign in failed',
+          { description: message },
+        );
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (step === 'unit') {
+    return (
+      <form onSubmit={submitUnit} className="mt-6 space-y-4">
+        <AuthHeader
+          icon={Building2}
+          title="Step 1 — Unit location"
+          subtitle="Authenticate the location before the person"
+        />
+        <Field
+          label="Unit Code"
+          value={unitCode}
+          onChange={setUnitCode}
+          placeholder="5BUILDING"
+          autoCapitalize="characters"
+          required
+        />
+        <Field
+          label="Unit PIN"
+          type="password"
+          inputMode="numeric"
+          value={pin}
+          onChange={setPin}
+          autoComplete="off"
+          required
+        />
+        <Submit busy={busy} busyLabel="Checking…">
+          Authenticate Unit
+        </Submit>
+      </form>
+    );
+  }
+
+  return (
+    <form onSubmit={submitAgent} className="mt-6 space-y-4">
+      <AuthHeader
+        icon={User}
+        title="Step 2 — Agent"
+        subtitle={
+          unitName ? `Unit authenticated · ${unitName}` : 'Unit authenticated'
+        }
+      />
+      <Field
+        label="Mobile Number"
+        hint="Your Agent ID"
+        value={identifier}
+        onChange={(v) => setIdentifier(v.replace(/\D/g, '').slice(0, 10))}
+        inputMode="numeric"
+        placeholder="8888999955"
+        autoComplete="username"
+        required
+      />
+      <Field
+        label="Password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+        required
+      />
+      <Submit busy={busy} busyLabel="Signing in…">
+        Sign In
+      </Submit>
+
+      {/* The unit session outlives agent logout by design (§3.2), so going
+          back means explicitly abandoning the location too. */}
+      <SubtleButton
+        icon={ArrowLeft}
+        onClick={() => void onChangeUnit()}
+        className="pt-1"
+      >
+        Change unit
+      </SubtleButton>
+    </form>
+  );
+}
+
+/* ================================================================== */
+/* Tab 2 — First-time setup                                            */
+/* ================================================================== */
+
+function SignupForm({ onBack }: { onBack: () => void }) {
+  const [name, setName] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [email, setEmail] = useState('');
+  const [unitCode, setUnitCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+
+  const [units, setUnits] = useState<PublicUnit[]>([]);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+
+  useEffect(() => {
+    void apiGet<{ units: PublicUnit[] }>('/auth/units')
+      .then((d) => setUnits(d.units))
+      // Non-fatal — SelectField degrades to a free-text code input.
+      .catch(() => setUnits([]));
+  }, []);
+
+  const clearError = (key: string) =>
+    setErrors((prev) => {
+      if (!prev[key]) return prev;
+      const nextErrors = { ...prev };
+      delete nextErrors[key];
+      return nextErrors;
     });
 
-    const data = (await res.json().catch(() => null)) as
-      | (T & { error?: { message?: string; code?: string } })
-      | null;
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
 
-    if (!res.ok) {
-      throw new Error(
-        data?.error?.message ?? 'Sign in failed. Check your details.',
-      );
-    }
+    const next: Record<string, string> = {};
+    if (name.trim().length < 2) next.name = 'Enter your full name.';
+    if (!/^[0-9]{10}$/.test(mobile))
+      next.mobile = 'Enter a valid 10-digit mobile number.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()))
+      next.email = 'Enter a valid email address.';
+    if (!unitCode.trim()) next.unitCode = 'Select your unit.';
+    if (password.length < AGENT_PASSWORD_MIN_LENGTH)
+      next.password = `At least ${AGENT_PASSWORD_MIN_LENGTH} characters.`;
+    if (confirm !== password) next.confirm = 'Passwords do not match.';
 
-    return data as T;
-  };
+    setErrors(next);
+    if (Object.keys(next).length) return;
 
-  const handleUnit = async (form: FormData) => {
     setBusy(true);
     try {
-      const session = await post<SessionResponse>('/auth/unit-login', {
-        unit_code: String(form.get('unit_code') ?? ''),
-        pin: String(form.get('pin') ?? ''),
+      await apiPost('/auth/signup', {
+        name: name.trim(),
+        mobile_number: mobile,
+        email: email.trim(),
+        unit_code: unitCode,
+        password,
+        confirm_password: confirm,
       });
-      setUnitPending(session);
-      toast.success('Unit authenticated', {
-        description: session.unit?.name ?? undefined,
-      });
+      // 202 Accepted — the account exists but cannot sign in yet.
+      setDone(true);
     } catch (err) {
-      toast.error('Unit sign in failed', {
-        description: (err as Error).message,
+      toast.error('Could not create the account', {
+        description: errorMessage(err),
       });
     } finally {
       setBusy(false);
     }
   };
 
-  const handleAgent = async (form: FormData) => {
-    setBusy(true);
-    try {
-      const session = await post<SessionResponse>('/auth/agent-login', {
-        mobile_number: String(form.get('mobile_number') ?? ''),
-        password: String(form.get('password') ?? ''),
-      });
-      login(session);
-      // Step 2's response carries the agent; the unit came from step 1.
-      // Re-reading /auth/session gets both in one verified answer rather
-      // than stitching two partial responses together on the client.
-      await hydrate();
-      router.replace(next ?? '/ticketing');
-    } catch (err) {
-      /* A wrong unit is a materially different problem from a wrong
-       * password — one is a typo, the other means this agent is standing at
-       * the wrong desk. The server distinguishes them (403 vs 401) and so
-       * should the message. */
-      const message = (err as Error).message;
-      toast.error(
-        message.includes('not assigned') ? 'Wrong unit' : 'Sign in failed',
-        { description: message },
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const handleSuperuser = async (form: FormData) => {
-    setBusy(true);
-    try {
-      const session = await post<SessionResponse>('/auth/superuser-login', {
-        username: String(form.get('username') ?? ''),
-        password: String(form.get('password') ?? ''),
-      });
-      login(session);
-      router.replace(next ?? '/dashboard');
-    } catch (err) {
-      toast.error('Sign in failed', { description: (err as Error).message });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Shell>
-      {/* Surface switch */}
-      <div className="-mt-1 flex rounded-full bg-gray-100 p-1">
-        {(['agent', 'superuser'] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setSurface(s)}
-            className="relative flex-1 rounded-full px-4 py-2 text-[13px] font-medium transition-colors duration-200"
-          >
-            {/* Shared layoutId — the white pill slides between tabs instead
-                of one fading out while the other fades in. */}
-            {surface === s && (
-              <motion.span
-                layoutId="surface-pill"
-                transition={springSurface}
-                className="absolute inset-0 rounded-full bg-white shadow-sm"
-              />
-            )}
-            <span
-              className={`relative z-10 ${
-                surface === s ? 'text-gray-900' : 'text-gray-500'
-              }`}
-            >
-              {s === 'agent' ? 'Agent' : 'Superuser'}
-            </span>
-          </button>
-        ))}
+  if (done) {
+    return (
+      <div className="mt-6">
+        <AuthOutcome
+          icon={CheckCircle2}
+          tone="success"
+          title="Account created"
+          body="Awaiting admin approval. You'll be able to sign in once an administrator activates your account."
+          actionLabel="Back to Sign In"
+          onAction={onBack}
+        />
       </div>
+    );
+  }
 
-      <AnimatePresence mode="wait">
-      <motion.div
-        key={`${surface}-${step}`}
-        variants={screenVariants}
-        initial="hidden"
-        animate="visible"
-        exit="exit"
-        transition={springSurface}
-      >
-      {surface === 'superuser' ? (
-        <form
-          action={handleSuperuser}
-          className="mt-6 space-y-4"
-          key="superuser"
-        >
-          <Header
-            icon={ShieldCheck}
-            title="Superuser sign in"
-            subtitle="Full system access"
-          />
-          <Field label="Username" name="username" autoComplete="username" />
-          <Field
-            label="Password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-          />
-          <Submit busy={busy}>Sign In</Submit>
-        </form>
-      ) : step === 'unit' ? (
-        <form action={handleUnit} className="mt-6 space-y-4" key="unit">
-          <Header
-            icon={Building2}
-            title="Step 1 — Unit location"
-            subtitle="Authenticate the location before the person"
-          />
-          <Field
-            label="Unit Code"
-            name="unit_code"
-            placeholder="5BUILDING"
-            autoCapitalize="characters"
-          />
-          <Field
-            label="Unit PIN"
-            name="pin"
-            type="password"
-            inputMode="numeric"
-            autoComplete="off"
-          />
-          <Submit busy={busy}>Authenticate Unit</Submit>
-        </form>
-      ) : (
-        <form action={handleAgent} className="mt-6 space-y-4" key="agent">
-          <Header
-            icon={User}
-            title="Step 2 — Agent"
-            subtitle={
-              unitName
-                ? `Unit authenticated · ${unitName}`
-                : 'Unit authenticated'
-            }
-          />
-          <Field
-            label="Mobile Number"
-            name="mobile_number"
-            inputMode="numeric"
-            placeholder="8888999955"
-            autoComplete="username"
-          />
-          <Field
-            label="Password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-          />
-          <Submit busy={busy}>Sign In</Submit>
-
-          {/* The unit session outlives agent logout by design (§3.2), so
-              going back means explicitly abandoning the location too. */}
-          <button
-            type="button"
-            onClick={async () => {
-              await fetch(`${API_BASE}/auth/logout`, {
-                method: 'POST',
-                credentials: 'include',
-              });
-              useAuthStore.getState().logout();
-              router.replace('/login');
-            }}
-            className="flex w-full items-center justify-center gap-1.5 pt-1 text-[12px] font-medium text-gray-400 transition-colors hover:text-gray-600"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.25} />
-            Change unit
-          </button>
-        </form>
-      )}
-      </motion.div>
-      </AnimatePresence>
-    </Shell>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Local primitives                                                    */
-/* ------------------------------------------------------------------ */
-
-function Shell({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gray-50 px-4 py-10 font-sans antialiased">
-      <div className="w-full max-w-sm">
-        <div className="overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
-          {/* Navy masthead.
-              Gold at 10px on white measures ~2:1 contrast — unreadable. On
-              navy it is the brand's own pairing and fully legible, so the
-              accent lives here rather than on the light surface. */}
-          <div
-            className="px-7 pb-6 pt-7 text-center"
-            style={{ backgroundColor: NAVY }}
-          >
-            <p
-              className="text-[10px] font-semibold uppercase tracking-[0.28em]"
-              style={{ color: GOLD }}
-            >
-              Karnataka Cultural Foundation
-            </p>
-            <h1 className="mt-2 text-[22px] font-extrabold uppercase leading-tight tracking-tight text-white">
-              Pravasi Sangama 2026
-            </h1>
-            <span
-              aria-hidden
-              className="mx-auto mt-4 block h-px w-14"
-              style={{ backgroundColor: GOLD }}
-            />
-          </div>
-
-          <div className="p-7">{children}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Header({
-  icon: Icon,
-  title,
-  subtitle,
-}: {
-  icon: typeof User;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <div className="flex items-start gap-3 pb-1">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#062B59]/[0.07]">
-        <Icon className="h-4 w-4 text-[#062B59]" strokeWidth={2.25} />
-      </span>
-      <div className="min-w-0">
-        <p className="text-[15px] font-semibold text-gray-900">{title}</p>
-        <p className="mt-0.5 text-[12px] text-gray-400">{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  name,
-  type = 'text',
-  ...rest
-}: {
-  label: string;
-  name: string;
-  type?: string;
-} & React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
-    <label className="block">
-      <span className="mb-2 block text-[13px] font-medium text-gray-700">
-        {label}
-        <span className="ml-0.5 text-[#062B59]">*</span>
-      </span>
-      <input
-        name={name}
-        type={type}
-        required
-        className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3.5 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#062B59]/40 focus:outline-none focus:ring-4 focus:ring-[#062B59]/10"
-        {...rest}
+    <form onSubmit={submit} noValidate className="mt-6 space-y-4">
+      <AuthHeader
+        icon={UserPlus}
+        title="First-time setup"
+        subtitle="Create your agent account"
       />
-    </label>
+
+      <Field
+        label="Agent Name"
+        value={name}
+        onChange={(v) => {
+          setName(v);
+          clearError('name');
+        }}
+        placeholder="Full name"
+        autoComplete="name"
+        error={errors.name}
+        required
+      />
+
+      <Field
+        label="Mobile Number"
+        hint="This is your Agent ID"
+        value={mobile}
+        onChange={(v) => {
+          setMobile(v.replace(/\D/g, '').slice(0, 10));
+          clearError('mobile');
+        }}
+        inputMode="numeric"
+        placeholder="8888999955"
+        error={errors.mobile}
+        required
+      />
+
+      <Field
+        label="Email Address"
+        hint="For password reset"
+        type="email"
+        inputMode="email"
+        value={email}
+        onChange={(v) => {
+          setEmail(v);
+          clearError('email');
+        }}
+        placeholder="name@example.com"
+        autoComplete="email"
+        error={errors.email}
+        required
+      />
+
+      {/* Units survive self-registration: every ticket carries unit_id and
+          division_id, and step 1 checks the agent against the authenticated
+          location. Unit codes are not secrets — the unit PIN is. */}
+      <SelectField
+        label="Unit"
+        hint="Ask your unit head"
+        value={unitCode}
+        onChange={(v) => {
+          setUnitCode(v);
+          clearError('unitCode');
+        }}
+        error={errors.unitCode}
+        placeholder="Select your unit…"
+        fallbackPlaceholder="5BUILDING"
+        options={units.map((u) => ({
+          value: u.unitCode,
+          label: `${u.divisionName} · ${u.sector ? `${u.sector} — ` : ''}${u.name}`,
+        }))}
+      />
+
+      <Field
+        label="New Password"
+        hint={`Min ${AGENT_PASSWORD_MIN_LENGTH} characters`}
+        type="password"
+        value={password}
+        onChange={(v) => {
+          setPassword(v);
+          clearError('password');
+        }}
+        autoComplete="new-password"
+        error={errors.password}
+        required
+      />
+
+      <Field
+        label="Confirm Password"
+        type="password"
+        value={confirm}
+        onChange={(v) => {
+          setConfirm(v);
+          clearError('confirm');
+        }}
+        autoComplete="new-password"
+        error={errors.confirm}
+        required
+      />
+
+      <Submit busy={busy} busyLabel="Creating…">
+        Create Account
+      </Submit>
+    </form>
   );
 }
 
-function Submit({
-  busy,
-  children,
-}: {
-  busy: boolean;
-  children: React.ReactNode;
-}) {
+/* ================================================================== */
+/* Tab 3 — Forgot password                                             */
+/* ================================================================== */
+
+function ForgotForm({ onBack }: { onBack: () => void }) {
+  const [email, setEmail] = useState('');
+  const [error, setError] = useState<string | undefined>();
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
+      setError('Enter a valid email address.');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await apiPost('/auth/forgot-password', { email: email.trim() });
+      setSent(true);
+    } catch (err) {
+      toast.error('Could not send the reset link', {
+        description: errorMessage(err),
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div className="mt-6">
+        {/* Deliberately does not confirm the address exists — the API does not
+            either, and the UI must not leak what the API protects. */}
+        <AuthOutcome
+          icon={Mail}
+          tone="info"
+          title="Check your email"
+          body="If that address has an approved account, a reset link is on its way. It expires in 60 minutes."
+          actionLabel="Back to Sign In"
+          onAction={onBack}
+        />
+      </div>
+    );
+  }
+
   return (
-    <button
-      type="submit"
-      disabled={busy}
-      className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#062B59] px-6 py-4 text-[14px] font-semibold uppercase tracking-[0.06em] text-white transition-all duration-200 hover:bg-[#031F43] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
-    >
-      {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-      {busy ? 'Signing in…' : children}
-    </button>
+    <form onSubmit={submit} noValidate className="mt-6 space-y-4">
+      <AuthHeader
+        icon={Mail}
+        title="Forgot password"
+        subtitle="We'll email you a reset link"
+      />
+      <Field
+        label="Email Address"
+        type="email"
+        inputMode="email"
+        value={email}
+        onChange={(v) => {
+          setEmail(v);
+          setError(undefined);
+        }}
+        placeholder="name@example.com"
+        autoComplete="email"
+        error={error}
+        required
+      />
+      <Submit busy={busy} busyLabel="Sending…">
+        Send Reset Link
+      </Submit>
+    </form>
+  );
+}
+
+/* ================================================================== */
+/* Administrator (spec §4 — three seeded accounts, no signup)          */
+/* ================================================================== */
+
+function AdminForm({
+  onDone,
+  onBack,
+}: {
+  onDone: (s: SessionResponse) => void;
+  onBack: () => void;
+}) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setBusy(true);
+    try {
+      onDone(
+        await apiPost<SessionResponse>('/auth/superuser-login', {
+          email: email.trim(),
+          password,
+        }),
+      );
+    } catch (err) {
+      toast.error('Sign in failed', { description: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <AuthHeader
+        icon={ShieldCheck}
+        title="Administrator sign in"
+        subtitle="Full system access"
+      />
+      <Field
+        label="Email Address"
+        type="email"
+        inputMode="email"
+        value={email}
+        onChange={setEmail}
+        placeholder="admin1@pravasisangama.com"
+        autoComplete="username"
+        required
+      />
+      <Field
+        label="Password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+        required
+      />
+      <Submit busy={busy} busyLabel="Signing in…">
+        Sign In
+      </Submit>
+
+      <SubtleButton icon={ArrowLeft} onClick={onBack} className="pt-1">
+        Back to agent sign in
+      </SubtleButton>
+    </form>
   );
 }

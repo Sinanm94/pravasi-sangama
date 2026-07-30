@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
 
 const BCRYPT_ROUNDS = 12;
@@ -32,3 +32,11 @@ export function hashToken(token: string): string {
 }
 
 export const newId = randomUUID;
+
+/**
+ * Password-reset token — 256 bits, hex. It travels in an emailed link, and
+ * only its SHA-256 is stored, so it cannot be recovered from a database leak.
+ */
+export function newResetToken(): string {
+  return randomBytes(32).toString('hex');
+}

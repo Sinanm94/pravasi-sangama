@@ -28,6 +28,10 @@ export interface SessionUser {
   divisionId?: string;
   divisionName?: string;
   divisionCode?: string;
+  /** SCANNER sessions only — a gate is the identity here, not a person. */
+  gateId?: string;
+  gateCode?: string;
+  gateName?: string;
 }
 
 type HydrationStatus = 'idle' | 'loading' | 'ready';
@@ -67,6 +71,9 @@ function toUser(session: SessionResponse): SessionUser {
     divisionId: session.division?.id,
     divisionName: session.division?.name,
     divisionCode: session.division?.code,
+    gateId: session.gate?.id,
+    gateCode: session.gate?.gateCode,
+    gateName: session.gate?.name,
   };
 }
 

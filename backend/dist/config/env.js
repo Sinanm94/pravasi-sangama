@@ -19,7 +19,15 @@ const schema = z.object({
     UNIT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(720),
     AGENT_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(480),
     SUPERUSER_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(120),
+    /**
+     * Gate scanner sessions. Long enough to cover one event day without a
+     * volunteer re-entering the PIN, short enough that a shared PIN cannot mint
+     * a token that outlives the event.
+     */
+    GATE_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(900),
     CORS_ORIGIN: z.string().default('http://localhost:3000'),
+    /** Public web origin. Used to build password-reset links in emails. */
+    APP_URL: z.string().url().default('http://localhost:3000'),
     /**
      * Timezone the event runs in. Drives "today" in analytics — a container on
      * UTC would roll the daily counter over at 3am local, mid-event.

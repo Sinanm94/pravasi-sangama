@@ -142,9 +142,40 @@ export function qrCodePlanFor(
 /* Roles                                                               */
 /* ------------------------------------------------------------------ */
 
-export const AUTH_ROLES = ['UNIT_PENDING', 'AGENT', 'SUPERUSER'] as const;
-/** UNIT_PENDING = step 1 complete, step 2 outstanding. Cannot issue tickets. */
+export const AUTH_ROLES = [
+  'UNIT_PENDING',
+  'AGENT',
+  'SCANNER',
+  'SUPERUSER',
+] as const;
+/**
+ * UNIT_PENDING — step 1 complete, step 2 outstanding. Cannot issue tickets.
+ * SCANNER      — a gate, not a person. Verifies codes; cannot issue anything.
+ */
 export type AuthRole = (typeof AUTH_ROLES)[number];
+
+/** Persisted `user_role` enum. UNIT_PENDING is a session state, not a role. */
+export const USER_ROLES = ['SUPERUSER', 'AGENT', 'SCANNER'] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const APPROVAL_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;
+export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
+
+/**
+ * The only addresses permitted to hold a superuser account (spec §4).
+ * Enforced server-side; there is no superuser signup route, by design.
+ */
+export const SUPERUSER_EMAILS = [
+  'admin1@pravasisangama.com',
+  'admin2@pravasisangama.com',
+  'admin3@pravasisangama.com',
+] as const;
+
+/** Self-registered agent password floor (spec §3). */
+export const AGENT_PASSWORD_MIN_LENGTH = 6;
+/** Gate PINs are short by design — volunteers key them in all evening. */
+export const GATE_PIN_MIN_LENGTH = 4;
+export const GATE_PIN_MAX_LENGTH = 6;
 
 export const TICKET_STATUSES = ['ACTIVE', 'REVOKED'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];

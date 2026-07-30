@@ -1,10 +1,10 @@
 import type {
-  AgentClaims,
   LiveScanEvent,
   ScanAlertType,
   ScanReason,
   VerifyScanResponse,
 } from '@pravasi/shared';
+import type { ScanActor } from '../../middleware/auth.js';
 import { query } from '../../db/index.js';
 import { broadcastScanAlert } from '../../socket.js';
 
@@ -90,24 +90,32 @@ function alertTypeFor(
 
 export async function publishScan(params: {
   outcome: VerifyScanResponse;
-  scope: AgentClaims;
+  actor: ScanActor;
   gateLabel: string | null;
   source: 'LIVE' | 'SYNC';
   /** Client capture time for replays; falls back to the commit time. */
   capturedAt: Date | null;
 }): Promise<void> {
-  const { outcome, scope, source } = params;
+  const { outcome, actor, source } = params;
 
   // A replayed response is a retry of an event already broadcast. Emitting
   // again would duplicate rows in the dashboard feed.
   if (outcome.replay) return;
 
-  const names = await resolveNames(scope.agentId, scope.unitId);
+  /* A gate has no person behind it — the shared PIN is the trade (spec §2).
+   * The feed shows the gate name where an agent name would go, which is what
+   * an operator actually needs to read at a glance. */
+  const names =
+    actor.kind === 'AGENT'
+      ? await resolveNames(actor.agentId, actor.unitId)
+      : { agentName: actor.gateName, unitName: null, unitSector: null };
+
+  const actorKey = actor.kind === 'AGENT' ? actor.agentId : actor.gateId;
 
   const event: LiveScanEvent = {
     // scan_logs.id is not returned by the scan path; the dashboard only needs
     // a stable React key, and this is unique per emitted event.
-    id: `${scope.agentId}:${params.capturedAt?.getTime() ?? Date.now()}:${
+    id: `${actorKey}:${params.capturedAt?.getTime() ?? Date.now()}:${
       outcome.guestIndex ?? 'x'
     }`,
     scannedAt: (params.capturedAt ?? new Date()).toISOString(),
@@ -124,7 +132,8 @@ export async function publishScan(params: {
     agentName: names.agentName,
     unitName: names.unitName,
     unitSector: names.unitSector,
-    gateLabel: params.gateLabel,
+    gateLabel:
+      params.gateLabel ?? (actor.kind === 'GATE' ? actor.gateName : null),
     ticketNumber: outcome.ticket?.ticketNumber ?? null,
     ticketType: outcome.ticket?.ticketType ?? null,
     alertType: alertTypeFor(outcome.reason, source),

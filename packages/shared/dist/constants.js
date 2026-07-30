@@ -112,7 +112,29 @@ export function qrCodePlanFor(type) {
 /* ------------------------------------------------------------------ */
 /* Roles                                                               */
 /* ------------------------------------------------------------------ */
-export const AUTH_ROLES = ['UNIT_PENDING', 'AGENT', 'SUPERUSER'];
+export const AUTH_ROLES = [
+    'UNIT_PENDING',
+    'AGENT',
+    'SCANNER',
+    'SUPERUSER',
+];
+/** Persisted `user_role` enum. UNIT_PENDING is a session state, not a role. */
+export const USER_ROLES = ['SUPERUSER', 'AGENT', 'SCANNER'];
+export const APPROVAL_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
+/**
+ * The only addresses permitted to hold a superuser account (spec §4).
+ * Enforced server-side; there is no superuser signup route, by design.
+ */
+export const SUPERUSER_EMAILS = [
+    'admin1@pravasisangama.com',
+    'admin2@pravasisangama.com',
+    'admin3@pravasisangama.com',
+];
+/** Self-registered agent password floor (spec §3). */
+export const AGENT_PASSWORD_MIN_LENGTH = 6;
+/** Gate PINs are short by design — volunteers key them in all evening. */
+export const GATE_PIN_MIN_LENGTH = 4;
+export const GATE_PIN_MAX_LENGTH = 6;
 export const TICKET_STATUSES = ['ACTIVE', 'REVOKED'];
 /* ------------------------------------------------------------------ */
 /* Numbering                                                           */

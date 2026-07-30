@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { MOBILE_NUMBER_REGEX, TICKET_TYPES } from './constants.js';
+import {
+  AGENT_PASSWORD_MIN_LENGTH,
+  GATE_PIN_MAX_LENGTH,
+  GATE_PIN_MIN_LENGTH,
+  MOBILE_NUMBER_REGEX,
+  TICKET_TYPES,
+} from './constants.js';
 
 /**
  * Wire contracts. Field names are snake_case to match the Postgres columns —
@@ -56,12 +62,178 @@ export type AgentLoginInput = z.infer<typeof AgentLoginSchema>;
 /* Auth — superuser                                                    */
 /* ------------------------------------------------------------------ */
 
+/** Spec §4: superusers are identified by email, and there are exactly three. */
 export const SuperuserLoginSchema = z.object({
-  username: z.string().trim().min(1).max(64),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .email('Enter a valid email address')
+    .max(180),
   password: z.string().min(8).max(128),
 });
 
 export type SuperuserLoginInput = z.infer<typeof SuperuserLoginSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Agent self-registration (spec §3)                                   */
+/* ------------------------------------------------------------------ */
+
+export const AgentSignupSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter your full name').max(120),
+
+    /** Agent ID *is* the mobile number. */
+    mobile_number: z
+      .string()
+      .trim()
+      .regex(MOBILE_NUMBER_REGEX, 'Enter a valid 10-digit mobile number'),
+
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email('Enter a valid email address')
+      .max(180),
+
+    /**
+     * Units survive self-registration, so a signup must name one: every
+     * ticket carries `unit_id` and `division_id` (§2), and step 1 of login
+     * compares the agent's unit against the authenticated location. The unit
+     * *code* is not a secret — the unit PIN is.
+     */
+    unit_code: z
+      .string()
+      .trim()
+      .min(1, 'Unit code is required')
+      .max(32)
+      .transform((v) => v.toUpperCase()),
+
+    password: z
+      .string()
+      .min(
+        AGENT_PASSWORD_MIN_LENGTH,
+        `Password must be at least ${AGENT_PASSWORD_MIN_LENGTH} characters`,
+      )
+      .max(128),
+
+    confirm_password: z.string(),
+  })
+  .strict()
+  .refine((data) => data.password === data.confirm_password, {
+    message: 'Passwords do not match',
+    path: ['confirm_password'],
+  });
+
+export type AgentSignupInput = z.infer<typeof AgentSignupSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Password reset (spec §3)                                            */
+/* ------------------------------------------------------------------ */
+
+export const ForgotPasswordSchema = z
+  .object({
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email('Enter a valid email address')
+      .max(180),
+  })
+  .strict();
+
+export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
+
+export const ResetPasswordSchema = z
+  .object({
+    token: z.string().trim().min(16).max(256),
+    password: z
+      .string()
+      .min(
+        AGENT_PASSWORD_MIN_LENGTH,
+        `Password must be at least ${AGENT_PASSWORD_MIN_LENGTH} characters`,
+      )
+      .max(128),
+    confirm_password: z.string(),
+  })
+  .strict()
+  .refine((data) => data.password === data.confirm_password, {
+    message: 'Passwords do not match',
+    path: ['confirm_password'],
+  });
+
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Gate scanner login (spec §2, Option A)                              */
+/* ------------------------------------------------------------------ */
+
+const gatePin = z
+  .string()
+  .trim()
+  .regex(
+    new RegExp(`^[0-9]{${GATE_PIN_MIN_LENGTH},${GATE_PIN_MAX_LENGTH}}$`),
+    `PIN must be ${GATE_PIN_MIN_LENGTH}–${GATE_PIN_MAX_LENGTH} digits`,
+  );
+
+export const GateLoginSchema = z
+  .object({
+    gate_code: z
+      .string()
+      .trim()
+      .min(1, 'Select a gate')
+      .max(32)
+      .transform((v) => v.toUpperCase()),
+    pin: gatePin,
+  })
+  .strict();
+
+export type GateLoginInput = z.infer<typeof GateLoginSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Admin — gate management and agent approval                          */
+/* ------------------------------------------------------------------ */
+
+export const CreateGateSchema = z
+  .object({
+    gate_code: z
+      .string()
+      .trim()
+      .min(1)
+      .max(32)
+      .transform((v) => v.toUpperCase()),
+    name: z.string().trim().min(1).max(100),
+    division_code: z
+      .string()
+      .trim()
+      .max(32)
+      .transform((v) => v.toUpperCase())
+      .optional(),
+    pin: gatePin,
+    /** ISO date. Set it for a PIN that must stop working after event day. */
+    pin_valid_on: z.string().date().optional(),
+  })
+  .strict();
+
+export type CreateGateInput = z.infer<typeof CreateGateSchema>;
+
+export const RotateGatePinSchema = z
+  .object({
+    pin: gatePin,
+    pin_valid_on: z.string().date().optional(),
+  })
+  .strict();
+
+export type RotateGatePinInput = z.infer<typeof RotateGatePinSchema>;
+
+export const AgentDecisionSchema = z
+  .object({
+    decision: z.enum(['APPROVED', 'REJECTED']),
+    reason: z.string().trim().max(300).optional(),
+  })
+  .strict();
+
+export type AgentDecisionInput = z.infer<typeof AgentDecisionSchema>;
 
 /* ------------------------------------------------------------------ */
 /* Ticket issuance                                                     */

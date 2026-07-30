@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import {
   Bar,
   BarChart,
@@ -18,6 +19,7 @@ import {
   RadioTower,
   ScanLine,
   Ticket,
+  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -181,6 +183,16 @@ export default function SuperuserDashboard({
                 Reconnecting
               </span>
             )}
+            {/* This screen is a wallboard, not a console — it deliberately has
+                no AdminShell nav, so admin sections need a way in from here. */}
+            <Link
+              href="/admin/approvals"
+              className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
+            >
+              <UserCheck className="h-3.5 w-3.5" strokeWidth={2.25} />
+              Administration
+            </Link>
+
             {/* The socket carries the feed, so its state is what "Live"
                 actually means — not the REST poll. */}
             <LivePulse stale={stale || !connected} />

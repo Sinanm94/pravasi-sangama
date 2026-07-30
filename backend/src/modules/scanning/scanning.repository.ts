@@ -65,13 +65,14 @@ export interface ExistingScanRow {
 export async function admitGuestCode(
   client: PoolClient,
   qrHash: string,
-  agentId: string,
+  actor: { agentId: string | null; gateId: string | null },
 ): Promise<AdmittedRow | null> {
   const { rows } = await client.query<AdmittedRow>(
     `UPDATE qr_codes AS q
-        SET status     = 'SCANNED',
-            scanned_at = NOW(),
-            scanned_by = $2
+        SET status          = 'SCANNED',
+            scanned_at      = NOW(),
+            scanned_by      = $2,
+            scanned_by_gate = $3
        FROM tickets AS t
       WHERE q.qr_hash    = $1
         AND q.status     = 'ISSUED'
@@ -79,7 +80,7 @@ export async function admitGuestCode(
         AND t.id         = q.ticket_id
         AND t.status     = 'ACTIVE'
     RETURNING q.id, q.ticket_id, q.code_kind, q.guest_index`,
-    [qrHash, agentId],
+    [qrHash, actor.agentId, actor.gateId],
   );
 
   return rows[0] ?? null;
@@ -185,8 +186,10 @@ export async function insertScanLog(
     ticketId: string | null;
     scannedHash: string;
     result: ScanResult;
-    scannedBy: string;
-    unitId: string;
+    /** Exactly one of these is set — a person, or a gate. */
+    scannedBy: string | null;
+    gateId: string | null;
+    unitId: string | null;
     gateLabel: string | null;
     ip: string | null;
     /**
@@ -200,8 +203,8 @@ export async function insertScanLog(
   const { rowCount } = await client.query(
     `INSERT INTO scan_logs
        (client_scan_id, qr_code_id, ticket_id, scanned_hash,
-        result, scanned_by, unit_id, gate_label, ip_address, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, COALESCE($10::TIMESTAMPTZ, NOW()))
+        result, scanned_by, gate_id, unit_id, gate_label, ip_address, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11::TIMESTAMPTZ, NOW()))
      ON CONFLICT (client_scan_id) DO NOTHING`,
     [
       params.clientScanId,
@@ -210,6 +213,7 @@ export async function insertScanLog(
       params.scannedHash,
       params.result,
       params.scannedBy,
+      params.gateId,
       params.unitId,
       params.gateLabel,
       params.ip,

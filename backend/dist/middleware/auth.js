@@ -32,6 +32,23 @@ export const requireSuperuser = (req, _res, next) => {
     next();
 };
 /**
+ * Gate scanning is open to a bound AGENT or a SCANNER gate session.
+ *
+ * Deliberately NOT extended to SUPERUSER: an admin has no business consuming
+ * a guest code, and every admission must trace to a person or a physical
+ * gate. Issuance stays `requireAgent` — a scanner can admit, never issue.
+ */
+export const requireScanAccess = (req, _res, next) => {
+    if (!req.auth)
+        return next(unauthorized());
+    if (req.auth.role === 'UNIT_PENDING')
+        return next(agentNotBound());
+    if (req.auth.role !== 'AGENT' && req.auth.role !== 'SCANNER') {
+        return next(forbidden('Gate access required'));
+    }
+    next();
+};
+/**
  * Authorization is always evaluated from the token's own unitId, never from
  * a client-supplied one. Use this to read the scope on any write path.
  */
@@ -40,5 +57,26 @@ export function agentScope(req) {
         throw unauthorized();
     }
     return req.auth;
+}
+export function scanActor(req) {
+    if (!req.auth)
+        throw unauthorized();
+    if (req.auth.role === 'AGENT') {
+        return {
+            kind: 'AGENT',
+            agentId: req.auth.agentId,
+            unitId: req.auth.unitId,
+            divisionId: req.auth.divisionId,
+        };
+    }
+    if (req.auth.role === 'SCANNER') {
+        return {
+            kind: 'GATE',
+            gateId: req.auth.gateId,
+            gateCode: req.auth.gateCode,
+            gateName: req.auth.gateName,
+        };
+    }
+    throw forbidden('Gate access required');
 }
 //# sourceMappingURL=auth.js.map

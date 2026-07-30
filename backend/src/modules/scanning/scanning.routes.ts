@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { requireAgent } from '../../middleware/auth.js';
+import { requireScanAccess } from '../../middleware/auth.js';
 import * as controller from './scanning.controller.js';
 
 /**
@@ -24,7 +24,7 @@ const scanLimiter = rateLimit({
 
 export const scanRoutes: Router = Router();
 
-scanRoutes.post('/verify', requireAgent, scanLimiter, controller.verifyScan);
+scanRoutes.post('/verify', requireScanAccess, scanLimiter, controller.verifyScan);
 
 /**
  * Batch drain. A device returning from a long outage sends up to 200 scans
@@ -37,4 +37,4 @@ const syncLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-scanRoutes.post('/bulk-sync', requireAgent, syncLimiter, controller.bulkSync);
+scanRoutes.post('/bulk-sync', requireScanAccess, syncLimiter, controller.bulkSync);

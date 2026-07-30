@@ -1,6 +1,10 @@
 import type { Request, RequestHandler, Response } from 'express';
 import {
   AgentLoginSchema,
+  AgentSignupSchema,
+  ForgotPasswordSchema,
+  GateLoginSchema,
+  ResetPasswordSchema,
   SESSION_COOKIE_NAME,
   SuperuserLoginSchema,
   UnitLoginSchema,
@@ -8,6 +12,7 @@ import {
 } from '@pravasi/shared';
 import { clearSessionCookie, setSessionCookie, verifySession } from '../../lib/jwt.js';
 import { unauthorized } from '../../lib/errors.js';
+import { sendPasswordResetEmail } from './auth.email.js';
 import * as service from './auth.service.js';
 
 const contextOf = (req: Request) => ({
@@ -81,6 +86,77 @@ export const superuserLogin = handle(async (req, res) => {
 
   setSessionCookie(res, result.token, result.ttlMinutes);
   res.status(200).json(result.session);
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /api/auth/signup — agent first-time setup (spec §3)            */
+/* ------------------------------------------------------------------ */
+
+export const agentSignup = handle(async (req, res) => {
+  const input = AgentSignupSchema.parse(req.body);
+  const result = await service.agentSignup(input, contextOf(req));
+
+  // 202, not 201: the account exists but is not yet usable, and no cookie
+  // is set. Approval is a separate, human step.
+  res.status(202).json(result);
+});
+
+/** Public unit picker for the signup form. Codes are not secrets; PINs are. */
+export const publicUnits = handle(async (_req, res) => {
+  res.status(200).json({ units: await service.listUnitsForSignup() });
+});
+
+/* ------------------------------------------------------------------ */
+/* Password reset (spec §3)                                            */
+/* ------------------------------------------------------------------ */
+
+export const forgotPassword = handle(async (req, res) => {
+  const input = ForgotPasswordSchema.parse(req.body);
+  const result = await service.requestPasswordReset(input, contextOf(req));
+
+  if (result.token && result.agentEmail) {
+    try {
+      await sendPasswordResetEmail({
+        to: result.agentEmail,
+        name: result.agentName ?? 'there',
+        token: result.token,
+      });
+    } catch (err) {
+      // A delivery failure must not change the response shape — see below.
+      console.error('[auth] reset email failed to send', err);
+    }
+  }
+
+  /* Always 200, always the same body. Telling the caller whether an address
+   * exists turns this endpoint into a membership oracle for every email an
+   * attacker cares to try. */
+  res.status(200).json({
+    message:
+      'If that address has an approved account, a reset link is on its way.',
+  });
+});
+
+export const resetPassword = handle(async (req, res) => {
+  const input = ResetPasswordSchema.parse(req.body);
+  await service.resetPassword(input, contextOf(req));
+  res.status(200).json({ message: 'Password updated. You can sign in now.' });
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /api/auth/gate-login — scanner (spec §2, Option A)             */
+/* ------------------------------------------------------------------ */
+
+export const gateLogin = handle(async (req, res) => {
+  const input = GateLoginSchema.parse(req.body);
+  const result = await service.gateLogin(input, contextOf(req));
+
+  setSessionCookie(res, result.token, result.ttlMinutes);
+  res.status(200).json(result.session);
+});
+
+/** Public gate picker for the scanner login screen. */
+export const publicGates = handle(async (_req, res) => {
+  res.status(200).json({ gates: await service.listGatesForLogin() });
 });
 
 /* ------------------------------------------------------------------ */

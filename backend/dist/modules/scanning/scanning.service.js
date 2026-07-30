@@ -12,6 +12,12 @@ const MESSAGES = {
     TICKET_REVOKED: 'This ticket has been revoked',
     UNKNOWN_CODE: 'Unrecognised code',
 };
+/* A scan is attributed to a person or to a gate, never both. These readers
+ * keep that branch in one place instead of at every call site. */
+const AGENT_ID = (a) => (a.kind === 'AGENT' ? a.agentId : null);
+const UNIT_ID = (a) => (a.kind === 'AGENT' ? a.unitId : null);
+const GATE_ID = (a) => (a.kind === 'GATE' ? a.gateId : null);
+const GATE_NAME = (a) => (a.kind === 'GATE' ? a.gateName : null);
 function summaryOf(ticketId, row) {
     return {
         ticketId,
@@ -35,14 +41,20 @@ async function resolveScan(client, args) {
         ticketId,
         scannedHash: qrHash,
         result: SCAN_REASON_TO_RESULT[reason],
-        scannedBy: args.scope.agentId,
-        unitId: args.scope.unitId,
-        gateLabel: args.gateLabel,
+        scannedBy: AGENT_ID(args.actor),
+        gateId: GATE_ID(args.actor),
+        unitId: UNIT_ID(args.actor),
+        // A gate session already knows where it stands; the client need not
+        // pass gate_label, and if it does, the explicit value wins.
+        gateLabel: args.gateLabel ?? GATE_NAME(args.actor),
         ip: args.ip,
         capturedAt: args.capturedAt,
     });
     /* --- The lock ---------------------------------------------------- */
-    const admitted = await repo.admitGuestCode(client, qrHash, args.scope.agentId);
+    const admitted = await repo.admitGuestCode(client, qrHash, {
+        agentId: AGENT_ID(args.actor),
+        gateId: GATE_ID(args.actor),
+    });
     if (admitted) {
         const summary = await repo.ticketSummary(client, admitted.ticket_id);
         await logIt('ADMITTED', admitted.id, admitted.ticket_id);
@@ -91,7 +103,7 @@ async function resolveScan(client, args) {
 /* ================================================================== */
 /* POST /api/scan/verify                                               */
 /* ================================================================== */
-export async function verifyScan(input, scope, ctx = {}) {
+export async function verifyScan(input, actor, ctx = {}) {
     /* Replay check runs BEFORE any state change. A retry after a lost
      * response must return the original verdict — re-running the UPDATE
      * would find the code already SCANNED and report DUPLICATE against
@@ -106,14 +118,14 @@ export async function verifyScan(input, scope, ctx = {}) {
         clientScanId: input.client_scan_id ?? null,
         gateLabel: input.gate_label ?? null,
         capturedAt: null, // live scan — the server clock is authoritative
-        scope,
+        actor,
         ip: ctx.ip ?? null,
     }));
     // After commit (§10.5). The dashboard must never see an admission that
     // could still roll back. Fire-and-forget — the gate does not wait.
     publishScanSafely({
         outcome,
-        scope,
+        actor,
         gateLabel: input.gate_label ?? null,
         source: 'LIVE',
         capturedAt: null,
@@ -123,7 +135,7 @@ export async function verifyScan(input, scope, ctx = {}) {
 /* ================================================================== */
 /* POST /api/scan/bulk-sync                                            */
 /* ================================================================== */
-export async function bulkSync(input, scope, ctx = {}) {
+export async function bulkSync(input, actor, ctx = {}) {
     const now = Date.now();
     // Oldest capture first (§10.4): offline scans are replayed in the order
     // they physically happened, not in the order they arrived.
@@ -152,7 +164,7 @@ export async function bulkSync(input, scope, ctx = {}) {
                 clientScanId: scan.client_scan_id,
                 gateLabel: scan.gate_label ?? null,
                 capturedAt,
-                scope,
+                actor,
                 ip: ctx.ip ?? null,
             }));
             /* source: 'SYNC' turns an ALREADY_SCANNED into POST_SYNC_DUPLICATE —
@@ -161,7 +173,7 @@ export async function bulkSync(input, scope, ctx = {}) {
              * duplicate caught at the door. */
             publishScanSafely({
                 outcome,
-                scope,
+                actor,
                 gateLabel: scan.gate_label ?? null,
                 source: 'SYNC',
                 capturedAt,

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
-import { requireAgent } from '../../middleware/auth.js';
+import { requireScanAccess } from '../../middleware/auth.js';
 import * as controller from './scanning.controller.js';
 /**
  * Deliberately loose. A gate legitimately fires several scans per second, and
@@ -21,7 +21,7 @@ const scanLimiter = rateLimit({
     },
 });
 export const scanRoutes = Router();
-scanRoutes.post('/verify', requireAgent, scanLimiter, controller.verifyScan);
+scanRoutes.post('/verify', requireScanAccess, scanLimiter, controller.verifyScan);
 /**
  * Batch drain. A device returning from a long outage sends up to 200 scans
  * per request, so this is limited by request count, not by scan count.
@@ -32,5 +32,5 @@ const syncLimiter = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
 });
-scanRoutes.post('/bulk-sync', requireAgent, syncLimiter, controller.bulkSync);
+scanRoutes.post('/bulk-sync', requireScanAccess, syncLimiter, controller.bulkSync);
 //# sourceMappingURL=scanning.routes.js.map

@@ -14,15 +14,30 @@ export async function findUnitsByCode(unitCode, divisionCode) {
     return rows;
 }
 export async function findAgentByMobile(mobile) {
-    const { rows } = await query(`SELECT id, unit_id, mobile_number, name, pin_hash, is_active
+    const { rows } = await query(`SELECT id, unit_id, mobile_number, name, pin_hash, is_active,
+            email, approval_status
        FROM agents
       WHERE mobile_number = $1`, [mobile]);
     return rows[0] ?? null;
 }
-export async function findSuperuserByUsername(username) {
+/** Spec §3: agents may sign in with their mobile OR their email. */
+export async function findAgentByMobileOrEmail(identifier) {
+    const { rows } = await query(`SELECT id, unit_id, mobile_number, name, pin_hash, is_active,
+            email, approval_status
+       FROM agents
+      WHERE mobile_number = $1 OR LOWER(email) = LOWER($1)
+      LIMIT 1`, [identifier]);
+    return rows[0] ?? null;
+}
+/**
+ * Spec §4 identifies superusers by email. `username` is still matched so the
+ * three seeded accounts keep working if someone types the short form.
+ */
+export async function findSuperuserByEmail(email) {
     const { rows } = await query(`SELECT id, username, password_hash, name, is_active
        FROM superusers
-      WHERE username = $1`, [username]);
+      WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($1)
+      LIMIT 1`, [email]);
     return rows[0] ?? null;
 }
 export async function touchSuperuserLogin(id) {
@@ -104,6 +119,119 @@ export async function loadSessionContext(sessionId) {
 export async function revokeSession(sessionId) {
     await query(`UPDATE unit_sessions
         SET revoked_at = NOW()
+      WHERE id = $1 AND revoked_at IS NULL`, [sessionId]);
+}
+export async function findUnitIdByCode(unitCode) {
+    const { rows } = await query(`SELECT id, division_id, unit_code, name
+       FROM units
+      WHERE unit_code = $1 AND is_active
+      ORDER BY created_at
+      LIMIT 1`, [unitCode]);
+    return rows[0] ?? null;
+}
+export async function listPublicUnits() {
+    const { rows } = await query(`SELECT u.unit_code, u.name, u.sector, d.name AS division_name
+       FROM units u
+       JOIN divisions d ON d.id = u.division_id
+      WHERE u.is_active AND d.is_active
+      ORDER BY d.name, u.name`);
+    return rows;
+}
+/**
+ * Creates a PENDING agent. Uniqueness on mobile and email is left to the
+ * indexes rather than a pre-check, so two simultaneous signups on the same
+ * number cannot both succeed.
+ */
+export async function createSelfRegisteredAgent(params) {
+    const { rows } = await query(`INSERT INTO agents
+       (unit_id, mobile_number, name, email, pin_hash,
+        self_registered, approval_status, is_active)
+     VALUES ($1, $2, $3, $4, $5, TRUE, 'PENDING', TRUE)
+     RETURNING id`, [
+        params.unitId,
+        params.mobileNumber,
+        params.name,
+        params.email,
+        params.passwordHash,
+    ]);
+    return rows[0];
+}
+export async function findAgentByEmail(email) {
+    const { rows } = await query(`SELECT id, unit_id, mobile_number, name, pin_hash, is_active,
+            email, approval_status
+       FROM agents
+      WHERE LOWER(email) = LOWER($1)`, [email]);
+    return rows[0] ?? null;
+}
+/* ================================================================== */
+/* Password reset                                                      */
+/* ================================================================== */
+export async function createPasswordResetToken(params) {
+    // One live token per agent — requesting a new link kills the previous one.
+    await query(`UPDATE password_reset_tokens
+        SET consumed_at = NOW()
+      WHERE agent_id = $1 AND consumed_at IS NULL`, [params.agentId]);
+    await query(`INSERT INTO password_reset_tokens (agent_id, token_hash, expires_at)
+     VALUES ($1, $2, $3)`, [params.agentId, params.tokenHash, params.expiresAt]);
+}
+/**
+ * Consumes the token and sets the new password in one statement. The
+ * `consumed_at IS NULL` predicate is the guard: a link double-clicked, or
+ * replayed out of a forwarded email, matches zero rows the second time.
+ */
+export async function consumeResetToken(params) {
+    const { rows } = await query(`WITH claimed AS (
+       UPDATE password_reset_tokens
+          SET consumed_at = NOW()
+        WHERE token_hash = $1
+          AND consumed_at IS NULL
+          AND expires_at > NOW()
+       RETURNING agent_id
+     )
+     UPDATE agents a
+        SET pin_hash = $2
+       FROM claimed c
+      WHERE a.id = c.agent_id
+     RETURNING a.id AS agent_id`, [params.tokenHash, params.passwordHash]);
+    return rows[0] ?? null;
+}
+export async function findGateByCode(gateCode) {
+    const { rows } = await query(`SELECT id, division_id, gate_code, name, pin_hash,
+            to_char(pin_valid_on, 'YYYY-MM-DD') AS pin_valid_on, is_active
+       FROM gates
+      WHERE gate_code = $1`, [gateCode]);
+    return rows[0] ?? null;
+}
+export async function listPublicGates() {
+    const { rows } = await query(`SELECT gate_code, name FROM gates WHERE is_active ORDER BY name`);
+    return rows;
+}
+export async function createGateSession(params) {
+    await query(`INSERT INTO gate_sessions
+       (id, gate_id, token_hash, expires_at, ip_address, user_agent)
+     VALUES ($1, $2, $3, $4, $5, $6)`, [
+        params.id,
+        params.gateId,
+        params.tokenHash,
+        params.expiresAt,
+        params.ip ?? null,
+        params.userAgent ?? null,
+    ]);
+}
+/** Also re-checks `gates.is_active`, so deactivating a gate kills its
+ *  sessions on the next request rather than at token expiry. */
+export async function findLiveGateSession(sessionId) {
+    const { rows } = await query(`SELECT s.id, s.gate_id, s.token_hash
+       FROM gate_sessions s
+       JOIN gates g ON g.id = s.gate_id
+      WHERE s.id = $1
+        AND s.revoked_at IS NULL
+        AND s.expires_at > NOW()
+        AND g.is_active`, [sessionId]);
+    return rows[0] ?? null;
+}
+export async function revokeGateSession(sessionId) {
+    await query(`UPDATE gate_sessions SET revoked_at = NOW()
       WHERE id = $1 AND revoked_at IS NULL`, [sessionId]);
 }
 export async function writeAudit(params) {

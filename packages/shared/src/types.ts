@@ -1,4 +1,5 @@
 import type {
+  ApprovalStatus,
   AuthRole,
   QrCodeKind,
   QrCodeStatus,
@@ -81,6 +82,20 @@ export interface AgentClaims {
   divisionId: string;
 }
 
+/**
+ * A gate, not a person (spec §2, Option A). Volunteers share the PIN, so
+ * there is no individual identity to carry — scans attribute to `gateId`,
+ * which is the operationally useful unit anyway.
+ */
+export interface ScannerClaims {
+  role: Extract<AuthRole, 'SCANNER'>;
+  sessionId: string;
+  gateId: string;
+  gateCode: string;
+  gateName: string;
+  divisionId: string | null;
+}
+
 export interface SuperuserClaims {
   role: Extract<AuthRole, 'SUPERUSER'>;
   superuserId: string;
@@ -89,6 +104,7 @@ export interface SuperuserClaims {
 export type SessionClaims =
   | UnitPendingClaims
   | AgentClaims
+  | ScannerClaims
   | SuperuserClaims;
 
 /* ------------------------------------------------------------------ */
@@ -298,5 +314,52 @@ export interface SessionResponse {
   unit?: Pick<Unit, 'id' | 'unitCode' | 'name' | 'sector'>;
   division?: Pick<Division, 'id' | 'name' | 'code'>;
   agent?: Pick<Agent, 'id' | 'name' | 'mobileNumber'>;
+  gate?: { id: string; gateCode: string; name: string };
   expiresAt: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Account management                                                  */
+/* ------------------------------------------------------------------ */
+
+/** What signup returns. No session — approval comes first (spec §3). */
+export interface AgentSignupResponse {
+  status: ApprovalStatus;
+  message: string;
+  agent: { id: string; name: string; mobileNumber: string; email: string };
+}
+
+/** Public, unauthenticated: the unit picker on the signup form. */
+export interface PublicUnit {
+  unitCode: string;
+  name: string;
+  sector: string | null;
+  divisionName: string;
+}
+
+/** Public, unauthenticated: the gate picker on the scanner login. */
+export interface PublicGate {
+  gateCode: string;
+  name: string;
+}
+
+export interface PendingAgent {
+  id: string;
+  name: string;
+  mobileNumber: string;
+  email: string | null;
+  unitCode: string;
+  unitName: string;
+  divisionName: string;
+  createdAt: string;
+}
+
+export interface GateSummary {
+  id: string;
+  gateCode: string;
+  name: string;
+  divisionName: string | null;
+  isActive: boolean;
+  pinRotatedAt: string;
+  pinValidOn: string | null;
 }

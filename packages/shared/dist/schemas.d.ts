@@ -35,17 +35,146 @@ export declare const AgentLoginSchema: z.ZodObject<{
     password: string;
 }>;
 export type AgentLoginInput = z.infer<typeof AgentLoginSchema>;
+/** Spec §4: superusers are identified by email, and there are exactly three. */
 export declare const SuperuserLoginSchema: z.ZodObject<{
-    username: z.ZodString;
+    email: z.ZodString;
     password: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     password: string;
-    username: string;
+    email: string;
 }, {
     password: string;
-    username: string;
+    email: string;
 }>;
 export type SuperuserLoginInput = z.infer<typeof SuperuserLoginSchema>;
+export declare const AgentSignupSchema: z.ZodEffects<z.ZodObject<{
+    name: z.ZodString;
+    /** Agent ID *is* the mobile number. */
+    mobile_number: z.ZodString;
+    email: z.ZodString;
+    /**
+     * Units survive self-registration, so a signup must name one: every
+     * ticket carries `unit_id` and `division_id` (§2), and step 1 of login
+     * compares the agent's unit against the authenticated location. The unit
+     * *code* is not a secret — the unit PIN is.
+     */
+    unit_code: z.ZodEffects<z.ZodString, string, string>;
+    password: z.ZodString;
+    confirm_password: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    unit_code: string;
+    mobile_number: string;
+    password: string;
+    email: string;
+    name: string;
+    confirm_password: string;
+}, {
+    unit_code: string;
+    mobile_number: string;
+    password: string;
+    email: string;
+    name: string;
+    confirm_password: string;
+}>, {
+    unit_code: string;
+    mobile_number: string;
+    password: string;
+    email: string;
+    name: string;
+    confirm_password: string;
+}, {
+    unit_code: string;
+    mobile_number: string;
+    password: string;
+    email: string;
+    name: string;
+    confirm_password: string;
+}>;
+export type AgentSignupInput = z.infer<typeof AgentSignupSchema>;
+export declare const ForgotPasswordSchema: z.ZodObject<{
+    email: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    email: string;
+}, {
+    email: string;
+}>;
+export type ForgotPasswordInput = z.infer<typeof ForgotPasswordSchema>;
+export declare const ResetPasswordSchema: z.ZodEffects<z.ZodObject<{
+    token: z.ZodString;
+    password: z.ZodString;
+    confirm_password: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    password: string;
+    confirm_password: string;
+    token: string;
+}, {
+    password: string;
+    confirm_password: string;
+    token: string;
+}>, {
+    password: string;
+    confirm_password: string;
+    token: string;
+}, {
+    password: string;
+    confirm_password: string;
+    token: string;
+}>;
+export type ResetPasswordInput = z.infer<typeof ResetPasswordSchema>;
+export declare const GateLoginSchema: z.ZodObject<{
+    gate_code: z.ZodEffects<z.ZodString, string, string>;
+    pin: z.ZodString;
+}, "strict", z.ZodTypeAny, {
+    pin: string;
+    gate_code: string;
+}, {
+    pin: string;
+    gate_code: string;
+}>;
+export type GateLoginInput = z.infer<typeof GateLoginSchema>;
+export declare const CreateGateSchema: z.ZodObject<{
+    gate_code: z.ZodEffects<z.ZodString, string, string>;
+    name: z.ZodString;
+    division_code: z.ZodOptional<z.ZodEffects<z.ZodString, string, string>>;
+    pin: z.ZodString;
+    /** ISO date. Set it for a PIN that must stop working after event day. */
+    pin_valid_on: z.ZodOptional<z.ZodString>;
+}, "strict", z.ZodTypeAny, {
+    pin: string;
+    name: string;
+    gate_code: string;
+    division_code?: string | undefined;
+    pin_valid_on?: string | undefined;
+}, {
+    pin: string;
+    name: string;
+    gate_code: string;
+    division_code?: string | undefined;
+    pin_valid_on?: string | undefined;
+}>;
+export type CreateGateInput = z.infer<typeof CreateGateSchema>;
+export declare const RotateGatePinSchema: z.ZodObject<{
+    pin: z.ZodString;
+    pin_valid_on: z.ZodOptional<z.ZodString>;
+}, "strict", z.ZodTypeAny, {
+    pin: string;
+    pin_valid_on?: string | undefined;
+}, {
+    pin: string;
+    pin_valid_on?: string | undefined;
+}>;
+export type RotateGatePinInput = z.infer<typeof RotateGatePinSchema>;
+export declare const AgentDecisionSchema: z.ZodObject<{
+    decision: z.ZodEnum<["APPROVED", "REJECTED"]>;
+    reason: z.ZodOptional<z.ZodString>;
+}, "strict", z.ZodTypeAny, {
+    decision: "APPROVED" | "REJECTED";
+    reason?: string | undefined;
+}, {
+    decision: "APPROVED" | "REJECTED";
+    reason?: string | undefined;
+}>;
+export type AgentDecisionInput = z.infer<typeof AgentDecisionSchema>;
 /**
  * NOTE what is absent: `counted_persons`, `request_number`, `ticket_number`,
  * `agent_id`, `unit_id`. All are derived server-side.

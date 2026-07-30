@@ -1,7 +1,7 @@
 import { env } from '../../config/env.js';
-import { hashToken, newId, verifyAgainstDummy, verifySecret, } from '../../lib/crypto.js';
+import { hashSecret, hashToken, newId, newResetToken, verifyAgainstDummy, verifySecret, } from '../../lib/crypto.js';
 import { signSession } from '../../lib/jwt.js';
-import { AppError, conflict, forbidden, unauthorized } from '../../lib/errors.js';
+import { AppError, badRequest, conflict, forbidden, unauthorized, } from '../../lib/errors.js';
 import * as repo from './auth.repository.js';
 const minutesFromNow = (minutes) => new Date(Date.now() + minutes * 60_000);
 /* =================================================================== */
@@ -99,7 +99,8 @@ export async function agentLogin(input, pending, rawToken, ctx) {
     if (session.agent_id !== null) {
         throw conflict('An agent is already bound to this session');
     }
-    const agent = await repo.findAgentByMobile(input.mobile_number);
+    // Spec §3: agents sign in with mobile OR email.
+    const agent = await repo.findAgentByMobileOrEmail(input.mobile_number);
     if (!agent || !agent.pin_hash) {
         await verifyAgainstDummy(input.password);
         throw unauthorized('Invalid mobile number or password');
@@ -107,6 +108,20 @@ export async function agentLogin(input, pending, rawToken, ctx) {
     if (!agent.is_active) {
         await verifyAgainstDummy(input.password);
         throw forbidden('This agent account is not active');
+    }
+    /* Approval gate. Checked AFTER the password so a stranger cannot probe
+     * which numbers are registered — a pending account and a wrong password
+     * must be indistinguishable until the password is right. */
+    if (agent.approval_status !== 'APPROVED') {
+        const okPassword = await verifySecret(input.password, agent.pin_hash);
+        if (!okPassword) {
+            throw unauthorized('Invalid mobile number or password');
+        }
+        throw new AppError(403, agent.approval_status === 'REJECTED'
+            ? 'AGENT_REJECTED'
+            : 'AGENT_PENDING_APPROVAL', agent.approval_status === 'REJECTED'
+            ? 'This registration was declined. Contact the event administrator.'
+            : 'Your registration is awaiting administrator approval.');
     }
     const ok = await verifySecret(input.password, agent.pin_hash);
     if (!ok) {
@@ -187,10 +202,10 @@ export async function agentLogin(input, pending, rawToken, ctx) {
 /* Superuser — single step, no unit scoping (§3.1)                     */
 /* =================================================================== */
 export async function superuserLogin(input, ctx) {
-    const user = await repo.findSuperuserByUsername(input.username);
+    const user = await repo.findSuperuserByEmail(input.email);
     if (!user) {
         await verifyAgainstDummy(input.password);
-        throw unauthorized('Invalid username or password');
+        throw unauthorized('Invalid email or password');
     }
     if (!user.is_active) {
         await verifyAgainstDummy(input.password);
@@ -204,7 +219,7 @@ export async function superuserLogin(input, ctx) {
             action: 'SUPERUSER_LOGIN_FAILED',
             ip: ctx.ip,
         });
-        throw unauthorized('Invalid username or password');
+        throw unauthorized('Invalid email or password');
     }
     const ttlMinutes = env.SUPERUSER_TOKEN_TTL_MINUTES;
     const expiresAt = minutesFromNow(ttlMinutes);
@@ -230,11 +245,229 @@ export async function superuserLogin(input, ctx) {
     };
 }
 /* =================================================================== */
+/* Agent self-registration (spec §3)                                   */
+/* =================================================================== */
+const UNIQUE_VIOLATION = '23505';
+export async function agentSignup(input, ctx) {
+    const unit = await repo.findUnitIdByCode(input.unit_code);
+    if (!unit) {
+        throw badRequest('That unit code does not exist. Check with your unit head.');
+    }
+    const passwordHash = await hashSecret(input.password);
+    let created;
+    try {
+        created = await repo.createSelfRegisteredAgent({
+            unitId: unit.id,
+            mobileNumber: input.mobile_number,
+            name: input.name,
+            email: input.email,
+            passwordHash,
+        });
+    }
+    catch (err) {
+        // The unique indexes decide, not a pre-check — two simultaneous signups
+        // on one number cannot both win.
+        const e = err;
+        if (e.code === UNIQUE_VIOLATION) {
+            throw conflict(e.constraint === 'agents_mobile_number_key'
+                ? 'An account already exists for this mobile number.'
+                : 'An account already exists for this email address.');
+        }
+        throw err;
+    }
+    await repo.writeAudit({
+        actorRole: null,
+        actorId: null,
+        action: 'AGENT_SELF_REGISTERED',
+        entityType: 'agent',
+        entityId: created.id,
+        metadata: {
+            mobile_number: input.mobile_number,
+            unit_code: unit.unit_code,
+        },
+        ip: ctx.ip,
+    });
+    /* No session is issued. The account is PENDING until a superuser approves
+     * it, which is the whole point — tickets are financial instruments and
+     * self-service must not mint an issuer. */
+    return {
+        status: 'PENDING',
+        message: 'Registration received. An administrator must approve your account before you can sign in.',
+        agent: {
+            id: created.id,
+            name: input.name,
+            mobileNumber: input.mobile_number,
+            email: input.email,
+        },
+    };
+}
+export async function listUnitsForSignup() {
+    const rows = await repo.listPublicUnits();
+    return rows.map((r) => ({
+        unitCode: r.unit_code,
+        name: r.name,
+        sector: r.sector,
+        divisionName: r.division_name,
+    }));
+}
+/* =================================================================== */
+/* Password reset (spec §3)                                            */
+/* =================================================================== */
+const RESET_TTL_MINUTES = 60;
+/**
+ * Always resolves, whether or not the address exists. Returning "no such
+ * account" would turn this endpoint into a membership oracle for every email
+ * an attacker cares to try.
+ */
+export async function requestPasswordReset(input, ctx) {
+    const agent = await repo.findAgentByEmail(input.email);
+    if (!agent || !agent.is_active || agent.approval_status !== 'APPROVED') {
+        await repo.writeAudit({
+            actorRole: null,
+            actorId: null,
+            action: 'PASSWORD_RESET_REQUESTED_UNKNOWN',
+            metadata: { email: input.email },
+            ip: ctx.ip,
+        });
+        return { token: null, agentEmail: null, agentName: null };
+    }
+    // Raw token goes in the email; only its hash is stored.
+    const token = newResetToken();
+    await repo.createPasswordResetToken({
+        agentId: agent.id,
+        tokenHash: hashToken(token),
+        expiresAt: minutesFromNow(RESET_TTL_MINUTES),
+    });
+    await repo.writeAudit({
+        actorRole: 'AGENT',
+        actorId: agent.id,
+        action: 'PASSWORD_RESET_REQUESTED',
+        entityType: 'agent',
+        entityId: agent.id,
+        ip: ctx.ip,
+    });
+    return { token, agentEmail: agent.email, agentName: agent.name };
+}
+export async function resetPassword(input, ctx) {
+    const passwordHash = await hashSecret(input.password);
+    const claimed = await repo.consumeResetToken({
+        tokenHash: hashToken(input.token),
+        passwordHash,
+    });
+    if (!claimed) {
+        throw badRequest('This reset link has expired or has already been used.');
+    }
+    await repo.writeAudit({
+        actorRole: 'AGENT',
+        actorId: claimed.agent_id,
+        action: 'PASSWORD_RESET_COMPLETED',
+        entityType: 'agent',
+        entityId: claimed.agent_id,
+        ip: ctx.ip,
+    });
+}
+/* =================================================================== */
+/* Gate scanner login (spec §2, Option A)                              */
+/* =================================================================== */
+export async function gateLogin(input, ctx) {
+    const gate = await repo.findGateByCode(input.gate_code);
+    if (!gate) {
+        await verifyAgainstDummy(input.pin);
+        throw unauthorized('Invalid gate or PIN');
+    }
+    if (!gate.is_active) {
+        await verifyAgainstDummy(input.pin);
+        throw forbidden('This gate is not active');
+    }
+    /* Daily PIN. A token minted yesterday is refused today, which is what
+     * makes a PIN shared with volunteers acceptable — it stops working when
+     * the event does. */
+    if (gate.pin_valid_on && gate.pin_valid_on !== todayIso()) {
+        await verifyAgainstDummy(input.pin);
+        throw unauthorized('This gate PIN has expired. Ask for today’s PIN.');
+    }
+    const ok = await verifySecret(input.pin, gate.pin_hash);
+    if (!ok) {
+        await repo.writeAudit({
+            actorRole: null,
+            actorId: null,
+            action: 'GATE_LOGIN_FAILED',
+            entityType: 'gate',
+            entityId: gate.id,
+            metadata: { gate_code: gate.gate_code },
+            ip: ctx.ip,
+        });
+        throw unauthorized('Invalid gate or PIN');
+    }
+    const ttlMinutes = env.GATE_SESSION_TTL_MINUTES;
+    const sessionId = newId();
+    const expiresAt = minutesFromNow(ttlMinutes);
+    const claims = {
+        role: 'SCANNER',
+        sessionId,
+        gateId: gate.id,
+        gateCode: gate.gate_code,
+        gateName: gate.name,
+        divisionId: gate.division_id,
+    };
+    const token = signSession(claims, ttlMinutes);
+    await repo.createGateSession({
+        id: sessionId,
+        gateId: gate.id,
+        tokenHash: hashToken(token),
+        expiresAt,
+        ip: ctx.ip,
+        userAgent: ctx.userAgent,
+    });
+    await repo.writeAudit({
+        actorRole: null,
+        actorId: null,
+        action: 'GATE_LOGIN',
+        entityType: 'gate_session',
+        entityId: sessionId,
+        metadata: { gate_code: gate.gate_code },
+        ip: ctx.ip,
+    });
+    return {
+        token,
+        ttlMinutes,
+        session: {
+            role: 'SCANNER',
+            gate: { id: gate.id, gateCode: gate.gate_code, name: gate.name },
+            expiresAt: expiresAt.toISOString(),
+        },
+    };
+}
+export async function listGatesForLogin() {
+    const rows = await repo.listPublicGates();
+    return rows.map((r) => ({ gateCode: r.gate_code, name: r.name }));
+}
+function todayIso() {
+    return new Date().toISOString().slice(0, 10);
+}
+/* =================================================================== */
 /* Session description — what the client hydrates its store from       */
 /* =================================================================== */
 export async function describeSession(claims) {
     if (claims.role === 'SUPERUSER') {
         return { role: 'SUPERUSER', expiresAt: '' };
+    }
+    if (claims.role === 'SCANNER') {
+        // Re-read the session so a revoked gate or a deactivated one is rejected
+        // on the next request rather than at token expiry.
+        const live = await repo.findLiveGateSession(claims.sessionId);
+        if (!live) {
+            throw unauthorized('Gate session is no longer valid');
+        }
+        return {
+            role: 'SCANNER',
+            gate: {
+                id: claims.gateId,
+                gateCode: claims.gateCode,
+                name: claims.gateName,
+            },
+            expiresAt: '',
+        };
     }
     const ctx = await repo.loadSessionContext(claims.sessionId);
     if (!ctx) {

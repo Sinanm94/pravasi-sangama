@@ -1,6 +1,6 @@
 import type { Request, RequestHandler, Response } from 'express';
 import { BulkSyncSchema, VerifyScanSchema } from '@pravasi/shared';
-import { agentScope } from '../../middleware/auth.js';
+import { scanActor } from '../../middleware/auth.js';
 import * as service from './scanning.service.js';
 
 const handle =
@@ -14,10 +14,10 @@ const handle =
 /* ------------------------------------------------------------------ */
 
 export const verifyScan = handle(async (req, res) => {
-  const scope = agentScope(req);
+  const actor = scanActor(req);
   const input = VerifyScanSchema.parse(req.body);
 
-  const result = await service.verifyScan(input, scope, { ip: req.ip ?? null });
+  const result = await service.verifyScan(input, actor, { ip: req.ip ?? null });
 
   /**
    * 200 for every verdict, including DUPLICATE and INVALID.
@@ -36,10 +36,10 @@ export const verifyScan = handle(async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 export const bulkSync = handle(async (req, res) => {
-  const scope = agentScope(req);
+  const actor = scanActor(req);
   const input = BulkSyncSchema.parse(req.body);
 
-  const result = await service.bulkSync(input, scope, { ip: req.ip ?? null });
+  const result = await service.bulkSync(input, actor, { ip: req.ip ?? null });
 
   /**
    * 200 even when individual items failed. The batch itself succeeded; the

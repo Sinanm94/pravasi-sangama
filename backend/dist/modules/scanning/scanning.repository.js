@@ -18,18 +18,19 @@ import { query } from '../../db/index.js';
  * Exactly one concurrent transaction can match. Zero rows means the caller
  * must diagnose why — see findByHash.
  */
-export async function admitGuestCode(client, qrHash, agentId) {
+export async function admitGuestCode(client, qrHash, actor) {
     const { rows } = await client.query(`UPDATE qr_codes AS q
-        SET status     = 'SCANNED',
-            scanned_at = NOW(),
-            scanned_by = $2
+        SET status          = 'SCANNED',
+            scanned_at      = NOW(),
+            scanned_by      = $2,
+            scanned_by_gate = $3
        FROM tickets AS t
       WHERE q.qr_hash    = $1
         AND q.status     = 'ISSUED'
         AND q.code_kind  = 'GUEST'
         AND t.id         = q.ticket_id
         AND t.status     = 'ACTIVE'
-    RETURNING q.id, q.ticket_id, q.code_kind, q.guest_index`, [qrHash, agentId]);
+    RETURNING q.id, q.ticket_id, q.code_kind, q.guest_index`, [qrHash, actor.agentId, actor.gateId]);
     return rows[0] ?? null;
 }
 /** Why did the UPDATE match nothing? Only runs off the hot path. */
@@ -95,8 +96,8 @@ export async function findByClientScanId(clientScanId) {
 export async function insertScanLog(client, params) {
     const { rowCount } = await client.query(`INSERT INTO scan_logs
        (client_scan_id, qr_code_id, ticket_id, scanned_hash,
-        result, scanned_by, unit_id, gate_label, ip_address, created_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, COALESCE($10::TIMESTAMPTZ, NOW()))
+        result, scanned_by, gate_id, unit_id, gate_label, ip_address, created_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11::TIMESTAMPTZ, NOW()))
      ON CONFLICT (client_scan_id) DO NOTHING`, [
         params.clientScanId,
         params.qrCodeId,
@@ -104,6 +105,7 @@ export async function insertScanLog(client, params) {
         params.scannedHash,
         params.result,
         params.scannedBy,
+        params.gateId,
         params.unitId,
         params.gateLabel,
         params.ip,
