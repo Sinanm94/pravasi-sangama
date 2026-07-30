@@ -1,7 +1,8 @@
 'use client';
 
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ChevronDown, Loader2, type LucideIcon } from 'lucide-react';
+import { ChevronDown, Eye, EyeOff, Loader2, type LucideIcon } from 'lucide-react';
 import { fieldErrorVariants, springSnappy } from '@/lib/motion';
 import { Logo } from './Logo';
 
@@ -122,17 +123,46 @@ export function Field({
   ref,
   ...rest
 }: FieldProps) {
+  const [showPassword, setShowPassword] = useState(false);
+  const isPassword = type === 'password';
+
+  /* `px-4` sets left AND right padding in one Tailwind utility. Appending
+   * `pr-11` alongside it would leave two classes touching the same CSS
+   * property — which one wins depends on Tailwind's generated stylesheet
+   * order, not on the order they're written here, so it's not safe to rely
+   * on. Splitting into explicit pl-4/pr-11 removes the ambiguity outright. */
+  const baseClass = inputClass(!!error);
+  const fieldClass = isPassword
+    ? baseClass.replace('px-4', 'pl-4 pr-11')
+    : baseClass;
+
   return (
     <label className="block">
       <FieldLabel label={label} hint={hint} required={required} />
-      <input
-        ref={ref}
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={inputClass(!!error)}
-        {...rest}
-      />
+      <div className="relative">
+        <input
+          ref={ref}
+          type={isPassword ? (showPassword ? 'text' : 'password') : type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={fieldClass}
+          {...rest}
+        />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? 'Hide password' : 'Show password'}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 transition-colors hover:text-gray-600"
+          >
+            {showPassword ? (
+              <Eye className="h-[18px] w-[18px]" strokeWidth={2} />
+            ) : (
+              <EyeOff className="h-[18px] w-[18px]" strokeWidth={2} />
+            )}
+          </button>
+        )}
+      </div>
       <FieldError error={error} />
     </label>
   );
