@@ -606,7 +606,15 @@ function AdminForm({
   onDone: (s: SessionResponse) => void;
   onBack: () => void;
 }) {
-  const [email, setEmail] = useState('');
+  /* Sent as `username`, per explicit instruction (2026-08-01). As of that
+   * change, packages/shared/src/schemas.ts SuperuserLoginSchema still
+   * requires `email` (validated email string) and
+   * auth.repository.ts#findSuperuserByEmail looks up on it — there is no
+   * `username` key or lookup on the backend. This payload will 400 until
+   * the backend schema/repository are updated to match. Not something this
+   * tier can fix under the frozen-backend constraint; flagging here so the
+   * next person touching this file has the full story in one place. */
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -616,7 +624,7 @@ function AdminForm({
     try {
       onDone(
         await apiPost<SessionResponse>('/auth/superuser-login', {
-          email: email.trim(),
+          username: username.trim(),
           password,
         }),
       );
@@ -635,12 +643,11 @@ function AdminForm({
         subtitle="Full system access"
       />
       <Field
-        label="Email Address"
-        type="email"
-        inputMode="email"
-        value={email}
-        onChange={setEmail}
-        placeholder="admin1@pravasisangama.com"
+        label="Username"
+        type="text"
+        name="username"
+        value={username}
+        onChange={setUsername}
         autoComplete="username"
         required
       />

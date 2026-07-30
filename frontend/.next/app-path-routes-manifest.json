@@ -1,12 +1,12 @@
 {
   "/_not-found/page": "/_not-found",
   "/(agent)/scanner/page": "/scanner",
-  "/(admin)/dashboard/page": "/dashboard",
-  "/(agent)/ticketing/page": "/ticketing",
-  "/page": "/",
-  "/login/reset/page": "/login/reset",
-  "/admin/gates/page": "/admin/gates",
   "/admin/approvals/page": "/admin/approvals",
+  "/admin/gates/page": "/admin/gates",
   "/login/page": "/login",
+  "/login/reset/page": "/login/reset",
+  "/(agent)/ticketing/page": "/ticketing",
+  "/(admin)/dashboard/page": "/dashboard",
+  "/page": "/",
   "/scanner/login/page": "/scanner/login"
 }

@@ -30,7 +30,7 @@ export function AuthShell({ children }: { children?: React.ReactNode }) {
             above the card, since margin on a flex item still adds to the
             wrapper's own auto height. */}
         <div className="flex justify-center">
-          <Logo className="mb-6 h-24 w-24" />
+          <Logo className="mb-6 h-32 w-32" />
         </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
