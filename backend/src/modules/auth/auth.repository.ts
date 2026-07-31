@@ -1,18 +1,6 @@
 import type { PoolClient } from 'pg';
 import { query } from '../../db/index.js';
 
-export interface UnitRow {
-  id: string;
-  division_id: string;
-  unit_code: string;
-  name: string;
-  sector: string | null;
-  access_code_hash: string;
-  is_active: boolean;
-  division_name: string;
-  division_code: string;
-}
-
 export interface AgentRow {
   id: string;
   unit_id: string;
@@ -24,36 +12,6 @@ export interface AgentRow {
   is_active: boolean;
   email: string | null;
   approval_status: 'PENDING' | 'APPROVED' | 'REJECTED';
-}
-
-export interface SessionRow {
-  id: string;
-  unit_id: string;
-  agent_id: string | null;
-  token_hash: string;
-  expires_at: Date;
-  revoked_at: Date | null;
-}
-
-/**
- * Unit codes are unique per division, not globally, so this can legitimately
- * return more than one row. The caller decides whether that is ambiguous.
- */
-export async function findUnitsByCode(
-  unitCode: string,
-  divisionCode?: string,
-): Promise<UnitRow[]> {
-  const { rows } = await query<UnitRow>(
-    `SELECT u.id, u.division_id, u.unit_code, u.name, u.sector,
-            u.access_code_hash, u.is_active,
-            d.name AS division_name, d.code AS division_code
-       FROM units u
-       JOIN divisions d ON d.id = u.division_id
-      WHERE u.unit_code = $1
-        AND ($2::TEXT IS NULL OR d.code = $2)`,
-    [unitCode, divisionCode ?? null],
-  );
-  return rows;
 }
 
 export async function findAgentByMobile(
@@ -149,84 +107,6 @@ export async function createAgentSession(params: {
       params.userAgent ?? null,
     ],
   );
-}
-
-export async function createUnitSession(params: {
-  id: string;
-  unitId: string;
-  tokenHash: string;
-  expiresAt: Date;
-  ip?: string | null;
-  userAgent?: string | null;
-}): Promise<void> {
-  await query(
-    `INSERT INTO unit_sessions
-       (id, unit_id, agent_id, token_hash, expires_at, ip_address, user_agent)
-     VALUES ($1, $2, NULL, $3, $4, $5, $6)`,
-    [
-      params.id,
-      params.unitId,
-      params.tokenHash,
-      params.expiresAt,
-      params.ip ?? null,
-      params.userAgent ?? null,
-    ],
-  );
-}
-
-export async function findLiveSession(
-  sessionId: string,
-): Promise<SessionRow | null> {
-  const { rows } = await query<SessionRow>(
-    `SELECT id, unit_id, agent_id, token_hash, expires_at, revoked_at
-       FROM unit_sessions
-      WHERE id = $1
-        AND revoked_at IS NULL
-        AND expires_at > NOW()`,
-    [sessionId],
-  );
-  return rows[0] ?? null;
-}
-
-/**
- * Binds the agent and rotates the stored token hash in one statement.
- *
- * The `agent_id IS NULL` predicate is the concurrency guard: two step-2
- * requests racing on the same pending session means exactly one UPDATE
- * matches, and the loser gets zero rows back rather than silently
- * overwriting the winner's binding.
- */
-export async function bindAgentToSession(params: {
-  sessionId: string;
-  agentId: string;
-  tokenHash: string;
-  expiresAt: Date;
-  client?: PoolClient;
-}): Promise<SessionRow | null> {
-  const sql = `
-    UPDATE unit_sessions
-       SET agent_id       = $2,
-           agent_bound_at = NOW(),
-           token_hash     = $3,
-           expires_at     = $4
-     WHERE id = $1
-       AND agent_id IS NULL
-       AND revoked_at IS NULL
-       AND expires_at > NOW()
-    RETURNING id, unit_id, agent_id, token_hash, expires_at, revoked_at`;
-
-  const params_ = [
-    params.sessionId,
-    params.agentId,
-    params.tokenHash,
-    params.expiresAt,
-  ];
-
-  const { rows } = params.client
-    ? await params.client.query<SessionRow>(sql, params_)
-    : await query<SessionRow>(sql, params_);
-
-  return rows[0] ?? null;
 }
 
 export interface SessionContextRow {

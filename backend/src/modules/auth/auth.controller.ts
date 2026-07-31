@@ -7,11 +7,8 @@ import {
   ResetPasswordSchema,
   SESSION_COOKIE_NAME,
   SuperuserLoginSchema,
-  UnitLoginSchema,
-  type UnitPendingClaims,
 } from '@pravasi/shared';
 import { clearSessionCookie, setSessionCookie, verifySession } from '../../lib/jwt.js';
-import { unauthorized } from '../../lib/errors.js';
 import { sendPasswordResetEmail } from './auth.email.js';
 import * as service from './auth.service.js';
 
@@ -28,23 +25,7 @@ const handle =
   };
 
 /* ------------------------------------------------------------------ */
-/* POST /api/auth/unit-login — step 1                                  */
-/* ------------------------------------------------------------------ */
-
-export const unitLogin = handle(async (req, res) => {
-  const input = UnitLoginSchema.parse(req.body);
-  const result = await service.unitLogin(input, contextOf(req));
-
-  setSessionCookie(res, result.token, result.ttlMinutes);
-
-  res.status(200).json({
-    ...result.session,
-    next_step: 'AGENT_LOGIN',
-  });
-});
-
-/* ------------------------------------------------------------------ */
-/* POST /api/auth/agent-login — step 2                                 */
+/* POST /api/auth/agent-login — single step (§3.2)                     */
 /* ------------------------------------------------------------------ */
 
 export const agentLogin = handle(async (req, res) => {

@@ -40,7 +40,6 @@ const signupLimiter = rateLimit({
 export const authRoutes: Router = Router();
 
 /* --- Agent: two-step login (§3.2) -------------------------------- */
-authRoutes.post('/unit-login', loginLimiter, controller.unitLogin);
 authRoutes.post('/agent-login', loginLimiter, controller.agentLogin);
 
 /* --- Agent: first-time setup (spec §3) --------------------------- */

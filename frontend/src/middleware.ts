@@ -74,9 +74,8 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  /* Already signed in and sitting on /login — send them where they belong,
-   * so a returning agent does not re-enter a unit PIN for no reason. */
-  if (pathname === '/login' && role && role !== 'UNIT_PENDING') {
+  /* Already signed in and sitting on /login — send them where they belong. */
+  if (pathname === '/login' && role) {
     return NextResponse.redirect(new URL(homeFor(role), req.url));
   }
 
@@ -88,18 +87,14 @@ export function middleware(req: NextRequest) {
 
   if (!role || !rule.allow.includes(role)) {
     /* Send would-be scanners to their own door. Bouncing a volunteer to the
-     * agent login — which asks for a unit code and a personal password they
-     * do not have — is a dead end on event day. */
+     * agent login — which asks for a personal password they do not have —
+     * is a dead end on event day. */
     const target = pathname.startsWith('/scanner') && role === null
       ? '/scanner/login'
       : '/login';
 
     const url = new URL(target, req.url);
     url.searchParams.set('next', pathname);
-
-    // A unit session is step 1 of 2 — the login page reads this and opens
-    // directly on the agent step rather than asking for the unit again.
-    if (role === 'UNIT_PENDING') url.searchParams.set('step', 'agent');
 
     return NextResponse.redirect(url);
   }

@@ -27,9 +27,6 @@ export const badRequest = (message: string, details?: unknown) =>
 export const unauthorized = (message = 'Authentication required') =>
   new AppError(401, 'UNAUTHORIZED', message);
 
-/** Step 1 passed but Step 2 has not — session exists, agent not yet bound. */
-export const agentNotBound = (message = 'Agent authentication required') =>
-  new AppError(401, 'AGENT_NOT_BOUND', message);
 
 export const forbidden = (message = 'Not permitted') =>
   new AppError(403, 'FORBIDDEN', message);

@@ -65,14 +65,6 @@ export interface Ticket {
 /* JWT claims                                                          */
 /* ------------------------------------------------------------------ */
 
-/** Step 1 complete. Authenticates, but cannot issue tickets. */
-export interface UnitPendingClaims {
-  role: Extract<AuthRole, 'UNIT_PENDING'>;
-  sessionId: string;
-  unitId: string;
-  divisionId: string;
-}
-
 /** Step 2 complete. Full agent access, scoped to one unit. */
 export interface AgentClaims {
   role: Extract<AuthRole, 'AGENT'>;
@@ -102,7 +94,6 @@ export interface SuperuserClaims {
 }
 
 export type SessionClaims =
-  | UnitPendingClaims
   | AgentClaims
   | ScannerClaims
   | SuperuserClaims;
@@ -308,7 +299,7 @@ export interface ApiError {
   };
 }
 
-/** What /auth/unit-login and /auth/agent-login return alongside the cookie. */
+/** What /auth/agent-login returns alongside the cookie. */
 export interface SessionResponse {
   role: AuthRole;
   unit?: Pick<Unit, 'id' | 'unitCode' | 'name' | 'sector'>;

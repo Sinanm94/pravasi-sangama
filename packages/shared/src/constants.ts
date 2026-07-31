@@ -142,19 +142,16 @@ export function qrCodePlanFor(
 /* Roles                                                               */
 /* ------------------------------------------------------------------ */
 
-export const AUTH_ROLES = [
-  'UNIT_PENDING',
-  'AGENT',
-  'SCANNER',
-  'SUPERUSER',
-] as const;
+export const AUTH_ROLES = ['AGENT', 'SCANNER', 'SUPERUSER'] as const;
 /**
- * UNIT_PENDING — step 1 complete, step 2 outstanding. Cannot issue tickets.
- * SCANNER      — a gate, not a person. Verifies codes; cannot issue anything.
+ * SCANNER — a gate, not a person. Verifies codes; cannot issue anything.
+ *
+ * There is no UNIT_PENDING: agent login is a single step and mints a full
+ * AGENT token directly (§3.2).
  */
 export type AuthRole = (typeof AUTH_ROLES)[number];
 
-/** Persisted `user_role` enum. UNIT_PENDING is a session state, not a role. */
+/** Persisted `user_role` enum — same set, named for the database. */
 export const USER_ROLES = ['SUPERUSER', 'AGENT', 'SCANNER'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 

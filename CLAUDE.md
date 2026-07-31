@@ -44,8 +44,9 @@ tier; no delegated admin yet.
 its own subtree's analytics and ticket ledger. Cannot see other divisions.
 
 **Unit** — A specific physical location within a division (e.g. `5 BUILDING`,
-sector `BATHA`). Units are the *login boundary* for agents — the first
-authentication factor is the unit itself, not the person.
+sector `BATHA`). A unit is the *scope* every agent token carries, and every
+ticket is written against it. It is no longer an authentication factor: units
+stopped being a login step in §3.2.
 
 **Agent** — The human issuing tickets. Assigned to one unit. Identified by mobile
 number. Cannot access analytics, cannot edit or revoke issued tickets, and can
@@ -108,9 +109,17 @@ verifies. A `unit_sessions` row is still created, with `agent_id` and
   deactivation via `is_active`, `AGENT_LOGIN` / `AGENT_LOGIN_FAILED` audit
   rows, and the login rate limiter.
 
-`POST /api/auth/unit-login` still exists and still mints a `UNIT_PENDING`
-token; nothing in the UI calls it. It is the way back if location
-authentication is ever wanted again.
+`POST /api/auth/unit-login`, the `UNIT_PENDING` role and every branch that
+handled a partially authenticated session have been **deleted** — from
+`packages/shared` (`AUTH_ROLES`, `UnitPendingClaims`, `UnitLoginSchema`), the
+backend (route, controller, service, `findUnitsByCode`, `createUnitSession`,
+`findLiveSession`, `bindAgentToSession`, `agentNotBound`) and the frontend
+(`middleware.ts`, `ProtectedRoute`, `useAuthStore.setUnitPending`).
+
+`units.access_code_hash` is still on the table and still seeded, but nothing
+reads it. Reinstating location authentication means writing the endpoint
+again, not flipping a flag — which is the honest state of affairs, not an
+oversight.
 
 ---
 
@@ -402,7 +411,8 @@ pravasi-sangama/
 
 - `packages/shared` — capacity constants, Zod wire schemas, JWT claim types.
   Imported by both tiers; npm workspaces at the repo root.
-- `backend/src/modules/auth/` — two-step agent login + superuser login.
+- `backend/src/modules/auth/` — single-step agent login (§3.2), gate and
+  superuser login.
 - `backend/src/modules/tickets/` — issuance, crypto-random numbering, QR fan-out.
 - `backend/src/modules/scanning/` — `/verify` and `/bulk-sync`, one shared
   `resolveScan()` core.
@@ -429,8 +439,8 @@ Two layers, neither of which protects data.
 
 **`middleware.ts`** decodes the cookie payload **without verifying the
 signature** — the signing secret lives on the API, not the web tier. It is
-navigation UX: it keeps an agent out of `/dashboard` and sends a `UNIT_PENDING`
-session straight to step 2. A forged cookie reaches an empty shell.
+navigation UX: it keeps an agent out of `/dashboard` and an unauthenticated
+volunteer out of `/scanner`. A forged cookie reaches an empty shell.
 
 **`ProtectedRoute`** waits for `GET /api/auth/session`, which the API validated
 properly, and redirects on mismatch. It also covers client-side navigations.

@@ -250,13 +250,9 @@ function report() {
   }
 
   console.log(`\n${line}`);
-  console.log('  Verify the two-step flow:');
+  console.log('  Verify agent login (§3.2 — single step, no unit credential):');
   console.log(`
-    curl -c jar.txt -X POST localhost:${env.PORT}/api/auth/unit-login \\
-      -H 'Content-Type: application/json' \\
-      -d '{"unit_code":"5BUILDING","pin":"1234"}'
-
-    curl -b jar.txt -c jar.txt -X POST localhost:${env.PORT}/api/auth/agent-login \\
+    curl -c jar.txt -X POST localhost:${env.PORT}/api/auth/agent-login \\
       -H 'Content-Type: application/json' \\
       -d '{"mobile_number":"8888999955","password":"agent1234"}'
 `);

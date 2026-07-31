@@ -14,36 +14,6 @@ import {
  */
 
 /* ------------------------------------------------------------------ */
-/* Auth — step 1: unit location                                        */
-/* ------------------------------------------------------------------ */
-
-export const UnitLoginSchema = z.object({
-  unit_code: z
-    .string()
-    .trim()
-    .min(1, 'Unit code is required')
-    .max(32)
-    .transform((v) => v.toUpperCase()),
-
-  pin: z.string().min(4, 'PIN must be at least 4 characters').max(128),
-
-  /**
-   * Unit codes are unique per division, not globally (see the
-   * `units_division_code_key` constraint). Optional here: only required when
-   * the same code exists in more than one division, in which case the API
-   * replies AMBIGUOUS_UNIT_CODE and the client re-submits with it.
-   */
-  division_code: z
-    .string()
-    .trim()
-    .max(32)
-    .transform((v) => v.toUpperCase())
-    .optional(),
-});
-
-export type UnitLoginInput = z.infer<typeof UnitLoginSchema>;
-
-/* ------------------------------------------------------------------ */
 /* Auth — step 2: individual agent                                     */
 /* ------------------------------------------------------------------ */
 

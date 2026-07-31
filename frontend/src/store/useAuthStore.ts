@@ -43,10 +43,8 @@ interface AuthState {
   /** 'idle' until the first hydrate resolves — guards render an early redirect. */
   status: HydrationStatus;
 
-  /** Step 2 complete, or superuser signed in. Full access for that role. */
+  /** Signed in. Full access for that role. */
   login: (session: SessionResponse) => void;
-  /** Step 1 complete. Authenticated location, no agent bound yet. */
-  setUnitPending: (session: SessionResponse) => void;
   /** Clears local state. Call after POST /api/auth/logout clears the cookie. */
   logout: () => void;
   /** Reads the verified session from the API. Safe to call repeatedly. */
@@ -89,17 +87,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       status: 'ready',
     }),
 
-  // isAuth stays FALSE here. A unit session authenticates a location, not a
-  // person, and it cannot issue tickets or scan. Treating it as "logged in"
-  // is how a half-authenticated device ends up at a gate.
-  setUnitPending: (session) =>
-    set({
-      isAuth: false,
-      role: 'UNIT_PENDING',
-      userData: toUser(session),
-      status: 'ready',
-    }),
-
   logout: () => set({ ...EMPTY, status: 'ready' }),
 
   hydrate: async () => {
@@ -127,7 +114,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       set({
-        isAuth: session.role !== 'UNIT_PENDING',
+        isAuth: true,
         role: session.role,
         userData: toUser(session),
         status: 'ready',

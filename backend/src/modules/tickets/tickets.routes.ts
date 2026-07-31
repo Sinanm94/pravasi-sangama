@@ -23,7 +23,7 @@ const issueLimiter = rateLimit({
 
 export const ticketRoutes: Router = Router();
 
-// requireAgent rejects a UNIT_PENDING session with AGENT_NOT_BOUND (401)
+// requireAgent rejects any non-AGENT session (401)
 // rather than a bare 401, so the client knows to show step 2, not step 1.
 ticketRoutes.post(
   '/issue',

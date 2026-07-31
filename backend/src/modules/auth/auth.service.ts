@@ -13,8 +13,6 @@ import type {
   SessionResponse,
   SuperuserClaims,
   SuperuserLoginInput,
-  UnitLoginInput,
-  UnitPendingClaims,
 } from '@pravasi/shared';
 import { env } from '../../config/env.js';
 import {
@@ -50,106 +48,7 @@ const minutesFromNow = (minutes: number) =>
   new Date(Date.now() + minutes * 60_000);
 
 /* =================================================================== */
-/* STEP 1 — Unit location authentication                               */
-/* =================================================================== */
-
-export async function unitLogin(
-  input: UnitLoginInput,
-  ctx: RequestContext,
-): Promise<LoginResult> {
-  const units = await repo.findUnitsByCode(input.unit_code, input.division_code);
-
-  if (units.length === 0) {
-    // Constant-time miss: a wrong unit code must cost the same as a wrong PIN.
-    await verifyAgainstDummy(input.pin);
-    throw unauthorized('Invalid unit code or PIN');
-  }
-
-  if (units.length > 1) {
-    throw new AppError(
-      409,
-      'AMBIGUOUS_UNIT_CODE',
-      'This unit code exists in more than one division. Include division_code.',
-      { divisions: units.map((u) => u.division_code) },
-    );
-  }
-
-  const unit = units[0]!;
-
-  if (!unit.is_active) {
-    await verifyAgainstDummy(input.pin);
-    throw forbidden('This unit is not active');
-  }
-
-  const ok = await verifySecret(input.pin, unit.access_code_hash);
-  if (!ok) {
-    await repo.writeAudit({
-      actorRole: null,
-      actorId: null,
-      action: 'UNIT_LOGIN_FAILED',
-      entityType: 'unit',
-      entityId: unit.id,
-      metadata: { unit_code: unit.unit_code },
-      ip: ctx.ip,
-    });
-    throw unauthorized('Invalid unit code or PIN');
-  }
-
-  const ttlMinutes = env.UNIT_SESSION_TTL_MINUTES;
-  const sessionId = newId();
-  const expiresAt = minutesFromNow(ttlMinutes);
-
-  // Sign first so the session row can store the hash of this exact token.
-  const claims: UnitPendingClaims = {
-    role: 'UNIT_PENDING',
-    sessionId,
-    unitId: unit.id,
-    divisionId: unit.division_id,
-  };
-  const token = signSession(claims, ttlMinutes);
-
-  await repo.createUnitSession({
-    id: sessionId,
-    unitId: unit.id,
-    tokenHash: hashToken(token),
-    expiresAt,
-    ip: ctx.ip,
-    userAgent: ctx.userAgent,
-  });
-
-  await repo.writeAudit({
-    actorRole: null,
-    actorId: null,
-    action: 'UNIT_LOGIN',
-    entityType: 'unit_session',
-    entityId: sessionId,
-    metadata: { unit_code: unit.unit_code },
-    ip: ctx.ip,
-  });
-
-  return {
-    token,
-    ttlMinutes,
-    session: {
-      role: 'UNIT_PENDING',
-      unit: {
-        id: unit.id,
-        unitCode: unit.unit_code,
-        name: unit.name,
-        sector: unit.sector,
-      },
-      division: {
-        id: unit.division_id,
-        name: unit.division_name,
-        code: unit.division_code,
-      },
-      expiresAt: expiresAt.toISOString(),
-    },
-  };
-}
-
-/* =================================================================== */
-/* STEP 2 — Individual agent authentication                            */
+/* Agent authentication — single step (§3.2)                           */
 /* =================================================================== */
 
 /**

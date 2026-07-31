@@ -40,7 +40,6 @@ export default function ProtectedRoute({
 
     const url = new URL('/login', window.location.origin);
     url.searchParams.set('next', window.location.pathname);
-    if (role === 'UNIT_PENDING') url.searchParams.set('step', 'agent');
 
     router.replace(`${url.pathname}${url.search}`);
   }, [status, permitted, role, router]);

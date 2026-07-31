@@ -1,7 +1,7 @@
 import type { RequestHandler } from 'express';
 import { SESSION_COOKIE_NAME, type AgentClaims } from '@pravasi/shared';
 import { verifySession } from '../lib/jwt.js';
-import { agentNotBound, forbidden, unauthorized } from '../lib/errors.js';
+import { forbidden, unauthorized } from '../lib/errors.js';
 
 /** Reads and verifies the cookie, if present. Never rejects on its own. */
 export const loadSession: RequestHandler = (req, _res, next) => {
@@ -14,12 +14,12 @@ export const loadSession: RequestHandler = (req, _res, next) => {
 };
 
 /**
- * Full agent access. A UNIT_PENDING session is explicitly distinguished from
+ * Full agent access. Agent login is single-step, so there is no partially
+ * authenticated session left to distinguish from
  * no session at all — the client needs to know to show step 2, not step 1.
  */
 export const requireAgent: RequestHandler = (req, _res, next) => {
   if (!req.auth) return next(unauthorized());
-  if (req.auth.role === 'UNIT_PENDING') return next(agentNotBound());
   if (req.auth.role !== 'AGENT') return next(forbidden('Agent access required'));
   next();
 };
@@ -41,7 +41,6 @@ export const requireSuperuser: RequestHandler = (req, _res, next) => {
  */
 export const requireScanAccess: RequestHandler = (req, _res, next) => {
   if (!req.auth) return next(unauthorized());
-  if (req.auth.role === 'UNIT_PENDING') return next(agentNotBound());
   if (req.auth.role !== 'AGENT' && req.auth.role !== 'SCANNER') {
     return next(forbidden('Gate access required'));
   }
