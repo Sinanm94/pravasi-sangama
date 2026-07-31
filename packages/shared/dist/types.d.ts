@@ -291,4 +291,45 @@ export interface GateSummary {
     pinRotatedAt: string;
     pinValidOn: string | null;
 }
+/**
+ * One row of the admin agent directory.
+ *
+ * Every count is aggregated server-side per agent. The client is never handed
+ * a ticket list to count for itself — an admin browser has no business
+ * holding the ledger, and a paginated list would undercount silently.
+ */
+export interface AgentDirectoryEntry {
+    id: string;
+    name: string;
+    mobileNumber: string;
+    email: string | null;
+    unitCode: string;
+    unitName: string;
+    divisionName: string;
+    /** A deactivated agent keeps their history but cannot sign in. */
+    isActive: boolean;
+    createdAt: string;
+    /** Every ticket this agent has issued, revoked ones included. */
+    ticketsIssued: number;
+    /** Subset of `ticketsIssued` that was later revoked. */
+    ticketsRevoked: number;
+    /**
+     * Seats on this agent's still-active tickets — SUM(counted_persons).
+     *
+     * This is issued CAPACITY, not attendance. Admission is a scan, and lives in
+     * scan_logs. Labelling this "admitted" anywhere in the UI would misreport
+     * the gate.
+     */
+    seatsIssued: number;
+    /** Null when the agent has never issued a ticket. */
+    lastIssuedAt: string | null;
+}
+export interface AgentDirectoryResponse {
+    agents: AgentDirectoryEntry[];
+    totals: {
+        agents: number;
+        ticketsIssued: number;
+        seatsIssued: number;
+    };
+}
 //# sourceMappingURL=types.d.ts.map

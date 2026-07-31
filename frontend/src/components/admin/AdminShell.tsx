@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { BarChart3, DoorOpen, LogOut, UserCheck } from 'lucide-react';
+import { BarChart3, DoorOpen, LogOut, UserCheck, Users } from 'lucide-react';
 import { apiPost } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
@@ -22,6 +22,7 @@ const NAVY = '#062B59';
 const SECTIONS = [
   { href: '/dashboard', label: 'Live Dashboard', icon: BarChart3 },
   { href: '/admin/approvals', label: 'Agent Approvals', icon: UserCheck },
+  { href: '/admin/directory', label: 'Agent Directory', icon: Users },
   { href: '/admin/gates', label: 'Gate Management', icon: DoorOpen },
 ];
 

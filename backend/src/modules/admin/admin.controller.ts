@@ -3,6 +3,8 @@ import {
   AgentDecisionSchema,
   CreateGateSchema,
   RotateGatePinSchema,
+  type AgentDirectoryEntry,
+  type AgentDirectoryResponse,
   type GateSummary,
   type PendingAgent,
 } from '@pravasi/shared';
@@ -81,6 +83,43 @@ export const decideAgent = handle(async (req, res) => {
   });
 
   res.status(200).json({ id: decided.id, status: input.decision });
+});
+
+/* ------------------------------------------------------------------ */
+/* Agent directory                                                     */
+/* ------------------------------------------------------------------ */
+
+export const listAgentDirectory = handle(async (_req, res) => {
+  const rows = await repo.listAgentDirectory();
+
+  const agents: AgentDirectoryEntry[] = rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    mobileNumber: r.mobile_number,
+    email: r.email,
+    unitCode: r.unit_code,
+    unitName: r.unit_name,
+    divisionName: r.division_name,
+    isActive: r.is_active,
+    createdAt: r.created_at.toISOString(),
+    ticketsIssued: r.tickets_issued,
+    ticketsRevoked: r.tickets_revoked,
+    seatsIssued: r.seats_issued,
+    lastIssuedAt: r.last_issued_at?.toISOString() ?? null,
+  }));
+
+  /* Totalled here, not in the browser. The client sees at most 500 rows and
+   * would silently under-report the moment that cap is reached. */
+  const body: AgentDirectoryResponse = {
+    agents,
+    totals: {
+      agents: agents.length,
+      ticketsIssued: agents.reduce((n, a) => n + a.ticketsIssued, 0),
+      seatsIssued: agents.reduce((n, a) => n + a.seatsIssued, 0),
+    },
+  };
+
+  res.status(200).json(body);
 });
 
 /* ------------------------------------------------------------------ */

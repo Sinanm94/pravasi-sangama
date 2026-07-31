@@ -76,6 +76,67 @@ export async function decideAgent(params: {
 }
 
 /* ------------------------------------------------------------------ */
+/* Agent directory                                                     */
+/* ------------------------------------------------------------------ */
+
+export interface AgentDirectoryRow {
+  id: string;
+  name: string;
+  mobile_number: string;
+  email: string | null;
+  unit_code: string;
+  unit_name: string;
+  division_name: string;
+  is_active: boolean;
+  created_at: Date;
+  tickets_issued: number;
+  tickets_revoked: number;
+  seats_issued: number;
+  last_issued_at: Date | null;
+}
+
+/**
+ * Approved agents with their issuance totals.
+ *
+ * The counts come from a LATERAL subquery rather than a JOIN + GROUP BY.
+ * Joining tickets directly would multiply each agent row by its ticket count
+ * before collapsing it again, and every non-aggregated agent column would
+ * have to be repeated in GROUP BY. The lateral runs one indexed lookup per
+ * agent against idx_tickets_agent_created and returns exactly one row.
+ *
+ * `::INT` on each count matters: pg returns COUNT() as BIGINT, which the
+ * driver hands back as a *string* to protect precision. Without the cast the
+ * JSON would carry "42" and the UI would sort and total it as text.
+ */
+export async function listAgentDirectory(): Promise<AgentDirectoryRow[]> {
+  const { rows } = await query<AgentDirectoryRow>(
+    `SELECT a.id, a.name, a.mobile_number, a.email, a.is_active, a.created_at,
+            u.unit_code, u.name AS unit_name, d.name AS division_name,
+            t.tickets_issued, t.tickets_revoked, t.seats_issued,
+            t.last_issued_at
+       FROM agents a
+       JOIN units u     ON u.id = a.unit_id
+       JOIN divisions d ON d.id = u.division_id
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*)::INT AS tickets_issued,
+                COUNT(*) FILTER (WHERE tk.status = 'REVOKED')::INT
+                  AS tickets_revoked,
+                COALESCE(
+                  SUM(tk.counted_persons) FILTER (WHERE tk.status = 'ACTIVE'), 0
+                )::INT AS seats_issued,
+                MAX(tk.created_at) AS last_issued_at
+           FROM tickets tk
+          WHERE tk.agent_id = a.id
+       ) t ON TRUE
+      WHERE a.approval_status = 'APPROVED'
+      -- Busiest first: this page exists to spot who is and is not working.
+      ORDER BY t.tickets_issued DESC, a.name ASC
+      LIMIT 500`,
+  );
+  return rows;
+}
+
+/* ------------------------------------------------------------------ */
 /* Gates (spec §2, Option A)                                           */
 /* ------------------------------------------------------------------ */
 
