@@ -1,6 +1,12 @@
 import type { Request, RequestHandler, Response } from 'express';
-import { IssueTicketSchema, ShareTicketEmailSchema } from '@pravasi/shared';
+import {
+  IssueTicketSchema,
+  ShareTicketEmailSchema,
+  type AgentTicketListResponse,
+  type AgentTicketSummary,
+} from '@pravasi/shared';
 import { agentScope } from '../../middleware/auth.js';
+import * as repo from './tickets.repository.js';
 import * as service from './tickets.service.js';
 import * as shareService from './tickets.share.service.js';
 
@@ -41,4 +47,45 @@ export const shareByEmail = handle(async (req, res) => {
   const result = await shareService.shareTicketByEmail(input, scope);
 
   res.status(200).json(result);
+});
+
+/* ------------------------------------------------------------------ */
+/* GET /api/tickets/mine — the agent's own ledger                      */
+/* ------------------------------------------------------------------ */
+
+export const myTickets = handle(async (req, res) => {
+  // Scope comes from the verified token. An agent cannot widen this by
+  // passing an agent_id — there is no parameter to pass.
+  const scope = agentScope(req);
+  const rows = await repo.listTicketsByAgent(scope.agentId);
+
+  const tickets: AgentTicketSummary[] = rows.map((r) => ({
+    id: r.id,
+    requestNumber: r.request_number,
+    ticketNumber: r.ticket_number,
+    ticketType: r.ticket_type,
+    purchaserName: r.purchaser_name,
+    purchaserMobile: r.purchaser_mobile,
+    purchaserEmail: r.purchaser_email,
+    countedPersons: r.counted_persons,
+    childrenBelow12: r.children_below_12,
+    status: r.status,
+    createdAt: r.created_at.toISOString(),
+  }));
+
+  /* Revoked tickets stay in the list — the agent needs to see what they
+   * issued — but they are excluded from the headcounts, because nobody is
+   * catering for a seat that was cancelled. */
+  const active = tickets.filter((t) => t.status === 'ACTIVE');
+
+  const body: AgentTicketListResponse = {
+    tickets,
+    totals: {
+      tickets: tickets.length,
+      seats: active.reduce((n, t) => n + t.countedPersons, 0),
+      children: active.reduce((n, t) => n + t.childrenBelow12, 0),
+    },
+  };
+
+  res.status(200).json(body);
 });

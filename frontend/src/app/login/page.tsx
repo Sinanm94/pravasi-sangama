@@ -128,7 +128,7 @@ function LoginFlow() {
                   onAgent={async (session) => {
                     login(session);
                     await hydrate();
-                    router.replace(next ?? '/ticketing');
+                    router.replace(next ?? '/agent/dashboard');
                   }}
                 />
               )}

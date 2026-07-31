@@ -23,7 +23,7 @@ export default function RootPage() {
     if (status !== 'ready') return;
 
     if (role === 'SUPERUSER') router.replace('/dashboard');
-    else if (role === 'AGENT') router.replace('/ticketing');
+    else if (role === 'AGENT') router.replace('/agent/dashboard');
     else router.replace('/login');
   }, [status, role, router]);
 

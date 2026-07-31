@@ -140,19 +140,40 @@ unique **Ticket Number** (`TKT-NNNN`).
 The three premium tiers are **identical in capacity**. They differ only in
 presentation, pricing, and access zone — never in seat count.
 
-> **The Normal pass displays a LOCATION INFO panel, but is still issued with
-> one QR code.** That panel encodes `VENUE_INFO_URL` — a fixed venue link,
-> identical on every Normal ticket, carrying no admission value. The gate
-> returns `UNKNOWN_CODE` for it. `qrCodePlanFor()` is unchanged, so the
-> backend fan-out and the scanner are untouched. If the intent was for Normal
-> tickets to receive a real per-ticket location code, that is a change to
-> `qrCodePlanFor()` and the §4.1 table, not to the component.
+> **Printed panels differ from database rows.** The table above is the
+> `qr_codes` fan-out. What the pass *prints* is:
+>
+> | Tier | Printed panels | Made of |
+> | --- | --- | --- |
+> | Normal | **2** | 1 Location + 1 Guest |
+> | VIP / VVIP / SVIP | **5** | 1 Location + 4 Guest |
+>
+> **Every Location panel on every tier encodes `VENUE_INFO_URL`** — the fixed
+> Google Maps link — not the backend's `LOCATION` payload. That payload is a
+> bare UUID: a guest pointing a phone camera at it gets nothing, where the URL
+> opens directions. It carries no admission value and the gate returns
+> `UNKNOWN_CODE` for it.
+>
+> Normal has no `LOCATION` row at all (one code, `GUEST`), so its panel is
+> added by the component. `qrCodePlanFor()` is untouched — this is print
+> layout, not fan-out.
+>
+> **Consequence, deliberately accepted:** premium tickets still get a
+> `LOCATION` row in `qr_codes`, but it is no longer printed, so the gate's
+> `LOCATION_INFO` path is unreachable from a scanned pass. Those rows are
+> inert. Removing them is a change to `qrCodePlanFor()` and the table above —
+> a §4.5 shared-constant change touching both tiers — not a component tweak.
 
 ### 4.2 Children below 12
 
 Free. **Excluded from ticket capacity** — they do not consume a guest QR and do
 not increment `countedPersons`. Recorded on the registration for catering and
 crowd-safety headcount only.
+
+Surfaced in three places, all read-only: the ticket stub (`Children Below 12`),
+the pass footer beside the admitted count, and the **Children** column of the
+agent ledger at `/agent/dashboard`. Printed even when zero — a gate reading
+`+0 Children` knows the field was captured, where a missing line is ambiguous.
 
 ### 4.3 Enforcement
 
@@ -459,19 +480,17 @@ let the web tier mint tokens, which is a worse trade than an empty shell.
 
 1. `npm audit` flags transitive dev/build dependencies (html2canvas, jspdf).
    None are on a request path; clear before production.
-2. `VENUE_INFO_URL` is a placeholder Google Maps query. Replace with the real
-   venue link before any ticket is printed (§4.1).
-3. The ticket has no true perforation notches — deliberately omitted, since
+2. The ticket has no true perforation notches — deliberately omitted, since
    background-colored cutout circles break in print and email.
-4. Socket rooms are a single `superusers` room. Division-scoped rooms (§10.5)
+3. Socket rooms are a single `superusers` room. Division-scoped rooms (§10.5)
    land with division admins. No `gate:offline` heartbeat yet — "active gate"
    is inferred from recent scan activity.
-5. App icons are placeholders — `frontend/public/icons/` holds only a README.
-   Install prompts will not appear until real PNGs are dropped in.
-6. `request_number_seq` / `ticket_number_seq` in the baseline schema are now
+4. `request_number_seq` / `ticket_number_seq` in the baseline schema are now
    unused — numbers are crypto-random, not sequential (§4.4). Drop in a later
    migration.
-7. The seed creates no tickets, so there is nothing to scan yet.
+5. The seed creates no tickets, so there is nothing to scan yet.
+6. Premium `LOCATION` rows in `qr_codes` are issued but never printed (§4.1),
+   so `LOCATION_INFO` is unreachable at the gate. Inert, not harmful.
 
 ## Setup
 

@@ -43,6 +43,11 @@ export interface TicketData {
   purchaserName: string;
   mobile: string;
   email?: string | null;
+  /**
+   * Free, and OUTSIDE ticket capacity (§4.2) — printed for the gate's
+   * headcount, never added to the admitted-guest figure.
+   */
+  childrenBelow12?: number;
   eventDate: string;
   organization?: string;
   eventName?: string;
@@ -81,6 +86,7 @@ const MOCK_TICKET: TicketData = {
   purchaserName: 'Anand Kumar',
   mobile: '8888999955',
   email: null,
+  childrenBelow12: 2,
   eventDate: '15 OCT 2026',
   organization: 'Karnataka Cultural Foundation',
   eventName: 'Pravasi Sangama 2026',
@@ -120,8 +126,11 @@ export default function TicketReceipt({
             key: 'loc',
             label: 'Location',
             caption: 'Scan for location',
-            value:
-              payloadFor('LOCATION', null) ?? `${ticket.ticketNumber}-LOC`,
+            /* VENUE_INFO_URL, never the backend's LOCATION payload. That
+             * payload is a bare UUID: a guest pointing a camera at it gets
+             * nothing, where this opens directions. The UUID's purpose is a
+             * gate scan, and the gate does not read it off the print. */
+            value: VENUE_INFO_URL,
             isLocation: true,
           }
         : {
@@ -142,12 +151,16 @@ export default function TicketReceipt({
      * That panel therefore carries the static venue link — informational, not
      * an admission credential. qrCodePlanFor is untouched, so the backend
      * fan-out and the gate remain exactly as specified. */
+    /* A Normal ticket is issued with ONE qr_codes row (§4.1), so the shared
+     * plan has no LOCATION slot to map over. The panel is added here so every
+     * printed ticket carries directions — 2 panels on Normal, 5 on premium.
+     * qrCodePlanFor is untouched: this is print layout, not fan-out. */
     if (!premium) {
       planned.unshift({
         key: 'venue',
-        label: 'Location Info',
+        label: 'Location',
         caption: 'Scan for location',
-        value: payloadFor('LOCATION', null) ?? VENUE_INFO_URL,
+        value: VENUE_INFO_URL,
         isLocation: true,
       });
     }
@@ -398,6 +411,11 @@ function Ticket({
               diamondSrc={ornaments.diamond}
             />
             <StubItem
+              label="Children Below 12"
+              value={String(ticket.childrenBelow12 ?? 0)}
+              diamondSrc={ornaments.diamond}
+            />
+            <StubItem
               label="Event Date"
               value={ticket.eventDate}
               diamondSrc={ornaments.diamond}
@@ -527,6 +545,10 @@ function Ticket({
               style={{ color: `${GOLD}CC` }}
             >
               {isPremium ? 'Admits 4 Guests' : 'Admits 1 Guest'}
+              {/* Printed even when zero: a gate reading "+0 Children" knows
+                  the field was captured, where a missing line is ambiguous.
+                  Children are free and never consume a guest QR (§4.2). */}
+              {` · +${ticket.childrenBelow12 ?? 0} Children Below 12`}
             </p>
             <Diamond src={ornaments.diamond} />
           </div>

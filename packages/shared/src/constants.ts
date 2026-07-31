@@ -189,17 +189,18 @@ export const ORGANISATION_NAME = 'Karnataka Cultural Foundation';
 export const EVENT_DATE_LABEL = '15, Oct 2026';
 
 /**
- * Static venue-information target.
+ * Static venue-information target — the real event location.
  *
- * The Normal ticket design carries a LOCATION INFO panel, but a Normal ticket
- * is issued with **one** QR code (§4.1) and the database holds no LOCATION row
- * for it. That panel therefore encodes this fixed venue link — identical on
- * every Normal ticket, not an admission credential, and the gate will report
- * UNKNOWN_CODE if anyone tries to enter on it.
+ * EVERY ticket prints a Location panel carrying this link, on all tiers. It
+ * is a plain https URL so a guest's phone camera opens directions; the
+ * backend's LOCATION qr_codes payload is a bare UUID, which a camera app can
+ * do nothing with.
  *
- * Replace with the real venue map URL before anything is printed.
+ * It is NOT an admission credential and never was. The gate reports
+ * UNKNOWN_CODE for it, and it never consumes guest capacity.
  */
-export const VENUE_INFO_URL = 'https://maps.google.com/?q=Pravasi+Sangama+2026';
+export const VENUE_INFO_URL =
+  'https://maps.app.goo.gl/QpuirTEdGJGnZyED9?g_st=ic';
 
 /**
  * Numbers are crypto-random, not sequential — a sequential ticket number

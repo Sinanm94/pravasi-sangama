@@ -390,6 +390,40 @@ export interface AgentDirectoryEntry {
   lastIssuedAt: string | null;
 }
 
+/**
+ * One row of an agent's own ticket ledger (`GET /api/tickets/mine`).
+ *
+ * Scoped server-side to the token's `agentId` — §2's rule that an agent sees
+ * only their own registrations is enforced in the query, not by a filter the
+ * client could drop.
+ */
+export interface AgentTicketSummary {
+  id: string;
+  requestNumber: string;
+  ticketNumber: string;
+  ticketType: TicketType;
+  purchaserName: string;
+  purchaserMobile: string;
+  purchaserEmail: string | null;
+  /** Adults admitted. Children below 12 are excluded from this (§4.2). */
+  countedPersons: number;
+  /** Free, and outside ticket capacity — headcount only (§4.2). */
+  childrenBelow12: number;
+  status: TicketStatus;
+  createdAt: string;
+}
+
+export interface AgentTicketListResponse {
+  tickets: AgentTicketSummary[];
+  totals: {
+    tickets: number;
+    /** Sum of countedPersons on ACTIVE tickets. */
+    seats: number;
+    /** Sum of childrenBelow12 on ACTIVE tickets — catering and crowd safety. */
+    children: number;
+  };
+}
+
 export interface AgentDirectoryResponse {
   agents: AgentDirectoryEntry[];
   totals: {

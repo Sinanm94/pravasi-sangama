@@ -23,8 +23,11 @@ const issueLimiter = rateLimit({
 
 export const ticketRoutes: Router = Router();
 
-// requireAgent rejects any non-AGENT session (401)
-// rather than a bare 401, so the client knows to show step 2, not step 1.
+// requireAgent rejects any non-AGENT session with a 401.
+
+/** The agent's own ledger. Scoped to the token's agentId in the query. */
+ticketRoutes.get('/mine', requireAgent, controller.myTickets);
+
 ticketRoutes.post(
   '/issue',
   requireAgent,

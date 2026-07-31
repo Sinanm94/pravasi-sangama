@@ -291,6 +291,9 @@ function toTicketData(response: IssueTicketResponse): TicketData {
     purchaserName: t.purchaser_name,
     mobile: t.purchaser_mobile,
     email: t.purchaser_email,
+    // Server-derived, like counted_persons — the form's input is a request,
+    // the issuance response is the record (§4.3).
+    childrenBelow12: t.children_below_12,
     eventDate: EVENT_DATE_LABEL,
     organization: ORGANISATION_NAME,
     eventName: EVENT_NAME,

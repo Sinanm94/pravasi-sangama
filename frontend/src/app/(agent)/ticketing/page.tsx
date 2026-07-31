@@ -28,5 +28,10 @@ function TicketingScreen() {
     unit: user?.unitName ?? '—',
   };
 
-  return <AgentDashboard agent={agent} onBack={() => router.push('/scanner')} />;
+  /* Back belongs to the ledger the agent came from, not the gate scanner —
+   * issuing a ticket and scanning one are different jobs, and /scanner is a
+   * dead end for someone at a registration desk. */
+  return (
+    <AgentDashboard agent={agent} onBack={() => router.push('/agent/dashboard')} />
+  );
 }

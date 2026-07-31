@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg';
-import type { QrCodeKind, TicketType } from '@pravasi/shared';
+import type { QrCodeKind, TicketStatus, TicketType } from '@pravasi/shared';
 import { query } from '../../db/index.js';
 
 export interface TicketRow {
@@ -170,4 +170,49 @@ export async function writeAudit(
       params.ip ?? null,
     ],
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* An agent's own ledger                                               */
+/* ------------------------------------------------------------------ */
+
+export interface AgentTicketRow {
+  id: string;
+  request_number: string;
+  ticket_number: string;
+  ticket_type: TicketType;
+  purchaser_name: string;
+  purchaser_mobile: string;
+  purchaser_email: string | null;
+  counted_persons: number;
+  children_below_12: number;
+  status: TicketStatus;
+  created_at: Date;
+}
+
+/**
+ * Every ticket this agent issued, newest first.
+ *
+ * `agent_id = $1` is the whole authorization story and it comes from the
+ * verified token, never the request body — §2. There is deliberately no
+ * unit-wide or division-wide variant here: an agent sees their own
+ * registrations, nothing else.
+ *
+ * Runs on idx_tickets_agent_created, so the ORDER BY is an index read.
+ */
+export async function listTicketsByAgent(
+  agentId: string,
+  limit = 500,
+): Promise<AgentTicketRow[]> {
+  const { rows } = await query<AgentTicketRow>(
+    `SELECT id, request_number, ticket_number, ticket_type,
+            purchaser_name, purchaser_mobile, purchaser_email,
+            counted_persons, children_below_12, status, created_at
+       FROM tickets
+      WHERE agent_id = $1
+      ORDER BY created_at DESC
+      LIMIT $2`,
+    [agentId, limit],
+  );
+  return rows;
 }
