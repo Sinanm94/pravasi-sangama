@@ -51,13 +51,22 @@ export async function decideAgent(params: {
     name: string;
     email: string | null;
   }>(
+    /*
+     * Both uses of $2 carry an explicit ::approval_status cast.
+     *
+     * Without it Postgres deduces the parameter's type twice — `approval_status`
+     * from the SET assignment, `text` from the comparison against a bare
+     * 'APPROVED' literal — and rejects the statement with 42P08
+     * (ambiguous_parameter, "text versus approval_status"). Casting one use is
+     * not enough; the two deductions must agree.
+     */
     `UPDATE agents
-        SET approval_status  = $2,
+        SET approval_status  = $2::approval_status,
             approved_at      = NOW(),
             approved_by      = $3,
             rejected_reason  = $4,
             -- A rejected account must not be able to authenticate at all.
-            is_active        = ($2 = 'APPROVED')
+            is_active        = ($2::approval_status = 'APPROVED')
       WHERE id = $1
         AND approval_status = 'PENDING'
      RETURNING id, name, email`,
