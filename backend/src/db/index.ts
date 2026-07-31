@@ -3,8 +3,34 @@ import { env, isProduction } from '../config/env.js';
 
 const { Pool } = pg;
 
+/**
+ * Supabase hands out connection strings ending in `?sslmode=require`. Recent
+ * pg-connection-string upgrades that to `verify-full`, which overrides the
+ * `ssl` object below and rejects Supabase's self-signed chain with
+ * "self-signed certificate in certificate chain" — at boot, as
+ * "database unreachable".
+ *
+ * TLS is governed by PGSSL here, so strip the parameter rather than leaving
+ * two mechanisms to fight over it.
+ *
+ * Do NOT reach for NODE_TLS_REJECT_UNAUTHORIZED=0 instead. That disables
+ * certificate verification for every outbound TLS connection in the process —
+ * SMTP and any HTTPS call included — where this is scoped to Postgres.
+ */
+function sanitizedConnectionString(): string {
+  try {
+    const url = new URL(env.DATABASE_URL);
+    url.searchParams.delete('sslmode');
+    url.searchParams.delete('uselibpqcompat');
+    return url.toString();
+  } catch {
+    // Not a parseable URL (a libpq key=value DSN). Hand it over untouched.
+    return env.DATABASE_URL;
+  }
+}
+
 export const pool = new Pool({
-  connectionString: env.DATABASE_URL,
+  connectionString: sanitizedConnectionString(),
   ssl: env.PGSSL ? { rejectUnauthorized: false } : undefined,
   max: 20,
   idleTimeoutMillis: 30_000,
