@@ -1,1 +1,22 @@
-node_modules
+# Dependencies
+node_modules/
+
+# Build output. Nothing here is a source of truth — every deploy path rebuilds
+# it, so committing it only produces large meaningless diffs:
+#   Vercel  cd .. && npm run build:shared && cd frontend && next build
+#   Render  npm ci && npm run build:shared && npm run build -w @pravasi/backend
+# `npm install` also rebuilds packages/shared via its prepare script.
+.next/
+dist/
+out/
+*.tsbuildinfo
+
+# Local environment. The .env.example files ARE tracked — they are the
+# template. A real .env carries JWT_SECRET and DATABASE_URL and must not be.
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+.directory
