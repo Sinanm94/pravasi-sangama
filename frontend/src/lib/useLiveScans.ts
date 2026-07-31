@@ -21,9 +21,37 @@ import {
 /** Hard ceiling on retained events — an all-day dashboard must not grow. */
 const MAX_FEED_ITEMS = 50;
 
-const SOCKET_URL =
-  process.env.NEXT_PUBLIC_SOCKET_URL ??
-  (typeof window !== 'undefined' ? window.location.origin : '');
+/**
+ * Origin for the socket handshake.
+ *
+ * socket.io-client only recognises a scheme when it sees a full `://`. Given
+ * `https:/host` (one slash) or a bare `host`, it silently prepends the page
+ * protocol, so `https:/api.example.com` becomes `https://https:/api.example.com`
+ * and the handshake goes to `wss://https/socket.io/`. That failure mode is
+ * invisible in the env var and only shows up as a dead live feed, so validate
+ * here instead of trusting the value.
+ *
+ * Order: explicit socket URL → derived from the API URL (which carries the
+ * `/api` suffix the socket must NOT have) → same origin.
+ */
+function resolveSocketUrl(): string {
+  const explicit = process.env.NEXT_PUBLIC_SOCKET_URL?.trim();
+  const fromApi = process.env.NEXT_PUBLIC_API_URL?.trim().replace(/\/api\/?$/, '');
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+
+  for (const candidate of [explicit, fromApi]) {
+    if (!candidate) continue;
+    if (/^https?:\/\/[^/]+/.test(candidate)) return candidate.replace(/\/+$/, '');
+    console.warn(
+      `[live] Ignoring malformed socket origin ${JSON.stringify(candidate)} — ` +
+        'expected a full origin like https://api.example.com (note the "//").',
+    );
+  }
+
+  return origin;
+}
+
+const SOCKET_URL = resolveSocketUrl();
 
 export interface LiveScansState {
   scans: RecentScanEntry[];
