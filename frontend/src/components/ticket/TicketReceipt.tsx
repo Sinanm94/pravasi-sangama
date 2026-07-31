@@ -310,7 +310,14 @@ function Ticket({
   return (
     <article
       ref={ticketRef}
-      className="relative flex min-w-[940px] overflow-hidden rounded-2xl text-white shadow-[0_20px_60px_-15px_rgba(6,43,89,0.45)] print:min-w-0 print:shadow-none"
+      /* FIXED width, not min-w. html2canvas captures at node.scrollWidth,
+         so a min-width let the pass grow with its container and the raster
+         changed aspect ratio between desktop and phone. 1000px divides
+         cleanly into the 250px stub + 750px body below, which keeps the two
+         columns on the same horizontal plane with no sub-pixel rounding —
+         percentage widths were the alignment drift. print: overrides let
+         the browser fit it to paper (§6.2). */
+      className="relative flex w-[1000px] shrink-0 overflow-hidden rounded-2xl text-white shadow-[0_20px_60px_-15px_rgba(6,43,89,0.45)] print:w-full print:min-w-0 print:shadow-none"
       style={{
         // Navy stays as the base layer. If the background art 404s in
         // production or is stripped by an email client, the pass is still
@@ -341,7 +348,7 @@ function Ticket({
 
       {/* ---------------- Stub ---------------- */}
       <div
-        className={`relative z-10 flex w-1/4 shrink-0 items-stretch ${
+        className={`relative z-10 flex w-[250px] shrink-0 items-stretch ${
           hasDividerArt ? '' : 'border-r-2 border-dashed'
         }`}
         style={{
@@ -367,9 +374,13 @@ function Ticket({
         )}
 
         {/* Rotated ticket number on the outer edge */}
-        <div className="flex w-9 shrink-0 items-center justify-center border-r border-white/5">
+        {/* Crypto-random ticket numbers run to ~14 characters (§4.4). At the
+            old 11px/0.35em the rotated string was longer than the stub is
+            tall and ran off the top edge. overflow-hidden is the hard stop;
+            the smaller type is what keeps it from needing one. */}
+        <div className="flex w-9 shrink-0 items-center justify-center overflow-hidden border-r border-white/5">
           <span
-            className="-rotate-90 whitespace-nowrap text-[11px] font-bold uppercase tracking-[0.35em]"
+            className="-rotate-90 whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.2em]"
             style={{ color: GOLD }}
           >
             {ticket.ticketNumber}
@@ -389,11 +400,13 @@ function Ticket({
               label="Request Number"
               value={ticket.requestNumber}
               diamondSrc={ornaments.diamond}
+              variant="code"
             />
             <StubItem
               label="Ticket Number"
               value={ticket.ticketNumber}
               diamondSrc={ornaments.diamond}
+              variant="code"
             />
             <StubItem
               label="Ticket Type"
@@ -435,7 +448,10 @@ function Ticket({
       </div>
 
       {/* ---------------- Main body ---------------- */}
-      <div className="relative z-10 flex w-3/4 flex-col px-8 py-6">
+      {/* flex-1 + min-w-0: takes exactly the 750px the stub leaves, and lets
+          truncate/ellipsis work on descendants — without min-w-0 a flex item
+          refuses to shrink below its content and children overflow instead. */}
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col px-8 py-6">
         <header>
           <div className="flex items-center gap-2.5">
             {brand.logo && (
@@ -501,7 +517,13 @@ function Ticket({
         {/* ---- QR region ---- */}
         {isPremium ? (
           /* Five panels, separated by small gold diamonds. */
-          <div className="mt-6 flex items-stretch justify-between gap-0">
+          /* Explicit gap, centred — not justify-between with gap-0.
+             justify-between distributed leftover space *between* panels, so
+             the spacing changed with the tier label above and the panels sat
+             hard against the body padding at the ends. Budget at 750px body
+             - 64px padding = 686px usable: 5x112 (560) + 4 diamonds (~28)
+             + 8 gaps x 8px (64) = 652. It fits with room, deterministically. */
+          <div className="mt-6 flex items-stretch justify-center gap-2">
             {codes.map((code, i) => (
               <Fragment key={code.key}>
                 {i > 0 && <DiamondSpacer src={ornaments.diamond} />}
@@ -512,7 +534,7 @@ function Ticket({
         ) : (
           /* Three sections: date box | location info | admission.
              Thin vertical rules with a gold diamond at their midpoint. */
-          <div className="mt-6 flex items-stretch justify-between gap-0">
+          <div className="mt-6 flex items-stretch justify-center gap-4">
             <DateBlock date={ticket.eventDate} />
 
             <RuleWithDiamond src={ornaments.diamond} />
@@ -562,25 +584,52 @@ function Ticket({
 /* Pieces                                                              */
 /* ------------------------------------------------------------------ */
 
+/**
+ * One labelled row of the stub ledger.
+ *
+ * `variant` decides what happens when the value is too wide, and the two
+ * cases are NOT interchangeable:
+ *
+ *   'text'  clip with an ellipsis. Correct for a purchaser name — "Anand
+ *           Kumar Venkatesh…" is still recognisably the right person.
+ *
+ *   'code'  wrap, never clip. A request or ticket number is what staff type
+ *           to find this booking; an ellipsised REQ-2026-A3F1… is worse than
+ *           useless because it looks complete. Smaller, tighter type so the
+ *           full ~21-character value fits on one line at 250px, with
+ *           break-all as the fallback rather than truncation.
+ */
 function StubItem({
   label,
   value,
   diamondSrc,
+  variant = 'text',
 }: {
   label: string;
   value: string;
   diamondSrc?: string;
+  variant?: 'text' | 'code';
 }) {
+  const isCode = variant === 'code';
+
   return (
     <div className="flex items-start gap-2">
       <span className="mt-[5px] shrink-0">
         <Diamond src={diamondSrc} />
       </span>
-      <div className="min-w-0">
+      {/* min-w-0 is what actually lets the child clip or wrap — a flex item
+          defaults to min-width:auto and will overflow its parent instead. */}
+      <div className="min-w-0 flex-1">
         <dt className="text-[8px] font-semibold uppercase tracking-[0.16em] text-white/40">
           {label}
         </dt>
-        <dd className="mt-0.5 truncate text-[12px] font-semibold text-white">
+        <dd
+          className={
+            isCode
+              ? 'mt-0.5 break-all text-[10.5px] font-semibold leading-[1.35] tracking-[-0.01em] text-white tabular-nums'
+              : 'mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold leading-[1.35] text-white'
+          }
+        >
           {value}
         </dd>
       </div>
@@ -626,10 +675,13 @@ function QrPanel({
   const compact = size === 'compact';
 
   return (
-    <div className={compact ? 'w-[104px]' : 'w-[148px]'}>
-      {/* Panel label sits above the card, in gold on the navy surface */}
+    <div className={compact ? 'w-[112px] shrink-0' : 'w-[148px] shrink-0'}>
+      {/* Panel label sits above the card, in gold on the navy surface.
+          nowrap + ellipsis: "Location" and "Guest 1" fit, but the label is
+          the one string here that could be re-worded later, and a wrapped
+          label would push every panel to a different height. */}
       <p
-        className="mb-2 text-center text-[9px] font-bold uppercase tracking-[0.14em]"
+        className="mb-2 overflow-hidden text-ellipsis whitespace-nowrap text-center text-[8.5px] font-bold uppercase tracking-[0.1em]"
         style={{ color: GOLD }}
       >
         {code.label}
@@ -642,23 +694,28 @@ function QrPanel({
           boxShadow: '0 6px 18px rgba(3,31,67,0.35)',
         }}
       >
-        <div className={compact ? 'p-1.5' : 'p-2'}>
+        <div className={compact ? 'p-2' : 'p-2.5'}>
           <TicketQr
             value={code.value}
-            className={compact ? 'h-[88px] w-full' : 'h-[128px] w-full'}
+            className={compact ? 'h-[92px] w-full' : 'h-[128px] w-full'}
           />
         </div>
 
-        {/* Caption block — #031F43 with white text */}
+        {/* Caption block — #031F43 with white text.
+            The old box was px-1 py-[5px] with leading-tight, so "SCAN FOR
+            ADMISSION" sat against both edges and its descenders touched the
+            bottom. Now: real horizontal padding, a minimum height so every
+            panel's block is the same depth regardless of caption length, and
+            nowrap+ellipsis as the hard stop rather than a silent overflow. */}
         <div
-          className="px-1 py-[5px] text-center"
+          className="flex min-h-[18px] items-center justify-center px-2 py-1.5 text-center"
           style={{ backgroundColor: NAVY_DARK }}
         >
           <span
-            className={`block font-bold uppercase leading-tight text-white ${
+            className={`block w-full overflow-hidden text-ellipsis whitespace-nowrap font-bold uppercase leading-[1.5] text-white ${
               compact
-                ? 'text-[6px] tracking-[0.06em]'
-                : 'text-[7px] tracking-[0.1em]'
+                ? 'text-[5.5px] tracking-[0.04em]'
+                : 'text-[7px] tracking-[0.08em]'
             }`}
           >
             {code.caption}
@@ -764,7 +821,9 @@ function RuleWithDiamond({ src }: { src?: string }) {
 /** Bare gold diamond between premium QR panels — no rule. */
 function DiamondSpacer({ src }: { src?: string }) {
   return (
-    <span className="flex shrink-0 items-center px-1.5">
+    // px-0: the parent's `gap` is the single source of spacing now. Padding
+    // here as well would double it and push the rail over its width.
+    <span className="flex shrink-0 items-center px-0">
       <Diamond src={src} size={6} />
     </span>
   );
