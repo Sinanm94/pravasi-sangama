@@ -24,7 +24,6 @@ import { closePool, query } from './index.js';
  * Usage:
  *   npm run db:rotate -w @pravasi/backend -- audit
  *   npm run db:rotate -w @pravasi/backend -- superuser admin1
- *   npm run db:rotate -w @pravasi/backend -- unit 5BUILDING
  *   npm run db:rotate -w @pravasi/backend -- agent 8888999955
  *   npm run db:rotate -w @pravasi/backend -- gate GATE1
  */
@@ -33,10 +32,12 @@ import { closePool, query } from './index.js';
  * is still using one, rather than assuming from the row's existence. */
 const SEEDED_SECRETS = {
   superuser: 'SuperAdmin@2026',
-  unit: '1234',
   agent: 'agent1234',
   gate: '4321',
 } as const;
+
+/* No `unit` entry: migration 004 dropped units.access_code_hash. Units are a
+ * posting, not a login, so there is no unit secret left to audit or rotate. */
 
 const MIN_LENGTH = 10;
 
@@ -105,9 +106,6 @@ async function audit(): Promise<void> {
   const superusers = await query<{ username: string; password_hash: string }>(
     `SELECT username, password_hash FROM superusers WHERE is_active`,
   );
-  const units = await query<{ unit_code: string; access_code_hash: string }>(
-    `SELECT unit_code, access_code_hash FROM units WHERE is_active`,
-  );
   const agents = await query<{ mobile_number: string; pin_hash: string | null }>(
     `SELECT mobile_number, pin_hash FROM agents WHERE is_active`,
   );
@@ -119,10 +117,6 @@ async function audit(): Promise<void> {
     (await auditTable(
       'superuser',
       superusers.rows.map((r) => ({ label: r.username, hash: r.password_hash })),
-    )) +
-    (await auditTable(
-      'unit',
-      units.rows.map((r) => ({ label: r.unit_code, hash: r.access_code_hash })),
     )) +
     (await auditTable(
       'agent',
@@ -161,11 +155,6 @@ async function rotate(
             RETURNING username AS label`,
       what: 'superuser password',
     },
-    unit: {
-      sql: `UPDATE units SET access_code_hash = $2 WHERE unit_code = $1
-            RETURNING unit_code AS label`,
-      what: 'unit access code',
-    },
     agent: {
       sql: `UPDATE agents SET pin_hash = $2 WHERE mobile_number = $1
             RETURNING mobile_number AS label`,
@@ -200,7 +189,6 @@ const USAGE = `
 Usage:
   db:rotate audit
   db:rotate superuser <username>
-  db:rotate unit      <unit_code>
   db:rotate agent     <mobile_number>
   db:rotate gate      <gate_code>
 `;
@@ -213,12 +201,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (
-    command === 'superuser' ||
-    command === 'unit' ||
-    command === 'agent' ||
-    command === 'gate'
-  ) {
+  if (command === 'superuser' || command === 'agent' || command === 'gate') {
     if (!identifier) throw new Error(`${command} needs an identifier.${USAGE}`);
     await rotate(command, identifier);
     return;

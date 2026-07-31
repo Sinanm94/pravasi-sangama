@@ -49,19 +49,11 @@ const GATES = [
   { gate_code: 'GATE2', name: 'Gate 2 — General', pin: '4321' },
 ] as const;
 
+/* No PIN: units stopped being an authentication factor in §3.2, and
+ * migration 004 dropped access_code_hash. A unit is a posting, not a login. */
 const UNITS = [
-  {
-    unit_code: '5BUILDING',
-    name: '5 Building',
-    sector: 'BATHA',
-    pin: '1234',
-  },
-  {
-    unit_code: 'DEERA',
-    name: 'Deera',
-    sector: 'BATHA',
-    pin: '1234',
-  },
+  { unit_code: '5BUILDING', name: '5 Building', sector: 'BATHA' },
+  { unit_code: 'DEERA', name: 'Deera', sector: 'BATHA' },
 ] as const;
 
 const AGENTS = [
@@ -141,20 +133,17 @@ async function seed() {
     const unitIds = new Map<string, string>();
 
     for (const unit of UNITS) {
-      const accessCodeHash = await hashSecret(unit.pin);
-
       // Natural key is (division_id, unit_code) — unit codes are unique
       // within a division, not globally.
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO units (division_id, unit_code, name, sector, access_code_hash)
-              VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO units (division_id, unit_code, name, sector)
+              VALUES ($1, $2, $3, $4)
          ON CONFLICT (division_id, unit_code) DO UPDATE
-              SET name             = EXCLUDED.name,
-                  sector           = EXCLUDED.sector,
-                  access_code_hash = EXCLUDED.access_code_hash,
-                  is_active        = TRUE
+              SET name      = EXCLUDED.name,
+                  sector    = EXCLUDED.sector,
+                  is_active = TRUE
            RETURNING id`,
-        [divisionId, unit.unit_code, unit.name, unit.sector, accessCodeHash],
+        [divisionId, unit.unit_code, unit.name, unit.sector],
       );
 
       unitIds.set(unit.unit_code, rows[0]!.id);
@@ -228,14 +217,13 @@ function report() {
 
   console.log(`\n  DIVISION   ${DIVISION.name} (${DIVISION.code})`);
 
-  console.log('\n  UNITS — step 1 of agent login');
+  console.log('\n  UNITS — agent postings, no credential');
   for (const u of UNITS) {
     console.log(`    ${u.sector} · ${u.name}`);
     console.log(`      unit_code : ${u.unit_code}`);
-    console.log(`      pin       : ${u.pin}`);
   }
 
-  console.log('\n  AGENTS — step 2 of agent login');
+  console.log('\n  AGENTS — sign in with mobile (or email) + password');
   for (const a of AGENTS) {
     console.log(`    ${a.name}  (unit ${a.unit_code})`);
     console.log(`      mobile_number : ${a.mobile_number}`);
@@ -255,13 +243,6 @@ function report() {
     curl -c jar.txt -X POST localhost:${env.PORT}/api/auth/agent-login \\
       -H 'Content-Type: application/json' \\
       -d '{"mobile_number":"8888999955","password":"agent1234"}'
-`);
-  console.log('  Cross-unit rejection (expect 403 AGENT_UNIT_MISMATCH):');
-  console.log(`
-    # log in to 5BUILDING, then attempt step 2 as the DEERA agent
-    curl -b jar.txt -X POST localhost:${env.PORT}/api/auth/agent-login \\
-      -H 'Content-Type: application/json' \\
-      -d '{"mobile_number":"8888999957","password":"agent1234"}'
 `);
   console.log(line + '\n');
 }

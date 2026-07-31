@@ -1,0 +1,21 @@
+-- ---------------------------------------------------------------------
+-- 004 — drop units.access_code_hash
+--
+-- Agent login became single-step (§3.2): the unit is read from the agent's
+-- own row after their password verifies, and POST /api/auth/unit-login was
+-- deleted along with the UNIT_PENDING role. Nothing has read this column
+-- since. A credential that grants nothing but still looks like a credential
+-- is worse than no column at all — it invites someone to "fix" the login by
+-- wiring it back up.
+--
+-- IRREVERSIBLE. There is no down-migration runner here, and the stored
+-- bcrypt hashes are gone once this commits. That is intended: they were
+-- hashes of PINs nobody distributes any more. Reinstating location
+-- authentication means a new column, new PINs and a new endpoint — not a
+-- rollback.
+--
+-- units.is_active, unit_code, name and sector are untouched. Units remain
+-- the scope every agent token carries and every ticket is written against.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE units DROP COLUMN IF EXISTS access_code_hash;
