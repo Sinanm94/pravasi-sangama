@@ -32,6 +32,7 @@ import {
   AuthOutcome,
   AuthShell,
   Field,
+  NAVY,
   SelectField,
   SubtleButton,
   Submit,
@@ -199,27 +200,37 @@ function AgentLoginForm({
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const submitUnit = async (e: React.FormEvent) => {
+  /**
+   * ONE submit, both factors.
+   *
+   * The screen is single-step; the PROTOCOL is still the two steps of §3.2.
+   * `/auth/unit-login` runs first and sets the short-lived unit session that
+   * `/auth/agent-login` requires — the server still has no endpoint that
+   * turns a mobile number into an agent JWT on its own, and an agent posted
+   * against the wrong unit is still rejected. Collapsing the presentation
+   * costs none of that.
+   *
+   * When a unit session is already live (`step === 'agent'`) the location
+   * call is skipped entirely, so a shift change is mobile + password only.
+   * That is the case that actually repeats all day on a shared gate phone.
+   */
+  const submitBoth = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-    try {
-      const session = await apiPost<SessionResponse>('/auth/unit-login', {
-        unit_code: unitCode,
-        pin,
-      });
-      onUnit(session);
-      toast.success('Unit authenticated', { description: session.unit?.name });
-    } catch (err) {
-      toast.error('Unit sign in failed', { description: errorMessage(err) });
-    } finally {
-      setBusy(false);
-    }
-  };
 
-  const submitAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
+    // Tracks which call is in flight, so a failure gets the right words.
+    let unitAuthenticated = step === 'agent';
+
     try {
+      if (!unitAuthenticated) {
+        const session = await apiPost<SessionResponse>('/auth/unit-login', {
+          unit_code: unitCode,
+          pin,
+        });
+        onUnit(session);
+        unitAuthenticated = true;
+      }
+
       await onAgent(
         await apiPost<SessionResponse>('/auth/agent-login', {
           mobile_number: identifier,
@@ -227,6 +238,15 @@ function AgentLoginForm({
         }),
       );
     } catch (err) {
+      if (!unitAuthenticated) {
+        /* Named so nobody re-checks their own password over a wrong unit PIN.
+         * The agent fields are untouched — only the location was rejected. */
+        toast.error('Unit sign in failed', {
+          description: errorMessage(err),
+        });
+        setBusy(false);
+        return;
+      }
       /* The approval states get their own words. "Sign in failed" would send
        * an agent hunting for a typo that isn't there. */
       const code = errorCode(err);
@@ -253,79 +273,124 @@ function AgentLoginForm({
     }
   };
 
-  if (step === 'unit') {
-    return (
-      <form onSubmit={submitUnit} className="mt-6 space-y-4">
-        <AuthHeader
-          icon={Building2}
-          title="Step 1 — Unit location"
-          subtitle="Authenticate the location before the person"
-        />
-        <Field
-          label="Unit Code"
-          value={unitCode}
-          onChange={setUnitCode}
-          placeholder="5BUILDING"
-          autoCapitalize="characters"
-          required
-        />
-        <Field
-          label="Unit PIN"
-          type="password"
-          inputMode="numeric"
-          value={pin}
-          onChange={setPin}
-          autoComplete="off"
-          required
-        />
-        <Submit busy={busy} busyLabel="Checking…">
-          Authenticate Unit
-        </Submit>
-      </form>
-    );
-  }
+  const unitKnown = step === 'agent';
 
   return (
-    <form onSubmit={submitAgent} className="mt-6 space-y-4">
+    <form onSubmit={submitBoth} className="mt-6 space-y-5">
       <AuthHeader
-        icon={User}
-        title="Step 2 — Agent"
+        icon={unitKnown ? User : Building2}
+        title="Sign in"
         subtitle={
-          unitName ? `Unit authenticated · ${unitName}` : 'Unit authenticated'
+          unitKnown
+            ? 'Confirm it is you — the location is already signed in'
+            : 'Confirm the location and yourself'
         }
       />
-      <Field
-        label="Mobile Number"
-        hint="Your Agent ID"
-        value={identifier}
-        onChange={(v) => setIdentifier(v.replace(/\D/g, '').slice(0, 10))}
-        inputMode="numeric"
-        placeholder="8888999955"
-        autoComplete="username"
-        required
-      />
-      <Field
-        label="Password"
-        type="password"
-        value={password}
-        onChange={setPassword}
-        autoComplete="current-password"
-        required
-      />
+
+      {unitKnown ? (
+        /* The location is authenticated and OUTLIVES agent logout (§3.2), so
+         * it is shown as settled context rather than a field to re-enter.
+         * This is the whole point of the split: a shift change is two fields,
+         * not four. */
+        <UnitContext name={unitName} onChange={() => void onChangeUnit()} />
+      ) : (
+        <section className="space-y-4">
+          <GroupLabel>Location</GroupLabel>
+          <Field
+            label="Unit Code"
+            value={unitCode}
+            onChange={setUnitCode}
+            placeholder="5BUILDING"
+            autoCapitalize="characters"
+            autoComplete="off"
+            required
+          />
+          <Field
+            label="Unit PIN"
+            type="password"
+            inputMode="numeric"
+            value={pin}
+            onChange={setPin}
+            autoComplete="off"
+            required
+          />
+        </section>
+      )}
+
+      <section className="space-y-4">
+        {!unitKnown && <GroupLabel>You</GroupLabel>}
+        <Field
+          label="Mobile Number"
+          hint="Your Agent ID"
+          value={identifier}
+          onChange={(v) => setIdentifier(v.replace(/\D/g, '').slice(0, 10))}
+          inputMode="numeric"
+          placeholder="8888999955"
+          autoComplete="username"
+          required
+        />
+        <Field
+          label="Password"
+          type="password"
+          value={password}
+          onChange={setPassword}
+          autoComplete="current-password"
+          required
+        />
+      </section>
+
       <Submit busy={busy} busyLabel="Signing in…">
         Sign In
       </Submit>
-
-      {/* The unit session outlives agent logout by design (§3.2), so going
-          back means explicitly abandoning the location too. */}
-      <SubtleButton
-        icon={ArrowLeft}
-        onClick={() => void onChangeUnit()}
-        className="pt-1"
-      >
-        Change unit
-      </SubtleButton>
     </form>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+/** Quiet section divider — a word, not a rule (§5.1). */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+      {children}
+    </p>
+  );
+}
+
+/** The live unit session, shown as settled context with a way to abandon it. */
+function UnitContext({
+  name,
+  onChange,
+}: {
+  name?: string;
+  onChange: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 ring-1 ring-gray-900/[0.04]">
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${NAVY}12` }}
+      >
+        <Building2 className="h-4 w-4" strokeWidth={2.25} style={{ color: NAVY }} />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
+          Location
+        </p>
+        <p className="truncate text-[13px] font-medium text-gray-900">
+          {name ?? 'Unit authenticated'}
+        </p>
+      </div>
+
+      <button
+        type="button"
+        onClick={onChange}
+        className="shrink-0 rounded-lg px-2 py-1 text-[12px] font-medium text-gray-400 transition-colors hover:text-gray-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/10"
+      >
+        Change
+      </button>
+    </div>
   );
 }
 
