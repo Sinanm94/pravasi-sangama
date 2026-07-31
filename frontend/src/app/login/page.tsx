@@ -6,7 +6,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
-  Building2,
   CheckCircle2,
   Mail,
   ScanLine,
@@ -60,11 +59,9 @@ function LoginFlow() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const role = useAuthStore((s) => s.role);
   const status = useAuthStore((s) => s.status);
   const hydrate = useAuthStore((s) => s.hydrate);
   const login = useAuthStore((s) => s.login);
-  const setUnitPending = useAuthStore((s) => s.setUnitPending);
 
   const [tab, setTab] = useState<Tab>('login');
   const [adminMode, setAdminMode] = useState(false);
@@ -75,17 +72,7 @@ function LoginFlow() {
     if (status === 'idle') void hydrate();
   }, [status, hydrate]);
 
-  /* A live unit session means the location is authenticated and only the
-   * person is missing — shift changes land here and re-run step 2 alone. */
-  const step: 'unit' | 'agent' =
-    role === 'UNIT_PENDING' || params.get('step') === 'agent' ? 'agent' : 'unit';
-
-  // Mid-session, the only sensible action is finishing step 2.
-  useEffect(() => {
-    if (role === 'UNIT_PENDING') setTab('login');
-  }, [role]);
-
-  const showTabs = step === 'unit' && !adminMode;
+  const showTabs = !adminMode;
 
   return (
     <AuthShell>
@@ -129,7 +116,7 @@ function LoginFlow() {
 
           <AnimatePresence mode="wait">
             <motion.div
-              key={`${tab}-${step}`}
+              key={tab}
               variants={screenVariants}
               initial="hidden"
               animate="visible"
@@ -138,17 +125,10 @@ function LoginFlow() {
             >
               {tab === 'login' && (
                 <AgentLoginForm
-                  step={step}
-                  onUnit={setUnitPending}
                   onAgent={async (session) => {
                     login(session);
                     await hydrate();
                     router.replace(next ?? '/ticketing');
-                  }}
-                  onChangeUnit={async () => {
-                    await apiPost('/auth/logout').catch(() => {});
-                    useAuthStore.getState().logout();
-                    router.replace('/login');
                   }}
                 />
               )}
@@ -182,55 +162,27 @@ function LoginFlow() {
 /* ================================================================== */
 
 function AgentLoginForm({
-  step,
-  onUnit,
   onAgent,
-  onChangeUnit,
 }: {
-  step: 'unit' | 'agent';
-  onUnit: (s: SessionResponse) => void;
   onAgent: (s: SessionResponse) => Promise<void>;
-  onChangeUnit: () => Promise<void>;
 }) {
-  const unitName = useAuthStore((s) => s.userData?.unitName);
-
-  const [unitCode, setUnitCode] = useState('');
-  const [pin, setPin] = useState('');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
 
   /**
-   * ONE submit, both factors.
+   * One request, mobile + password.
    *
-   * The screen is single-step; the PROTOCOL is still the two steps of §3.2.
-   * `/auth/unit-login` runs first and sets the short-lived unit session that
-   * `/auth/agent-login` requires — the server still has no endpoint that
-   * turns a mobile number into an agent JWT on its own, and an agent posted
-   * against the wrong unit is still rejected. Collapsing the presentation
-   * costs none of that.
-   *
-   * When a unit session is already live (`step === 'agent'`) the location
-   * call is skipped entirely, so a shift change is mobile + password only.
-   * That is the case that actually repeats all day on a shared gate phone.
+   * There is no unit code or PIN here BY EXPLICIT DECISION — see the note on
+   * `agentLogin` in the backend service and CLAUDE.md §3.2. The volunteers
+   * running this event cannot distribute location credentials on the day, so
+   * the server reads each agent's posting from their own row instead. The
+   * client never names a unit, which is why it cannot pick the wrong one.
    */
-  const submitBoth = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
-
-    // Tracks which call is in flight, so a failure gets the right words.
-    let unitAuthenticated = step === 'agent';
-
     try {
-      if (!unitAuthenticated) {
-        const session = await apiPost<SessionResponse>('/auth/unit-login', {
-          unit_code: unitCode,
-          pin,
-        });
-        onUnit(session);
-        unitAuthenticated = true;
-      }
-
       await onAgent(
         await apiPost<SessionResponse>('/auth/agent-login', {
           mobile_number: identifier,
@@ -238,15 +190,6 @@ function AgentLoginForm({
         }),
       );
     } catch (err) {
-      if (!unitAuthenticated) {
-        /* Named so nobody re-checks their own password over a wrong unit PIN.
-         * The agent fields are untouched — only the location was rejected. */
-        toast.error('Unit sign in failed', {
-          description: errorMessage(err),
-        });
-        setBusy(false);
-        return;
-      }
       /* The approval states get their own words. "Sign in failed" would send
        * an agent hunting for a typo that isn't there. */
       const code = errorCode(err);
@@ -262,135 +205,42 @@ function AgentLoginForm({
           duration: 7000,
         });
       } else {
-        const message = errorMessage(err);
-        toast.error(
-          message.includes('not assigned') ? 'Wrong unit' : 'Sign in failed',
-          { description: message },
-        );
+        toast.error('Sign in failed', { description: errorMessage(err) });
       }
     } finally {
       setBusy(false);
     }
   };
 
-  const unitKnown = step === 'agent';
-
   return (
-    <form onSubmit={submitBoth} className="mt-6 space-y-5">
+    <form onSubmit={submit} className="mt-6 space-y-4">
       <AuthHeader
-        icon={unitKnown ? User : Building2}
+        icon={User}
         title="Sign in"
-        subtitle={
-          unitKnown
-            ? 'Confirm it is you — the location is already signed in'
-            : 'Confirm the location and yourself'
-        }
+        subtitle="Your mobile number and password"
       />
-
-      {unitKnown ? (
-        /* The location is authenticated and OUTLIVES agent logout (§3.2), so
-         * it is shown as settled context rather than a field to re-enter.
-         * This is the whole point of the split: a shift change is two fields,
-         * not four. */
-        <UnitContext name={unitName} onChange={() => void onChangeUnit()} />
-      ) : (
-        <section className="space-y-4">
-          <GroupLabel>Location</GroupLabel>
-          <Field
-            label="Unit Code"
-            value={unitCode}
-            onChange={setUnitCode}
-            placeholder="5BUILDING"
-            autoCapitalize="characters"
-            autoComplete="off"
-            required
-          />
-          <Field
-            label="Unit PIN"
-            type="password"
-            inputMode="numeric"
-            value={pin}
-            onChange={setPin}
-            autoComplete="off"
-            required
-          />
-        </section>
-      )}
-
-      <section className="space-y-4">
-        {!unitKnown && <GroupLabel>You</GroupLabel>}
-        <Field
-          label="Mobile Number"
-          hint="Your Agent ID"
-          value={identifier}
-          onChange={(v) => setIdentifier(v.replace(/\D/g, '').slice(0, 10))}
-          inputMode="numeric"
-          placeholder="8888999955"
-          autoComplete="username"
-          required
-        />
-        <Field
-          label="Password"
-          type="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="current-password"
-          required
-        />
-      </section>
-
+      <Field
+        label="Mobile Number"
+        hint="Your Agent ID"
+        value={identifier}
+        onChange={(v) => setIdentifier(v.replace(/\D/g, '').slice(0, 10))}
+        inputMode="numeric"
+        placeholder="8888999955"
+        autoComplete="username"
+        required
+      />
+      <Field
+        label="Password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+        required
+      />
       <Submit busy={busy} busyLabel="Signing in…">
         Sign In
       </Submit>
     </form>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-
-/** Quiet section divider — a word, not a rule (§5.1). */
-function GroupLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-      {children}
-    </p>
-  );
-}
-
-/** The live unit session, shown as settled context with a way to abandon it. */
-function UnitContext({
-  name,
-  onChange,
-}: {
-  name?: string;
-  onChange: () => void;
-}) {
-  return (
-    <div className="flex items-center gap-3 rounded-2xl bg-gray-50 px-4 py-3 ring-1 ring-gray-900/[0.04]">
-      <span
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${NAVY}12` }}
-      >
-        <Building2 className="h-4 w-4" strokeWidth={2.25} style={{ color: NAVY }} />
-      </span>
-
-      <div className="min-w-0 flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-400">
-          Location
-        </p>
-        <p className="truncate text-[13px] font-medium text-gray-900">
-          {name ?? 'Unit authenticated'}
-        </p>
-      </div>
-
-      <button
-        type="button"
-        onClick={onChange}
-        className="shrink-0 rounded-lg px-2 py-1 text-[12px] font-medium text-gray-400 transition-colors hover:text-gray-700 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/10"
-      >
-        Change
-      </button>
-    </div>
   );
 }
 

@@ -48,29 +48,12 @@ export const unitLogin = handle(async (req, res) => {
 /* ------------------------------------------------------------------ */
 
 export const agentLogin = handle(async (req, res) => {
-  const rawToken = req.cookies?.[SESSION_COOKIE_NAME] as string | undefined;
-
-  if (!rawToken) {
-    throw unauthorized('Authenticate the unit first');
-  }
-
-  const claims = verifySession(rawToken);
-
-  // Step 2 is reachable only from a step-1 session. Never accept a mobile
-  // number and hand back a full agent token directly.
-  if (claims.role !== 'UNIT_PENDING') {
-    throw unauthorized('Authenticate the unit first');
-  }
-
+  // No unit-session precondition — see the note on service.agentLogin. The
+  // unit is derived from the agent's own row, so nothing here reads a
+  // caller-supplied unit or an incoming cookie.
   const input = AgentLoginSchema.parse(req.body);
-  const result = await service.agentLogin(
-    input,
-    claims as UnitPendingClaims,
-    rawToken,
-    contextOf(req),
-  );
+  const result = await service.agentLogin(input, contextOf(req));
 
-  // Overwrite the pending cookie with the full-access token.
   setSessionCookie(res, result.token, result.ttlMinutes);
 
   res.status(200).json(result.session);

@@ -152,28 +152,26 @@ export async function unitLogin(
 /* STEP 2 — Individual agent authentication                            */
 /* =================================================================== */
 
+/**
+ * Agent login — single step.
+ *
+ * DEVIATES FROM CLAUDE.md §3.2 BY EXPLICIT OPERATIONAL DECISION. The event is
+ * run by unpaid volunteers who cannot distribute unit codes and PINs on the
+ * day, so location authentication was dropped rather than left as a barrier
+ * nobody could clear. What that costs is written up in §3.2 — read it before
+ * reinstating anything here.
+ *
+ * The unit is NOT accepted from the client. It is read from the agent's own
+ * row after the password verifies, which still satisfies §2: a token's
+ * unitId/divisionId are server-derived, never client-supplied. An agent
+ * therefore cannot issue against a unit they are not posted to — the check
+ * that used to compare against a step-1 token is now structural, because
+ * there is no other unit they could name.
+ */
 export async function agentLogin(
   input: AgentLoginInput,
-  pending: UnitPendingClaims,
-  rawToken: string,
   ctx: RequestContext,
 ): Promise<LoginResult> {
-  const session = await repo.findLiveSession(pending.sessionId);
-
-  if (!session) {
-    throw unauthorized('Unit session has expired. Sign in to the unit again.');
-  }
-
-  // The cookie must be the token this session was issued with. A valid
-  // signature is not enough — a rotated or revoked token is dead.
-  if (session.token_hash !== hashToken(rawToken)) {
-    throw unauthorized('Session token is no longer valid');
-  }
-
-  if (session.agent_id !== null) {
-    throw conflict('An agent is already bound to this session');
-  }
-
   // Spec §3: agents sign in with mobile OR email.
   const agent = await repo.findAgentByMobileOrEmail(input.mobile_number);
 
@@ -215,63 +213,45 @@ export async function agentLogin(
       action: 'AGENT_LOGIN_FAILED',
       entityType: 'agent',
       entityId: agent.id,
-      metadata: { reason: 'BAD_CREDENTIALS', session_id: session.id },
+      metadata: { reason: 'BAD_CREDENTIALS' },
       ip: ctx.ip,
     });
     throw unauthorized('Invalid mobile number or password');
   }
 
-  /* --- THE critical check ---------------------------------------- *
-   * Correct credentials are not sufficient. The agent must belong to
-   * the unit that was authenticated in step 1. This is what stops a
-   * valid agent from issuing tickets against someone else's unit.    */
-  if (agent.unit_id !== pending.unitId) {
-    await repo.writeAudit({
-      actorRole: 'AGENT',
-      actorId: agent.id,
-      action: 'AGENT_UNIT_MISMATCH',
-      entityType: 'unit_session',
-      entityId: session.id,
-      metadata: {
-        agent_unit_id: agent.unit_id,
-        session_unit_id: pending.unitId,
-      },
-      ip: ctx.ip,
-    });
-    throw forbidden('You are not assigned to this unit');
-  }
-
+  /* The posting comes from the agent's row, never from the request. The
+   * session id is minted here so it can be signed into the claims before the
+   * row exists — the token hash is what ties the two together. */
+  const sessionId = newId();
   const ttlMinutes = env.AGENT_TOKEN_TTL_MINUTES;
   const expiresAt = minutesFromNow(ttlMinutes);
 
   const claims: AgentClaims = {
     role: 'AGENT',
-    sessionId: session.id,
+    sessionId,
     agentId: agent.id,
-    unitId: pending.unitId,
-    divisionId: pending.divisionId,
+    unitId: agent.unit_id,
+    divisionId: agent.division_id,
   };
   const token = signSession(claims, ttlMinutes);
 
-  const bound = await repo.bindAgentToSession({
-    sessionId: session.id,
+  await repo.createAgentSession({
+    id: sessionId,
+    unitId: agent.unit_id,
     agentId: agent.id,
     tokenHash: hashToken(token),
     expiresAt,
+    ip: ctx.ip,
+    userAgent: ctx.userAgent,
   });
-
-  // Lost the race against a concurrent step 2 on the same session.
-  if (!bound) {
-    throw conflict('An agent is already bound to this session');
-  }
 
   await repo.writeAudit({
     actorRole: 'AGENT',
     actorId: agent.id,
     action: 'AGENT_LOGIN',
     entityType: 'unit_session',
-    entityId: session.id,
-    metadata: { unit_id: pending.unitId },
+    entityId: sessionId,
+    metadata: { unit_id: agent.unit_id, direct: true },
     ip: ctx.ip,
   });
 

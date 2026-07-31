@@ -16,6 +16,8 @@ export interface UnitRow {
 export interface AgentRow {
   id: string;
   unit_id: string;
+  /** Joined from units — the agent's own posting is the source of truth. */
+  division_id: string;
   mobile_number: string;
   name: string;
   pin_hash: string | null;
@@ -72,10 +74,11 @@ export async function findAgentByMobileOrEmail(
   identifier: string,
 ): Promise<AgentRow | null> {
   const { rows } = await query<AgentRow>(
-    `SELECT id, unit_id, mobile_number, name, pin_hash, is_active,
-            email, approval_status
-       FROM agents
-      WHERE mobile_number = $1 OR LOWER(email) = LOWER($1)
+    `SELECT a.id, a.unit_id, u.division_id, a.mobile_number, a.name,
+            a.pin_hash, a.is_active, a.email, a.approval_status
+       FROM agents a
+       JOIN units u ON u.id = a.unit_id
+      WHERE a.mobile_number = $1 OR LOWER(a.email) = LOWER($1)
       LIMIT 1`,
     [identifier],
   );
@@ -113,6 +116,39 @@ export async function findSuperuserByUsername(
 
 export async function touchSuperuserLogin(id: string): Promise<void> {
   await query(`UPDATE superusers SET last_login_at = NOW() WHERE id = $1`, [id]);
+}
+
+/**
+ * A session created and bound to its agent in one insert.
+ *
+ * The two-step flow created a row at step 1 with agent_id NULL and bound it
+ * at step 2. Direct agent login has no unbound phase, so both columns are set
+ * together — which is also what unit_sessions_binding_consistent requires.
+ */
+export async function createAgentSession(params: {
+  id: string;
+  unitId: string;
+  agentId: string;
+  tokenHash: string;
+  expiresAt: Date;
+  ip?: string | null;
+  userAgent?: string | null;
+}): Promise<void> {
+  await query(
+    `INSERT INTO unit_sessions
+       (id, unit_id, agent_id, agent_bound_at, token_hash, expires_at,
+        ip_address, user_agent)
+     VALUES ($1, $2, $3, NOW(), $4, $5, $6, $7)`,
+    [
+      params.id,
+      params.unitId,
+      params.agentId,
+      params.tokenHash,
+      params.expiresAt,
+      params.ip ?? null,
+      params.userAgent ?? null,
+    ],
+  );
 }
 
 export async function createUnitSession(params: {

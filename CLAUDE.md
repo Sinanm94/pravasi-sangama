@@ -65,35 +65,52 @@ Two distinct login surfaces.
 
 Standard credential login → JWT with `role: 'SUPERUSER'`. No unit scoping.
 
-### 3.2 Agent login (TWO STEPS — non-negotiable)
+### 3.2 Agent login (SINGLE STEP — was two, changed deliberately)
 
-Agents share devices at gates and registration desks, so the *location* is
-authenticated before the *person*. Both steps must pass before any ticket can be
-issued.
+> **This section previously specified a mandatory two-step flow and called it
+> non-negotiable. It was overridden by an explicit operational decision by the
+> project owner. Do not "restore" the old behaviour as a bug fix.**
+>
+> The event is run by unpaid volunteers. There was no manpower to distribute
+> unit codes and PINs on the day, so location authentication was not a
+> security control in practice — it was a barrier that would have stopped
+> agents issuing tickets at all.
 
-**Step 1 — Unit Location Authentication**
-Route: `/(agent)/login/unit`
-The agent selects/enters the unit and authenticates the location with the unit
-credential. On success the server issues a short-lived **unit session token**
-(scoped, cannot issue tickets on its own).
+Route: `/login`. The agent enters **mobile number (or email) + password**.
+On success the server issues the full **agent JWT** carrying
+`{ agentId, unitId, divisionId, sessionId, role: 'AGENT' }`.
 
-**Step 2 — Individual Agent Authentication**
-Route: `/(agent)/login/agent`
-The agent authenticates with their **mobile number** (+ OTP/PIN per deployment
-config). The server validates that this agent is actually assigned to the unit
-from Step 1, then upgrades the session to a full **agent JWT** carrying
-`{ agentId, unitId, divisionId, role: 'AGENT' }`.
+`unitId` and `divisionId` are read from the agent's own row
+(`agents.unit_id` joined to `units.division_id`) *after* the password
+verifies. A `unit_sessions` row is still created, with `agent_id` and
+`agent_bound_at` set in the same insert — there is no unbound phase.
 
-**Invariants:**
+**Invariants that still hold:**
 
-- Step 2 is impossible without a valid Step 1 token. Never expose an endpoint
-  that accepts a mobile number and returns a full agent JWT directly.
-- An agent whose `unitId` does not match the Step 1 token is rejected, even if
-  their credentials are otherwise valid.
-- The unit session survives agent logout. Shift changes re-run Step 2 only —
-  this is intentional and the whole point of the split.
-- JWTs live in **httpOnly cookies**, set via the Next.js `app/api/` BFF layer.
-  Never `localStorage` — these are shared phones.
+- **The client never names a unit.** The posting is server-derived from the
+  authenticated agent, so an agent cannot issue against a unit they are not
+  assigned to — §2's bottom-up rule is intact, and the old "does the agent
+  match the step-1 unit?" check is now structural rather than a comparison.
+- The password is verified before anything else is disclosed. Approval state
+  (`PENDING` / `REJECTED`) is only revealed *after* a correct password, so
+  the endpoint cannot be used to enumerate registered numbers.
+- JWTs live in **httpOnly cookies**. Never `localStorage` — these are shared
+  phones.
+
+**What was genuinely given up — mitigate, don't pretend otherwise:**
+
+- A stolen agent password is now sufficient on its own, from any device
+  anywhere. Previously it also required physical presence at a unit that had
+  been unlocked with a separate credential.
+- `unit_sessions` no longer records a location being opened independently of
+  the people who used it, so the audit trail is per-agent, not per-post.
+- Compensating controls that matter more now: agent approval (§ admin), fast
+  deactivation via `is_active`, `AGENT_LOGIN` / `AGENT_LOGIN_FAILED` audit
+  rows, and the login rate limiter.
+
+`POST /api/auth/unit-login` still exists and still mints a `UNIT_PENDING`
+token; nothing in the UI calls it. It is the way back if location
+authentication is ever wanted again.
 
 ---
 
