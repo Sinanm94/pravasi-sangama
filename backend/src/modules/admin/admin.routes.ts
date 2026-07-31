@@ -19,6 +19,10 @@ adminRoutes.post('/agents/:id/decision', controller.decideAgent);
 /* --- Agent directory + issuance totals ---------------------------- */
 adminRoutes.get('/agent-directory', controller.listAgentDirectory);
 
+/* --- Master ticket ledger ---------------------------------------- */
+adminRoutes.get('/tickets', controller.listTicketLedger);
+adminRoutes.get('/filter-options', controller.listFilterOptions);
+
 /* --- Gate channels (spec §2, Option A) --------------------------- */
 adminRoutes.get('/gates', controller.listGates);
 adminRoutes.post('/gates', controller.createGate);

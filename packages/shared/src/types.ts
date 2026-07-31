@@ -424,6 +424,58 @@ export interface AgentTicketListResponse {
   };
 }
 
+/* ------------------------------------------------------------------ */
+/* Admin — master ticket ledger                                        */
+/* ------------------------------------------------------------------ */
+
+/** One row of the admin-wide ticket ledger. Unscoped: superusers see all. */
+export interface AdminTicketRow {
+  id: string;
+  requestNumber: string;
+  ticketNumber: string;
+  ticketType: TicketType;
+  purchaserName: string;
+  purchaserMobile: string;
+  purchaserEmail: string | null;
+  /** Adults. Children below 12 are excluded from this (§4.2). */
+  countedPersons: number;
+  childrenBelow12: number;
+  status: TicketStatus;
+  createdAt: string;
+
+  agentId: string;
+  agentName: string;
+  unitId: string;
+  unitName: string;
+  unitCode: string;
+  divisionId: string;
+  divisionName: string;
+}
+
+export interface AdminTicketLedgerResponse {
+  tickets: AdminTicketRow[];
+  /**
+   * Aggregated over the WHOLE filtered set in SQL, not over `tickets`.
+   * The row list is capped, so summing it client-side would silently
+   * under-report the moment a filter matches more than the cap.
+   */
+  totals: {
+    tickets: number;
+    seats: number;
+    children: number;
+  };
+  /** True when more rows matched than were returned — narrow the filters. */
+  truncated: boolean;
+  limit: number;
+}
+
+/** Option lists for the ledger's dependent dropdowns. */
+export interface AdminFilterOptions {
+  divisions: Array<{ id: string; name: string; code: string }>;
+  units: Array<{ id: string; name: string; unitCode: string; divisionId: string }>;
+  agents: Array<{ id: string; name: string; mobileNumber: string; unitId: string }>;
+}
+
 export interface AgentDirectoryResponse {
   agents: AgentDirectoryEntry[];
   totals: {

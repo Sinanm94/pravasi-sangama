@@ -356,3 +356,27 @@ export const TicketSearchSchema = z.object({
 });
 
 export type TicketSearchInput = z.infer<typeof TicketSearchSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Admin — master ticket ledger                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Query for GET /api/admin/tickets.
+ *
+ * The id filters are validated as UUIDs here so a malformed value is a 400.
+ * Passed straight to Postgres they would raise 22P02 (invalid input syntax
+ * for type uuid), which surfaces as an opaque 500.
+ *
+ * Not `.strict()`: this parses `req.query`, and rejecting an unknown key
+ * would break the moment anyone appends a cache-buster or a tracking param.
+ */
+export const AdminTicketQuerySchema = z.object({
+  agent_id: z.string().uuid('agent_id must be a UUID').optional(),
+  unit_id: z.string().uuid('unit_id must be a UUID').optional(),
+  division_id: z.string().uuid('division_id must be a UUID').optional(),
+  search: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().positive().max(1000).default(300),
+});
+
+export type AdminTicketQuery = z.infer<typeof AdminTicketQuerySchema>;

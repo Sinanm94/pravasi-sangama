@@ -1,3 +1,4 @@
+import type { TicketStatus, TicketType } from '@pravasi/shared';
 import { query } from '../../db/index.js';
 
 /* ------------------------------------------------------------------ */
@@ -263,4 +264,176 @@ export async function writeAudit(params: {
       params.ip ?? null,
     ],
   );
+}
+
+/* ------------------------------------------------------------------ */
+/* Master ticket ledger                                                */
+/* ------------------------------------------------------------------ */
+
+export interface TicketLedgerFilters {
+  agentId?: string | undefined;
+  unitId?: string | undefined;
+  divisionId?: string | undefined;
+  search?: string | undefined;
+}
+
+export interface AdminTicketLedgerRow {
+  id: string;
+  request_number: string;
+  ticket_number: string;
+  ticket_type: TicketType;
+  purchaser_name: string;
+  purchaser_mobile: string;
+  purchaser_email: string | null;
+  counted_persons: number;
+  children_below_12: number;
+  status: TicketStatus;
+  created_at: Date;
+  agent_id: string;
+  agent_name: string;
+  unit_id: string;
+  unit_name: string;
+  unit_code: string;
+  division_id: string;
+  division_name: string;
+}
+
+/**
+ * Builds the shared WHERE clause for the ledger.
+ *
+ * Both the row query and the totals query run through this, so the summary
+ * cards can never describe a different set than the table below them.
+ *
+ * Every value is a bound parameter — nothing is interpolated. The ids are
+ * already UUID-validated by AdminTicketQuerySchema before they reach here.
+ */
+function ticketLedgerWhere(f: TicketLedgerFilters): {
+  sql: string;
+  params: unknown[];
+} {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+
+  const add = (fragment: (i: number) => string, value: unknown) => {
+    params.push(value);
+    clauses.push(fragment(params.length));
+  };
+
+  /* Filtering on tickets' own denormalised columns rather than joining up
+   * through units/divisions: the ids are written at issuance and indexed. */
+  if (f.agentId) add((i) => `t.agent_id = $${i}`, f.agentId);
+  if (f.unitId) add((i) => `t.unit_id = $${i}`, f.unitId);
+  if (f.divisionId) add((i) => `t.division_id = $${i}`, f.divisionId);
+
+  if (f.search) {
+    /* % and _ are ILIKE wildcards. Left unescaped, a search for "%" matches
+     * every ticket and a search for "_" matches on any single character —
+     * confusing rather than dangerous, but wrong. \\ is the escape char. */
+    const escaped = f.search.replace(/([\\%_])/g, '\\$1');
+    add(
+      (i) =>
+        `(t.purchaser_name ILIKE $${i} OR t.purchaser_mobile ILIKE $${i}
+          OR t.ticket_number ILIKE $${i} OR t.request_number ILIKE $${i})`,
+      `%${escaped}%`,
+    );
+  }
+
+  return {
+    sql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
+    params,
+  };
+}
+
+export async function listTicketsForAdmin(
+  filters: TicketLedgerFilters,
+  limit: number,
+): Promise<AdminTicketLedgerRow[]> {
+  const { sql, params } = ticketLedgerWhere(filters);
+
+  const { rows } = await query<AdminTicketLedgerRow>(
+    `SELECT t.id, t.request_number, t.ticket_number, t.ticket_type,
+            t.purchaser_name, t.purchaser_mobile, t.purchaser_email,
+            t.counted_persons, t.children_below_12, t.status, t.created_at,
+            t.agent_id, a.name AS agent_name,
+            t.unit_id, u.name AS unit_name, u.unit_code,
+            t.division_id, d.name AS division_name
+       FROM tickets t
+       JOIN agents a    ON a.id = t.agent_id
+       JOIN units u     ON u.id = t.unit_id
+       JOIN divisions d ON d.id = t.division_id
+       ${sql}
+      ORDER BY t.created_at DESC
+      LIMIT $${params.length + 1}`,
+    [...params, limit],
+  );
+  return rows;
+}
+
+/**
+ * Totals over the ENTIRE filtered set, independent of the row cap.
+ *
+ * Revoked tickets are counted in `tickets` — an admin auditing what was
+ * issued needs to see them — but excluded from seats and children, because
+ * nobody is seated or catered for on a cancelled ticket.
+ */
+export async function summariseTicketsForAdmin(
+  filters: TicketLedgerFilters,
+): Promise<{ tickets: number; seats: number; children: number }> {
+  const { sql, params } = ticketLedgerWhere(filters);
+
+  const { rows } = await query<{
+    tickets: number;
+    seats: number;
+    children: number;
+  }>(
+    `SELECT COUNT(*)::INT AS tickets,
+            COALESCE(SUM(t.counted_persons)
+              FILTER (WHERE t.status = 'ACTIVE'), 0)::INT AS seats,
+            COALESCE(SUM(t.children_below_12)
+              FILTER (WHERE t.status = 'ACTIVE'), 0)::INT AS children
+       FROM tickets t
+       ${sql}`,
+    params,
+  );
+
+  return rows[0] ?? { tickets: 0, seats: 0, children: 0 };
+}
+
+export interface FilterOptionRows {
+  divisions: Array<{ id: string; name: string; code: string }>;
+  units: Array<{
+    id: string;
+    name: string;
+    unit_code: string;
+    division_id: string;
+  }>;
+  agents: Array<{
+    id: string;
+    name: string;
+    mobile_number: string;
+    unit_id: string;
+  }>;
+}
+
+/** One round trip for all three dropdowns, rather than three endpoints. */
+export async function listFilterOptions(): Promise<FilterOptionRows> {
+  const [divisions, units, agents] = await Promise.all([
+    query<{ id: string; name: string; code: string }>(
+      `SELECT id, name, code FROM divisions WHERE is_active ORDER BY name`,
+    ),
+    query<{ id: string; name: string; unit_code: string; division_id: string }>(
+      `SELECT id, name, unit_code, division_id FROM units
+        WHERE is_active ORDER BY name`,
+    ),
+    query<{ id: string; name: string; mobile_number: string; unit_id: string }>(
+      `SELECT id, name, mobile_number, unit_id FROM agents
+        WHERE is_active AND approval_status = 'APPROVED' ORDER BY name`,
+    ),
+  ]);
+
+  return {
+    divisions: divisions.rows,
+    units: units.rows,
+    agents: agents.rows,
+  };
 }

@@ -447,7 +447,15 @@ pravasi-sangama/
 - `frontend/src/store/useAuthStore.ts` — Zustand session mirror (not persisted).
 - `frontend/src/middleware.ts` + `components/auth/ProtectedRoute.tsx` — the two
   routing layers. **Neither is an authorization boundary** — see §11.
-- `frontend/src/app/` — `/login`, `/dashboard`, `/ticketing`, `/scanner`.
+- `frontend/src/app/` — `/login`, `/dashboard`, `/ticketing`, `/scanner`,
+  `/agent/dashboard` (agent ledger), `/admin/approvals`, `/admin/directory`,
+  `/admin/tickets` (master ledger), `/admin/gates`.
+- `backend/src/modules/admin/` — approvals, gates, agent directory, and the
+  master ticket ledger (`GET /api/admin/tickets` + `/filter-options`).
+  Ledger totals are a SQL aggregate over the whole filtered set, deliberately
+  not a sum of the returned rows — the row list is capped and would
+  under-report. Both queries share one parameterised WHERE builder so the
+  summary cards can never describe a different set than the table.
 
 **Not yet built:** divisions/units/agents CRUD, ticket revocation, real QR
 encoding, `gate:offline` heartbeat.

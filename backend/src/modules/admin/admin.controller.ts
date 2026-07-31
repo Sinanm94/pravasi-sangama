@@ -1,8 +1,12 @@
 import type { Request, RequestHandler, Response } from 'express';
 import {
+  AdminTicketQuerySchema,
   AgentDecisionSchema,
   CreateGateSchema,
   RotateGatePinSchema,
+  type AdminFilterOptions,
+  type AdminTicketLedgerResponse,
+  type AdminTicketRow,
   type AgentDirectoryEntry,
   type AgentDirectoryResponse,
   type GateSummary,
@@ -226,4 +230,83 @@ export const setGateActive = handle(async (req, res) => {
   });
 
   res.status(200).json({ id: gateId, isActive });
+});
+
+/* ------------------------------------------------------------------ */
+/* GET /api/admin/tickets — master ledger                              */
+/* ------------------------------------------------------------------ */
+
+export const listTicketLedger = handle(async (req, res) => {
+  // Zod validates the ids as UUIDs, so a malformed filter is a 400 rather
+  // than a Postgres 22P02 surfacing as an opaque 500.
+  const q = AdminTicketQuerySchema.parse(req.query);
+
+  const filters = {
+    agentId: q.agent_id,
+    unitId: q.unit_id,
+    divisionId: q.division_id,
+    search: q.search,
+  };
+
+  /* Rows and totals in parallel, from the same filter object. The totals are
+   * a SQL aggregate over the whole matching set — NOT a sum of `rows`, which
+   * is capped and would under-report the moment a filter matches more. */
+  const [rows, totals] = await Promise.all([
+    repo.listTicketsForAdmin(filters, q.limit),
+    repo.summariseTicketsForAdmin(filters),
+  ]);
+
+  const tickets: AdminTicketRow[] = rows.map((r) => ({
+    id: r.id,
+    requestNumber: r.request_number,
+    ticketNumber: r.ticket_number,
+    ticketType: r.ticket_type,
+    purchaserName: r.purchaser_name,
+    purchaserMobile: r.purchaser_mobile,
+    purchaserEmail: r.purchaser_email,
+    countedPersons: r.counted_persons,
+    childrenBelow12: r.children_below_12,
+    status: r.status,
+    createdAt: r.created_at.toISOString(),
+    agentId: r.agent_id,
+    agentName: r.agent_name,
+    unitId: r.unit_id,
+    unitName: r.unit_name,
+    unitCode: r.unit_code,
+    divisionId: r.division_id,
+    divisionName: r.division_name,
+  }));
+
+  const body: AdminTicketLedgerResponse = {
+    tickets,
+    totals,
+    // The table is showing a slice; the cards are not. Say so.
+    truncated: totals.tickets > tickets.length,
+    limit: q.limit,
+  };
+
+  res.status(200).json(body);
+});
+
+/** Option lists for the ledger's dependent dropdowns. */
+export const listFilterOptions = handle(async (_req, res) => {
+  const rows = await repo.listFilterOptions();
+
+  const body: AdminFilterOptions = {
+    divisions: rows.divisions,
+    units: rows.units.map((u) => ({
+      id: u.id,
+      name: u.name,
+      unitCode: u.unit_code,
+      divisionId: u.division_id,
+    })),
+    agents: rows.agents.map((a) => ({
+      id: a.id,
+      name: a.name,
+      mobileNumber: a.mobile_number,
+      unitId: a.unit_id,
+    })),
+  };
+
+  res.status(200).json(body);
 });
