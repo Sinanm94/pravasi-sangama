@@ -16,6 +16,7 @@ import {
 import {
   AlertTriangle,
   RadioTower,
+  RefreshCw,
   ScanLine,
   Ticket,
   Users,
@@ -49,8 +50,16 @@ export default function SuperuserDashboard({
 }: {
   initialData?: DashboardSnapshot;
 }) {
+  /* Starts NULL, never MOCK_SNAPSHOT.
+   *
+   * Seeding from the fixture put four fabricated scans — carrying the seeded
+   * agents' real names — straight into the live feed on mount, and printed
+   * invented totals (1,284 tickets) as though they were the event's. An admin
+   * glancing at a dashboard whose fetch had failed would read numbers that
+   * came from nowhere. The fixture is still available for standalone review
+   * (§6.3), but only when a caller passes it in deliberately as `initialData`. */
   const [data, setData] = useState<DashboardSnapshot | null>(
-    initialData ?? MOCK_SNAPSHOT,
+    initialData ?? null,
   );
   const [stale, setStale] = useState(false);
   const [loading, setLoading] = useState(!initialData);
@@ -62,7 +71,7 @@ export default function SuperuserDashboard({
   const seeded = useRef(false);
   const lastReconcile = useRef(0);
 
-  const fetchSnapshot = useCallback(async () => {
+  const fetchSnapshot = useCallback(async (force = false) => {
     inFlight.current?.abort();
     const controller = new AbortController();
     inFlight.current = controller;
@@ -86,7 +95,7 @@ export default function SuperuserDashboard({
       const now = Date.now();
       const due = now - lastReconcile.current > RECONCILE_INTERVAL_MS;
 
-      if (!seeded.current || due) {
+      if (!seeded.current || due || force) {
         reconcile(snapshot.recentScans);
         seeded.current = true;
         lastReconcile.current = now;
@@ -101,6 +110,21 @@ export default function SuperuserDashboard({
       setLoading(false);
     }
   }, [reconcile]);
+
+  /* Manual pull for the feed. The socket is the live path, but it can drop
+   * silently on venue wifi, and waiting out the 30s reconcile to find out is
+   * too long when someone is actively watching a gate. `force` re-seeds the
+   * list even inside that window. */
+  const [feedRefreshing, setFeedRefreshing] = useState(false);
+
+  const refreshFeed = useCallback(async () => {
+    setFeedRefreshing(true);
+    try {
+      await fetchSnapshot(true);
+    } finally {
+      setFeedRefreshing(false);
+    }
+  }, [fetchSnapshot]);
 
   useEffect(() => {
     // Seed the feed from whatever we already have so the panel is never
@@ -159,7 +183,7 @@ export default function SuperuserDashboard({
   );
 
   if (loading && !data) return <DashboardSkeleton />;
-  if (!data) return null;
+  if (!data) return <DashboardUnavailable onRetry={() => void fetchSnapshot()} />;
 
   return (
     <AdminShell
@@ -354,6 +378,20 @@ export default function SuperuserDashboard({
                   ? 'Streaming — newest first'
                   : 'Socket disconnected · showing last snapshot'
               }
+              action={
+                <button
+                  type="button"
+                  onClick={() => void refreshFeed()}
+                  disabled={feedRefreshing}
+                  className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97] disabled:opacity-60"
+                >
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${feedRefreshing ? 'animate-spin' : ''}`}
+                    strokeWidth={2.25}
+                  />
+                  Refresh
+                </button>
+              }
             />
             <LiveFeed scans={scans} />
           </Card>
@@ -445,18 +483,23 @@ function Card({
 function CardHeader({
   title,
   subtitle,
+  action,
 }: {
   title: string;
   subtitle?: string;
+  action?: React.ReactNode;
 }) {
   return (
-    <div>
-      <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900">
-        {title}
-      </h2>
-      {subtitle && (
-        <p className="mt-0.5 text-[12px] text-gray-400">{subtitle}</p>
-      )}
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-[15px] font-semibold tracking-[-0.01em] text-gray-900">
+          {title}
+        </h2>
+        {subtitle && (
+          <p className="mt-0.5 text-[12px] text-gray-400">{subtitle}</p>
+        )}
+      </div>
+      {action}
     </div>
   );
 }
@@ -636,7 +679,11 @@ function LiveFeed({ scans }: { scans: RecentScanEntry[] }) {
                   {formatTime(scan.scannedAt, true)}
                 </td>
                 <td className="py-3 pr-4 text-[13px] font-medium text-gray-900">
-                  {scan.agentName ?? '—'}
+                  {/* scan_logs.scanned_by is ON DELETE SET NULL, so a
+                      deleted agent leaves the scan intact with no name.
+                      The scan itself is never hidden — §10.6 requires every
+                      attempt to stay on the record. */}
+                  {scan.agentName ?? 'Deleted agent'}
                 </td>
                 <td className="py-3 pr-4 text-[12px] text-gray-500">
                   {scan.gateLabel && (
@@ -768,7 +815,13 @@ function formatTime(iso: string, withSeconds = false): string {
 /* Standalone fixture — renders without a backend (§6.3)               */
 /* ------------------------------------------------------------------ */
 
-const MOCK_SNAPSHOT: DashboardSnapshot = {
+/**
+ * Standalone fixture. NOT default state — pass it explicitly:
+ *   <SuperuserDashboard initialData={MOCK_SNAPSHOT} />
+ * It carries invented totals and invented scans bearing the seeded agents'
+ * names, so anything that renders it is showing fiction on purpose.
+ */
+export const MOCK_SNAPSHOT: DashboardSnapshot = {
   generatedAt: new Date().toISOString(),
   timezone: 'Asia/Riyadh',
   totals: {
@@ -860,3 +913,32 @@ const MOCK_SNAPSHOT: DashboardSnapshot = {
     },
   ],
 };
+
+/** First load failed and there is nothing to show. Offers the way out. */
+function DashboardUnavailable({ onRetry }: { onRetry: () => void }) {
+  return (
+    <AdminShell wide title="System Overview" subtitle="Could not load the dashboard">
+      <div className="flex flex-col items-center rounded-3xl bg-white px-6 py-16 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
+        <span className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
+          <AlertTriangle className="h-6 w-6 text-amber-600" strokeWidth={2} />
+        </span>
+        <p className="mt-5 text-[15px] font-semibold text-gray-900">
+          No data from the server
+        </p>
+        <p className="mt-1.5 max-w-sm text-[13px] leading-relaxed text-gray-500">
+          The dashboard shows nothing rather than something invented — an ops
+          screen with made-up numbers is worse than an empty one.
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-6 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
+          style={{ backgroundColor: '#062B59' }}
+        >
+          <RefreshCw className="h-4 w-4" strokeWidth={2.25} />
+          Try again
+        </button>
+      </div>
+    </AdminShell>
+  );
+}
