@@ -31,6 +31,16 @@ const cookieOptions = {
   secure: isProduction || env.COOKIE_SAMESITE === 'none',
   sameSite: env.COOKIE_SAMESITE,
   path: '/' as const,
+  /**
+   * Unset in dev and on a single-hostname deployment, giving a host-only
+   * cookie. Set to the shared parent (`.pravasisangama.com`) when the web
+   * tier and API are split across `app.` / `api.` subdomains — otherwise the
+   * cookie is bound to `api.` and `middleware.ts` on `app.` never sees it.
+   *
+   * `domain: undefined` is how Express omits the attribute entirely, so the
+   * unset case stays host-only rather than becoming a literal "undefined".
+   */
+  domain: env.COOKIE_DOMAIN,
 };
 
 export function setSessionCookie(

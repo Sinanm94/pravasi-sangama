@@ -449,19 +449,50 @@ let the web tier mint tokens, which is a worse trade than an empty shell.
 ## Setup
 
 ```bash
-npm install                 # workspaces; shared builds via its prepare script
-npm run build:shared        # after editing packages/shared
+docker compose up -d postgres   # local Postgres 16 on :5432; adminer UI on :8080
+npm install                     # workspaces; shared builds via its prepare script
+npm run build:shared            # after editing packages/shared — see note below
 npm run db:migrate
-npm run db:seed             # dev credentials, printed to stdout
-npm run dev:api             # :4000
-npm run dev:web             # :3000
+npm run db:seed                 # dev credentials, printed to stdout
+npm run dev:api                 # :4000
+npm run dev:web                 # :3000
 ```
+
+> **`@pravasi/shared` is consumed as compiled output**, not source. Any edit
+> under `packages/shared/src` is invisible to both tiers until you re-run
+> `npm run build:shared`. This is the #1 cause of "I changed the constant but
+> nothing happened."
 
 Seeded fixtures: division `RIYADH`; units `5BUILDING` and `DEERA` (PIN `1234`);
 agents `8888999955` / `8888999956` on 5BUILDING and `8888999957` on DEERA
 (password `agent1234`); superuser `superadmin` / `SuperAdmin@2026`.
 The seed is idempotent and refuses to run in production without
 `ALLOW_PROD_SEED=true`.
+
+### Other commands
+
+```bash
+npm run typecheck           # tsc --noEmit across every workspace, root script
+npm run typecheck -w @pravasi/backend    # single workspace
+npm run typecheck -w @pravasi/frontend
+npm run build:shared        # tsc -p packages/shared/tsconfig.json
+npm run dev:shared          # tsc --watch, if iterating on shared in isolation
+npm run db:reset -w @pravasi/backend     # db:migrate + db:seed in one shot
+```
+
+`npm run <script> -w @pravasi/<backend|frontend|shared>` runs a script in one
+workspace only — the general pattern for anything not exposed as a root
+script (e.g. `npm run build -w @pravasi/frontend` for a production `next build`).
+
+**No lint is configured** (no ESLint config in any workspace) and **no
+automated test suite exists** — `TESTING.md` is a manual E2E checklist and is,
+today, the entire test suite for this repo. Before calling any change to
+auth, ticketing, or scanning "done," walk the relevant section of
+`TESTING.md` by hand. `typecheck` is the only automated correctness gate;
+run it on both `backend` and `frontend` before considering a change complete.
+`DEPLOYMENT.md` covers the production topology (Supabase/Render/Vercel) and
+the cookie-domain decision in §3 of this file — read its §0 before touching
+anything cookie- or CORS-related.
 
 ---
 

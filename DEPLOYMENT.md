@@ -22,7 +22,15 @@ api.pravasisangama.org   → Render
 ```
 
 Both share the registrable domain `pravasisangama.org`, so requests between
-them are **same-site**. Set `COOKIE_SAMESITE=lax`.
+them are **same-site**. Set `COOKIE_SAMESITE=lax` **and
+`COOKIE_DOMAIN=.pravasisangama.org`**.
+
+`COOKIE_DOMAIN` is not optional on this option, and it is the one people miss.
+Without it the API sets a **host-only** cookie bound to `api.`; `middleware.ts`
+runs on `app.` and cannot read it, so login returns 200 and the very next
+navigation 307s straight back to `/login`. Same-site is about whether the
+browser *sends* the cookie; `Domain` is about which hosts it is *scoped* to.
+You need both.
 
 - Safari and Brave ship with third-party cookie blocking on by default. A Lax
   same-site cookie is unaffected. `SameSite=None` on a genuinely cross-site
@@ -179,6 +187,7 @@ consumed as **compiled** output — `packages/shared/dist`, not its source.
 | `JWT_ISSUER` | `pravasi-sangama-2026` | |
 | `CORS_ORIGIN` | `https://app.pravasisangama.org` | Exact origin, scheme included, **no trailing slash** |
 | `COOKIE_SAMESITE` | `lax` (Option A) / `none` (Option B) | §0 |
+| `COOKIE_DOMAIN` | `.pravasisangama.org` (Option A) / **unset** (Option B) | §0. Required when `app.` and `api.` are separate subdomains — omit it and login 200s, then bounces to `/login`. Leave unset on Option B: `vercel.app` and `onrender.com` share no parent you control |
 | `EVENT_TIMEZONE` | `Asia/Riyadh` | Drives "today" in analytics |
 | `UNIT_SESSION_TTL_MINUTES` | `720` | Survives a full shift |
 | `AGENT_TOKEN_TTL_MINUTES` | `480` | |

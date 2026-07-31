@@ -52,6 +52,24 @@ const schema = z.object({
    */
   COOKIE_SAMESITE: z.enum(['lax', 'none', 'strict']).default('lax'),
 
+  /**
+   * Cookie Domain attribute. Leave unset in development.
+   *
+   * Unset means a host-only cookie: it is returned only to the exact host
+   * that set it. That is correct locally, and correct in any deployment
+   * where the web tier and the API share one hostname.
+   *
+   * It is WRONG when they are split across subdomains
+   * (`app.` + `api.pravasisangama.com`). The API sets the cookie host-only on
+   * `api.`, `middleware.ts` runs on `app.` and cannot read it, and every
+   * navigation bounces back to /login even though login returned 200. Set
+   * `COOKIE_DOMAIN=.pravasisangama.com` there to scope it to the parent.
+   *
+   * Only ever set this to a domain you control. A cookie scoped to a parent
+   * domain is sent to every subdomain under it.
+   */
+  COOKIE_DOMAIN: z.string().optional(),
+
   /* SMTP — all optional. Without SMTP_HOST + MAIL_FROM, development logs the
    * message instead of sending; production returns 503. */
   SMTP_HOST: z.string().optional(),
