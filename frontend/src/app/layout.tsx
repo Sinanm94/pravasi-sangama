@@ -41,7 +41,13 @@ export const metadata: Metadata = {
     telephone: false,
   },
   icons: {
-    icon: '/Pravasi-Sangama.svg',
+    // The square mark, not the portrait lockup — a favicon is 16–32px, where
+    // the wordmark is unreadable noise.
+    icon: [
+      { url: '/Pravasi-Sangama-mark.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/icons/apple-touch-icon.png',
   },
 };
 

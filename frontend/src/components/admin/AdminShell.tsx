@@ -12,15 +12,18 @@ import { Logo } from '@/components/ui/Logo';
 const NAVY = '#062B59';
 
 /**
- * Chrome for every /admin page: masthead, section nav, sign out.
+ * Chrome for every superuser screen: masthead, section nav, sign out.
  *
- * The live dashboard at /dashboard stays a separate full-bleed screen — it is
- * a wallboard, watched rather than operated, and wrapping it in navigation
- * would waste the vertical space its charts need.
+ * This wraps /dashboard too. It previously did not — the dashboard was left
+ * full-bleed on the theory that a wallboard is watched rather than operated —
+ * but that left it with no way into the admin sections except a single
+ * "Administration" link, and no way back from them at all. Every section is
+ * now one click from anywhere. The dashboard passes `wide` to keep the room
+ * its four-across metric grid needs.
  */
 
 const SECTIONS = [
-  { href: '/dashboard', label: 'Live Dashboard', icon: BarChart3 },
+  { href: '/dashboard', label: 'System Overview', icon: BarChart3 },
   { href: '/admin/approvals', label: 'Agent Approvals', icon: UserCheck },
   { href: '/admin/directory', label: 'Agent Directory', icon: Users },
   { href: '/admin/gates', label: 'Gate Management', icon: DoorOpen },
@@ -30,16 +33,21 @@ export default function AdminShell({
   title,
   subtitle,
   actions,
+  /** The dashboard's four-across metric grid needs more than max-w-6xl. */
+  wide = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
+  wide?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
+
+  const shellWidth = wide ? 'max-w-7xl' : 'max-w-6xl';
 
   const signOut = async () => {
     await apiPost('/auth/logout').catch(() => {});
@@ -51,7 +59,7 @@ export default function AdminShell({
     <div className="min-h-dvh bg-gray-50 font-sans antialiased">
       {/* Masthead */}
       <header style={{ backgroundColor: NAVY }}>
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
+        <div className={`mx-auto flex ${shellWidth} items-center justify-between gap-4 px-5 py-4 sm:px-8`}>
           {/* items-center here, not just on the outer row: it centers the
               mark against its own two-line text stack, independent of
               whatever height the sign-out button ends up being. */}
@@ -81,7 +89,7 @@ export default function AdminShell({
         </div>
 
         {/* Section nav — the active pill slides between items */}
-        <nav className="mx-auto max-w-6xl px-5 sm:px-8">
+        <nav className={`mx-auto ${shellWidth} px-5 sm:px-8`}>
           <div className="flex gap-1 overflow-x-auto pb-px">
             {SECTIONS.map((s) => {
               const active =
@@ -118,7 +126,7 @@ export default function AdminShell({
       </header>
 
       {/* Page */}
-      <main className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+      <main className={`mx-auto ${shellWidth} px-5 py-8 sm:px-8 sm:py-10`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-gray-900">

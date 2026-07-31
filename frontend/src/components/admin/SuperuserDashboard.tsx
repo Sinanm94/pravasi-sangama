@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Link from 'next/link';
 import {
   Bar,
   BarChart,
@@ -19,7 +18,6 @@ import {
   RadioTower,
   ScanLine,
   Ticket,
-  UserCheck,
   Users,
   X,
 } from 'lucide-react';
@@ -36,6 +34,7 @@ import {
   TIER_COLORS,
 } from '@/components/charts/chartTheme';
 import { useLiveScans } from '@/lib/useLiveScans';
+import AdminShell from '@/components/admin/AdminShell';
 
 /** Totals and charts still poll. Only the feed moved to the socket. */
 const POLL_INTERVAL_MS = 5_000;
@@ -163,41 +162,24 @@ export default function SuperuserDashboard({
   if (!data) return null;
 
   return (
-    <div className="min-h-dvh bg-gray-50 px-5 py-8 font-sans antialiased sm:px-8 sm:py-10">
-      <div className="mx-auto w-full max-w-7xl">
-        {/* Header */}
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-[26px] font-semibold tracking-[-0.02em] text-gray-900">
-              System Overview
-            </h1>
-            <p className="mt-1 text-[13px] text-gray-500">
-              Updated {formatTime(data.generatedAt)} · {data.timezone}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {stale && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-[12px] font-medium text-amber-700 ring-1 ring-amber-600/15">
-                <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.5} />
-                Reconnecting
-              </span>
-            )}
-            {/* This screen is a wallboard, not a console — it deliberately has
-                no AdminShell nav, so admin sections need a way in from here. */}
-            <Link
-              href="/admin/approvals"
-              className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-4 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
-            >
-              <UserCheck className="h-3.5 w-3.5" strokeWidth={2.25} />
-              Administration
-            </Link>
-
-            {/* The socket carries the feed, so its state is what "Live"
-                actually means — not the REST poll. */}
-            <LivePulse stale={stale || !connected} />
-          </div>
-        </header>
+    <AdminShell
+      wide
+      title="System Overview"
+      subtitle={`Updated ${formatTime(data.generatedAt)} · ${data.timezone}`}
+      actions={
+        <div className="flex items-center gap-3">
+          {stale && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1.5 text-[12px] font-medium text-amber-700 ring-1 ring-amber-600/15">
+              <AlertTriangle className="h-3.5 w-3.5" strokeWidth={2.5} />
+              Reconnecting
+            </span>
+          )}
+          {/* The socket carries the feed, so its state is what "Live"
+              actually means — not the REST poll. */}
+          <LivePulse stale={stale || !connected} />
+        </div>
+      }
+    >
 
         {/* Key metrics */}
         <section className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -375,11 +357,10 @@ export default function SuperuserDashboard({
             />
             <LiveFeed scans={scans} />
           </Card>
-        </section>
-      </div>
+      </section>
 
       <ToastStack alerts={alerts} onDismiss={dismissAlert} />
-    </div>
+    </AdminShell>
   );
 }
 
@@ -744,12 +725,14 @@ function TierTooltip({
 
 /* ------------------------------------------------------------------ */
 
+/* Inside the shell, so the nav is reachable while the first snapshot loads
+ * rather than appearing a second later. The title placeholder bar is gone —
+ * AdminShell renders the real heading immediately. */
 function DashboardSkeleton() {
   return (
-    <div className="min-h-dvh bg-gray-50 px-5 py-8 sm:px-8 sm:py-10">
-      <div className="mx-auto w-full max-w-7xl animate-pulse">
-        <div className="h-8 w-56 rounded-lg bg-gray-200" />
-        <div className="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <AdminShell wide title="System Overview" subtitle="Loading the latest snapshot…">
+      <div className="animate-pulse">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="h-36 rounded-3xl bg-white" />
           ))}
@@ -759,7 +742,7 @@ function DashboardSkeleton() {
           <div className="h-[380px] rounded-3xl bg-white lg:col-span-2" />
         </div>
       </div>
-    </div>
+    </AdminShell>
   );
 }
 

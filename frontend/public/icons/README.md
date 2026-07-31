@@ -1,25 +1,45 @@
 # App Icons
 
-Placeholder entries only — `manifest.json` references these paths, and the
-service worker precaches the first two. **Until real files exist here, install
-prompts will not appear and `[sw] precache miss` will log on every install.**
+**Generated — do not hand-edit.** Rendered from `../Pravasi-Sangama-mark.svg`
+(the flame alone: the source SVG with its viewBox cropped past the wordmark).
+The full lockup is unreadable below ~64px, so it is never the icon source.
 
-| File                    | Size    | Purpose   | Notes                                    |
-| ----------------------- | ------- | --------- | ---------------------------------------- |
-| `icon-192.png`          | 192×192 | `any`     | Home screen, shortcuts                   |
-| `icon-512.png`          | 512×512 | `any`     | Splash screen                            |
-| `icon-maskable-512.png` | 512×512 | `maskable`| Android adaptive — see safe zone below   |
+| File                    | Size    | Purpose    | Consumer                        |
+| ----------------------- | ------- | ---------- | ------------------------------- |
+| `icon-192.png`          | 192×192 | `any`      | Home screen, shortcuts, favicon |
+| `icon-512.png`          | 512×512 | `any`      | Splash screen                   |
+| `icon-maskable-512.png` | 512×512 | `maskable` | Android adaptive                |
+| `apple-touch-icon.png`  | 180×180 | —          | iOS, via `metadata.icons.apple` |
 
 ## Maskable safe zone
 
 Android crops maskable icons to a circle, squircle or rounded square depending
-on launcher. Keep all meaningful content inside the **centre 80%** (a 409px
-circle within the 512px canvas). Artwork that fills the full square will have
-its corners cut off.
+on launcher. All meaningful content must sit inside the **centre 80%** (a 409px
+circle within the 512px canvas), which is why the maskable variant scales the
+mark to 56% where the `any` icons use 76%. The `any` icons are not cropped.
 
-The `any` icons are *not* cropped, so they can use the full canvas.
+## Background
 
-## Suggested treatment
+White, matching `manifest.json`'s `background_color` (`#f9fafb`).
 
-Deep maroon `#062B59` field, gold `#d4af37` mark, no transparency — a
-transparent PNG renders as a black square on some Android launchers.
+Deliberately **not** navy, despite navy being `theme_color`: the mark contains
+a near-white counter (`#F7F8FB`) drawn to blend into a light background. On
+navy that counter reads as an unintended white blob in the middle of the
+flame. Fully opaque either way — a transparent PNG renders as a black square
+on some Android launchers.
+
+## Regenerating
+
+Requires ImageMagick. Run from `frontend/public`:
+
+```bash
+gen() {
+  inner=$(python3 -c "print(int($1*$2))")
+  magick -background none -density 400 Pravasi-Sangama-mark.svg -resize ${inner}x${inner} \
+    -background white -gravity center -extent ${1}x${1} -strip PNG32:"icons/$3"
+}
+gen 192 0.76 icon-192.png
+gen 512 0.76 icon-512.png
+gen 512 0.56 icon-maskable-512.png
+gen 180 0.76 apple-touch-icon.png
+```

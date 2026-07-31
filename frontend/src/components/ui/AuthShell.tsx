@@ -30,7 +30,10 @@ export function AuthShell({ children }: { children?: React.ReactNode }) {
             above the card, since margin on a flex item still adds to the
             wrapper's own auto height. */}
         <div className="flex justify-center">
-          <Logo className="mb-6 h-32 w-32" />
+          {/* The MARK, not the full lockup: the navy band directly below
+              already spells out "Pravasi Sangama 2026" in type, and the
+              lockup would print the same words a second time 40px above it. */}
+          <Logo variant="mark" className="mb-6 h-24 w-24" priority />
         </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
