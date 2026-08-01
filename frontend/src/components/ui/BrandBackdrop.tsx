@@ -28,26 +28,30 @@ export default function BrandBackdrop() {
       aria-hidden
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden print:hidden"
     >
-      {/* Two soft washes on the diagonal. Large and very faint, so they read
-          as a warm cast on the grey rather than as shapes. */}
+      {/* A warm-to-cool diagonal, which is where the depth comes from: gold
+          top-left sweeping into navy bottom-right. Gold alone read as a flat
+          cream tint no matter how far it was pushed — it is the temperature
+          CONTRAST that makes the page feel lit rather than tinted. Both are
+          brand colours (§5.3); nothing new was introduced. */}
       <div
-        className="absolute -left-[10%] -top-[12%] h-[78vh] w-[78vh] rounded-full"
+        className="absolute -left-[12%] -top-[14%] h-[85vh] w-[85vh] rounded-full"
         style={{
-          background: `radial-gradient(circle, ${GOLD}1F 0%, ${GOLD}10 45%, transparent 72%)`,
+          background: `radial-gradient(circle, ${GOLD}74 0%, ${GOLD}38 42%, transparent 72%)`,
         }}
       />
       <div
-        className="absolute -bottom-[14%] -right-[8%] h-[84vh] w-[84vh] rounded-full"
+        className="absolute -bottom-[16%] -right-[10%] h-[90vh] w-[90vh] rounded-full"
         style={{
-          background: `radial-gradient(circle, ${GOLD}1C 0%, ${GOLD}0E 45%, transparent 72%)`,
+          background: `radial-gradient(circle, ${NAVY}5C 0%, ${NAVY}26 42%, transparent 72%)`,
         }}
       />
 
-      {/* A single cool wash keeps the gold from tipping the page sepia. */}
+      {/* A second, smaller gold bloom on the cool side stops the bottom-right
+          reading as a grey shadow. */}
       <div
-        className="absolute -right-[10%] top-[8%] h-[40vh] w-[40vh] rounded-full"
+        className="absolute -right-[12%] top-[2%] h-[48vh] w-[48vh] rounded-full"
         style={{
-          background: `radial-gradient(circle, ${NAVY}12 0%, transparent 70%)`,
+          background: `radial-gradient(circle, ${GOLD}4C 0%, transparent 70%)`,
         }}
       />
 
@@ -56,9 +60,9 @@ export default function BrandBackdrop() {
       <div
         className="absolute left-8 top-24 hidden h-40 w-40 sm:block"
         style={{
-          backgroundImage: `radial-gradient(${GOLD}59 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(${GOLD}B0 1px, transparent 1px)`,
           backgroundSize: '14px 14px',
-          opacity: 0.5,
+          opacity: 0.7,
           maskImage: 'radial-gradient(circle at 0% 0%, #000 10%, transparent 72%)',
           WebkitMaskImage:
             'radial-gradient(circle at 0% 0%, #000 10%, transparent 72%)',
@@ -67,9 +71,9 @@ export default function BrandBackdrop() {
       <div
         className="absolute bottom-16 right-10 hidden h-44 w-44 sm:block"
         style={{
-          backgroundImage: `radial-gradient(${GOLD}59 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(${GOLD}B0 1px, transparent 1px)`,
           backgroundSize: '14px 14px',
-          opacity: 0.5,
+          opacity: 0.7,
           maskImage:
             'radial-gradient(circle at 100% 100%, #000 10%, transparent 72%)',
           WebkitMaskImage:
@@ -84,15 +88,15 @@ export default function BrandBackdrop() {
         viewBox="0 0 200 200"
         fill="none"
       >
-        <circle cx="100" cy="100" r="96" stroke={GOLD} strokeWidth="0.6" opacity="0.22" />
-        <circle cx="100" cy="100" r="74" stroke={GOLD} strokeWidth="0.4" opacity="0.14" />
+        <circle cx="100" cy="100" r="96" stroke={GOLD} strokeWidth="0.8" opacity="0.4" />
+        <circle cx="100" cy="100" r="74" stroke={GOLD} strokeWidth="0.6" opacity="0.26" />
       </svg>
       <svg
         className="absolute -right-28 top-[6%] hidden h-[380px] w-[380px] lg:block"
         viewBox="0 0 200 200"
         fill="none"
       >
-        <circle cx="100" cy="100" r="96" stroke={GOLD} strokeWidth="0.6" opacity="0.2" />
+        <circle cx="100" cy="100" r="96" stroke={GOLD} strokeWidth="0.8" opacity="0.36" />
       </svg>
     </div>
   );

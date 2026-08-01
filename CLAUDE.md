@@ -302,10 +302,13 @@ Rules:
   > legibility rule about *type and controls*. The backdrop is neither — it is
   > washes, dot fields and hairline arcs behind the content, at 3–12% alpha,
   > `aria-hidden`, `pointer-events-none` and `print:hidden`. Gold on grey there
-  > is not a regression. Its alphas are calibrated, not guessed: composited
-  > over `bg-gray-50` the strongest corner lands ~12 RGB units off the base.
-  > Below ~4 units it is invisible; past ~24 it reads as a stain rather than a
-  > wash. Re-measure if you change them.
+  > is not a regression. The depth comes from a warm-to-cool diagonal — gold
+  > top-left into navy bottom-right — not from gold alone, which reads as a
+  > flat cream tint at any strength. Alphas are calibrated by compositing over
+  > `bg-gray-50` and measuring: the corners land ~45–50 RGB units off the base.
+  > Two earlier passes measured 2 and 13 units and were both invisible on a
+  > real display, so judge this by looking, not by the number. Past ~60 the
+  > corners look stained.
 - **Light Gold `#F7E7B5`** is for inner detail on navy (badge hairlines,
   secondary ornament), not for fills.
 - Brand colours are **accents in the app shell**, and **the entire surface on
