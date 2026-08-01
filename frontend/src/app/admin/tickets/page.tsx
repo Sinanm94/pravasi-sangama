@@ -143,7 +143,6 @@ function LedgerScreen() {
 
   return (
     <AdminShell
-      wide
       title="Ticket Ledger"
       subtitle={
         data === null

@@ -187,7 +187,6 @@ export default function SuperuserDashboard({
 
   return (
     <AdminShell
-      wide
       title="System Overview"
       subtitle={`Updated ${formatTime(data.generatedAt)} · ${data.timezone}`}
       actions={
@@ -777,7 +776,7 @@ function TierTooltip({
  * AdminShell renders the real heading immediately. */
 function DashboardSkeleton() {
   return (
-    <AdminShell wide title="System Overview" subtitle="Loading the latest snapshot…">
+    <AdminShell title="System Overview" subtitle="Loading the latest snapshot…">
       <div className="animate-pulse">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {[0, 1, 2, 3].map((i) => (
@@ -917,7 +916,7 @@ export const MOCK_SNAPSHOT: DashboardSnapshot = {
 /** First load failed and there is nothing to show. Offers the way out. */
 function DashboardUnavailable({ onRetry }: { onRetry: () => void }) {
   return (
-    <AdminShell wide title="System Overview" subtitle="Could not load the dashboard">
+    <AdminShell title="System Overview" subtitle="Could not load the dashboard">
       <div className="flex flex-col items-center rounded-3xl bg-white px-6 py-16 text-center shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-50">
           <AlertTriangle className="h-6 w-6 text-amber-600" strokeWidth={2} />

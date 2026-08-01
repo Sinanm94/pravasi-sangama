@@ -19,8 +19,8 @@ const NAVY = '#062B59';
  * full-bleed on the theory that a wallboard is watched rather than operated —
  * but that left it with no way into the admin sections except a single
  * "Administration" link, and no way back from them at all. Every section is
- * now one click from anywhere. The dashboard passes `wide` to keep the room
- * its four-across metric grid needs.
+ * Masthead, nav rail and body all share SHELL_WIDTH, so the branding sits on
+ * the same vertical axis as the cards beneath it.
  */
 
 const SECTIONS = [
@@ -31,25 +31,32 @@ const SECTIONS = [
   { href: '/admin/gates', label: 'Gate Management', icon: DoorOpen },
 ];
 
+/**
+ * ONE width for masthead, nav rail and body, so the mark lines up with the
+ * left edge of the cards below it.
+ *
+ * This replaced a per-page `wide` prop that gave the dashboard and ticket
+ * ledger max-w-7xl and the other three sections max-w-6xl. Since the prop
+ * also sized the chrome, the nav rail visibly resized when clicking between
+ * tabs. 7xl is the wider of the two, so nothing lost room — and the overline
+ * at 0.28em tracking gets the space it needs.
+ */
+const SHELL_WIDTH = 'max-w-7xl';
+
 export default function AdminShell({
   title,
   subtitle,
   actions,
-  /** The dashboard's four-across metric grid needs more than max-w-6xl. */
-  wide = false,
   children,
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
-  wide?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
-
-  const shellWidth = wide ? 'max-w-7xl' : 'max-w-6xl';
 
   const signOut = async () => {
     await apiPost('/auth/logout').catch(() => {});
@@ -63,12 +70,7 @@ export default function AdminShell({
 
       {/* Masthead */}
       <header className="relative z-10" style={{ backgroundColor: NAVY }}>
-        {/* Full-bleed, NOT mx-auto max-w-*. The row was already
-            justify-between, so the branding was left-aligned — but inside a
-            centred max-width container, which is why it read as centred on a
-            wide screen. The page body below stays contained; a full-bleed
-            header over contained content is the intended look. */}
-        <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-8">
+        <div className={`mx-auto flex ${SHELL_WIDTH} items-center justify-between gap-4 px-5 py-4 sm:px-8`}>
           {/* items-center here, not just on the outer row: it centers the
               mark against its own two-line text stack, independent of
               whatever height the sign-out button ends up being. */}
@@ -101,7 +103,7 @@ export default function AdminShell({
         </div>
 
         {/* Section nav — the active pill slides between items */}
-        <nav className="px-5 sm:px-8">
+        <nav className={`mx-auto ${SHELL_WIDTH} px-5 sm:px-8`}>
           <div className="flex gap-1 overflow-x-auto pb-px">
             {SECTIONS.map((s) => {
               const active =
@@ -138,7 +140,7 @@ export default function AdminShell({
       </header>
 
       {/* Page */}
-      <main className={`relative z-10 mx-auto ${shellWidth} px-5 py-8 sm:px-8 sm:py-10`}>
+      <main className={`relative z-10 mx-auto ${SHELL_WIDTH} px-5 py-8 sm:px-8 sm:py-10`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-gray-900">

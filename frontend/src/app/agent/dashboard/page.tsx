@@ -93,9 +93,9 @@ function LedgerScreen() {
 
       {/* Masthead */}
       <header className="relative z-10" style={{ backgroundColor: NAVY }}>
-        {/* Full-bleed, matching AdminShell: the mark sits at the viewport's
-            left edge and sign-out at its right. */}
-        <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-8">
+        {/* Same max-w as <main> below, so the mark lines up with the left
+            edge of the cards. */}
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Logo className="h-9 w-9" />
             <div className="min-w-0">
@@ -126,7 +126,7 @@ function LedgerScreen() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+      <main className="relative z-10 mx-auto max-w-7xl px-5 py-8 sm:px-8 sm:py-10">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-gray-900">
