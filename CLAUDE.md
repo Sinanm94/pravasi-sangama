@@ -300,15 +300,17 @@ Rules:
 
   > **One deliberate exception: `components/ui/BrandBackdrop.tsx`.** That is a
   > legibility rule about *type and controls*. The backdrop is neither — it is
-  > washes, dot fields and hairline arcs behind the content, at 3–12% alpha,
-  > `aria-hidden`, `pointer-events-none` and `print:hidden`. Gold on grey there
-  > is not a regression. The depth comes from a warm-to-cool diagonal — gold
-  > top-left into navy bottom-right — not from gold alone, which reads as a
-  > flat cream tint at any strength. Alphas are calibrated by compositing over
-  > `bg-gray-50` and measuring: the corners land ~45–50 RGB units off the base.
-  > Two earlier passes measured 2 and 13 units and were both invisible on a
-  > real display, so judge this by looking, not by the number. Past ~60 the
-  > corners look stained.
+  > an `aria-hidden`, `pointer-events-none`, `print:hidden` layer behind the
+  > content.
+  >
+  > It is built from a masked dot lattice, hairline arcs and one flat diagonal
+  > gradient — **not** soft radial washes. Those were tried at four strengths
+  > and read as stains at every one of them: too faint to see, or obviously
+  > like a spill, with nothing usable in between. On a light surface ornament
+  > has to come from texture and line work; a blurred coloured circle always
+  > looks like a mistake. Judge any change by looking at it, not by measuring
+  > the pixel delta — that measurement misled twice.
+
 - **Light Gold `#F7E7B5`** is for inner detail on navy (badge hairlines,
   secondary ornament), not for fills.
 - Brand colours are **accents in the app shell**, and **the entire surface on
