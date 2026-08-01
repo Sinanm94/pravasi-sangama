@@ -521,39 +521,44 @@ function Ticket({
             measures ~2:1 contrast and is unreadable (§5.3), so nothing gold
             may cross onto this surface as text or a hairline. */}
         <div className="mx-5 rounded-lg bg-white px-5 pb-5 pt-4">
-          <div className="flex items-center justify-between gap-4">
-            {/* Tier badge — premium only, as before. */}
-            {isPremium &&
-              (ribbonSrc ? (
-                <div className="relative flex shrink-0">
-              <img
-                src={ribbonSrc}
-                alt={
-                  ribbonHasLabel
-                    ? `${TICKET_TYPE_LABELS[ticket.ticketType]} ticket`
-                    : ''
-                }
-                aria-hidden={!ribbonHasLabel}
-                className="block h-11 w-auto"
-              />
-              {!ribbonHasLabel && (
-                <span
-                  className="absolute inset-0 flex items-center justify-center px-6 text-[13px] font-extrabold uppercase tracking-[0.18em]"
-                  style={{ color: NAVY }}
-                >
-                  {TICKET_TYPE_LABELS[ticket.ticketType]} Ticket
-                </span>
-              )}
-            </div>
-              ) : (
-                <HexBadge
-                  label={`${TICKET_TYPE_LABELS[ticket.ticketType]} Ticket`}
-                />
-              ))}
+          {/* Header row: tier badge left, date badge right, matched at 46px
+              so they read as a balanced pair above the codes.
 
-            {/* Right-aligned date badge. ml-auto so it stays hard right even
-                on Normal, where there is no tier badge to push against. */}
-            <DateBadge date={ticket.eventDate} className="ml-auto" />
+              EVERY tier gets a badge, including Normal. It was previously
+              gated behind isPremium, which left the left half of the card
+              empty on a Normal pass and made the date look accidentally
+              off-centre rather than deliberately right-aligned. The QR region
+              below still branches on isPremium — that is the 2-vs-5 panel
+              layout, which is a real difference; the tier label is not. */}
+          <div className="flex items-center justify-between gap-4">
+            {ribbonSrc ? (
+              <div className="relative flex shrink-0">
+                <img
+                  src={ribbonSrc}
+                  alt={
+                    ribbonHasLabel
+                      ? `${TICKET_TYPE_LABELS[ticket.ticketType]} ticket`
+                      : ''
+                  }
+                  aria-hidden={!ribbonHasLabel}
+                  className="block h-11 w-auto"
+                />
+                {!ribbonHasLabel && (
+                  <span
+                    className="absolute inset-0 flex items-center justify-center px-6 text-[13px] font-extrabold uppercase tracking-[0.18em]"
+                    style={{ color: NAVY }}
+                  >
+                    {TICKET_TYPE_LABELS[ticket.ticketType]} Ticket
+                  </span>
+                )}
+              </div>
+            ) : (
+              <HexBadge
+                label={`${TICKET_TYPE_LABELS[ticket.ticketType]} Ticket`}
+              />
+            )}
+
+            <DateBadge date={ticket.eventDate} />
           </div>
 
         {/* ---- QR region ---- */}
