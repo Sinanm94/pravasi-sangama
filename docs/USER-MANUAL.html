@@ -1,0 +1,377 @@
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Pravasi Sangama 2026 — System User Manual</title>
+<style>
+  @page { size: A4 portrait; margin: 18mm 16mm; }
+
+  body {
+    font-family: 'Liberation Sans', Arial, Helvetica, sans-serif;
+    font-size: 10.5pt;
+    line-height: 1.55;
+    color: #1c1c1c;
+    margin: 0;
+  }
+
+  h1, h2, h3 { font-family: 'Liberation Sans', Arial, Helvetica, sans-serif; }
+  h1 { font-size: 22pt; color: #062B59; margin: 0 0 4pt 0; letter-spacing: -0.3pt; }
+  h2 {
+    font-size: 13pt; color: #062B59; margin: 22pt 0 6pt 0;
+    border-bottom: 1.5pt solid #D4AF37; padding-bottom: 3pt;
+  }
+  h3 { font-size: 11pt; color: #031F43; margin: 14pt 0 4pt 0; }
+  p  { margin: 0 0 8pt 0; }
+  ul, ol { margin: 0 0 10pt 0; padding-left: 16pt; }
+  li { margin-bottom: 3pt; }
+
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0 12pt 0; font-size: 9.5pt; }
+  th {
+    background-color: #062B59; color: #ffffff; text-align: left;
+    padding: 5pt 7pt; font-size: 8.5pt; letter-spacing: 0.5pt;
+    text-transform: uppercase;
+  }
+  td { border-bottom: 0.5pt solid #d8d8d8; padding: 5pt 7pt; vertical-align: top; }
+
+  .lead { font-size: 11pt; color: #444; margin-bottom: 14pt; }
+  .eyebrow {
+    font-size: 8pt; letter-spacing: 2pt; text-transform: uppercase;
+    color: #8a6d16; font-weight: bold; margin: 0 0 6pt 0;
+  }
+  .rule { border-top: 2pt solid #062B59; margin: 10pt 0 16pt 0; }
+
+  .note {
+    background-color: #f4f7fb; border-left: 3pt solid #062B59;
+    padding: 8pt 10pt; margin: 8pt 0 12pt 0; font-size: 9.5pt;
+  }
+  .warn {
+    background-color: #fdf6e6; border-left: 3pt solid #D4AF37;
+    padding: 8pt 10pt; margin: 8pt 0 12pt 0; font-size: 9.5pt;
+  }
+
+  .pill {
+    display: inline-block; padding: 1pt 6pt; font-size: 8.5pt;
+    font-weight: bold; color: #ffffff; background-color: #062B59;
+  }
+  .green { background-color: #047857; }
+  .amber { background-color: #b45309; }
+  .red   { background-color: #b91c1c; }
+
+  .pagebreak { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<p class="eyebrow">Karnataka Cultural Foundation</p>
+<h1>Pravasi Sangama 2026</h1>
+<p class="lead">E&#8209;Ticketing &amp; Gate Management — User Manual</p>
+<div class="rule"></div>
+
+<p>This manual explains how to run the ticketing system for Pravasi Sangama 2026.
+It is written for the <b>administrator</b>, but it also covers what the field
+agents and gate staff see, so you can answer their questions and train them
+without needing a second document.</p>
+
+<p>No technical knowledge is assumed. Anything you need to type is shown
+<b>in bold</b>.</p>
+
+<h2>1. What the system does</h2>
+
+<p>The system replaces paper tickets with digital passes carrying QR codes.</p>
+
+<ol>
+  <li>A field agent registers a guest and issues a ticket.</li>
+  <li>The guest receives the pass by WhatsApp, email, or on paper.</li>
+  <li>At the venue, gate staff scan the QR code to admit them.</li>
+  <li>You watch it all happen live from the admin dashboard.</li>
+</ol>
+
+<p>Every ticket is traceable to the agent who issued it and the unit they were
+posted at. Nothing is anonymous.</p>
+
+<h2>2. Who uses it</h2>
+
+<table>
+  <tr><th style="width:22%">Role</th><th style="width:38%">What they can do</th><th>What they cannot do</th></tr>
+  <tr>
+    <td><b>Administrator</b><br />(Superuser)</td>
+    <td>Everything: live dashboard, approve agents, view all tickets, manage gates.</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><b>Agent</b><br />(field staff)</td>
+    <td>Register guests, issue tickets, view <i>their own</i> tickets, scan at a gate.</td>
+    <td>See other agents' tickets, view analytics, edit or cancel a ticket.</td>
+  </tr>
+  <tr>
+    <td><b>Gate staff</b><br />(scanner)</td>
+    <td>Scan QR codes and admit guests.</td>
+    <td>Issue tickets, see guest lists, see any totals.</td>
+  </tr>
+</table>
+
+<div class="note">
+  <b>Why agents cannot cancel tickets.</b> Only you can. This is deliberate — it
+  means a mistake at a registration desk cannot quietly erase a record, and
+  every cancellation has one accountable person behind it.
+</div>
+
+<div class="pagebreak"></div>
+
+<h2>3. For the Administrator</h2>
+
+<h3>3.1 Signing in</h3>
+<p>Go to the web address for the system and enter your <b>username</b> (or your
+email address) and <b>password</b>. You will land on the System Overview.</p>
+
+<p>Your session lasts <b>2 hours</b>, then asks you to sign in again. This is
+shorter than an agent's session on purpose: your account can do far more damage
+if a laptop is left open.</p>
+
+<h3>3.2 The five sections</h3>
+<p>Every screen has the same navigation bar across the top. You are always one
+click from any section.</p>
+
+<table>
+  <tr><th style="width:26%">Section</th><th>What it is for</th></tr>
+  <tr><td><b>System Overview</b></td><td>Live totals and a running feed of gate scans as they happen. Your event-day screen.</td></tr>
+  <tr><td><b>Agent Approvals</b></td><td>New agents who have registered and are waiting for you to let them in.</td></tr>
+  <tr><td><b>Agent Directory</b></td><td>Every approved agent, with how many tickets each has issued.</td></tr>
+  <tr><td><b>Ticket Ledger</b></td><td>Every ticket in the system, searchable and filterable.</td></tr>
+  <tr><td><b>Gate Management</b></td><td>Create gates and set or change their PINs.</td></tr>
+</table>
+
+<h3>3.3 Approving an agent</h3>
+<p>An agent who registers cannot sign in until you approve them. Open
+<b>Agent Approvals</b> and press <b>Approve</b> or <b>Reject</b>.</p>
+<ul>
+  <li><b>Approve</b> — they can sign in immediately and start issuing.</li>
+  <li><b>Reject</b> — final. They would have to register again from scratch.</li>
+</ul>
+
+<div class="warn">
+  <b>This is your main security control.</b> Anyone can fill in the registration
+  form. Nobody can issue a single ticket until you press Approve. Check the name
+  and mobile number against your own list of volunteers before approving.
+</div>
+
+<h3>3.4 Finding a ticket</h3>
+<p>Open <b>Ticket Ledger</b>. You can filter by division, unit and agent, and
+search by guest name, mobile number, or ticket number. The summary cards at the
+top update to match whatever you have filtered.</p>
+
+<div class="note">
+  The cards count <i>every</i> matching ticket, even when the table below shows
+  only the most recent few hundred. If the table says it is showing a portion,
+  the totals are still complete.
+</div>
+
+<h3>3.5 If an agent leaves or a phone is lost</h3>
+<p>Open <b>Agent Directory</b>, find the agent, and deactivate them. They are
+signed out and cannot issue anything further. Their existing tickets stay valid
+and stay on the record — deactivating a person never invalidates guests who
+already hold passes.</p>
+
+<div class="pagebreak"></div>
+
+<h2>4. For Agents (field staff)</h2>
+
+<h3>4.1 Signing in</h3>
+<p>Agents go to the same web address and enter their <b>mobile number</b> (or
+email) and <b>password</b>. That is the whole login — there is no unit code or
+location PIN to remember.</p>
+
+<p>The system already knows which unit each agent belongs to, and writes every
+ticket against that unit automatically. An agent cannot issue against a unit
+they are not posted to, because they are never asked which unit they are at.</p>
+
+<p>An agent session lasts <b>8 hours</b> — a full shift.</p>
+
+<h3>4.2 Issuing a ticket</h3>
+<ol>
+  <li>Press <b>New Registration</b>.</li>
+  <li>Fill in the guest's name, mobile number, and email if they have one.</li>
+  <li>Choose the ticket type.</li>
+  <li>Enter how many <b>children below 12</b> are coming.</li>
+  <li>Press submit. The pass appears immediately.</li>
+</ol>
+
+<h3>4.3 Ticket types</h3>
+<table>
+  <tr><th style="width:20%">Type</th><th style="width:20%">Adults admitted</th><th>QR panels on the printed pass</th></tr>
+  <tr><td><b>Normal</b></td><td>1</td><td>2 — one location, one entry code</td></tr>
+  <tr><td><b>VIP</b></td><td>4</td><td>5 — one location, four entry codes</td></tr>
+  <tr><td><b>VVIP</b></td><td>4</td><td>5 — one location, four entry codes</td></tr>
+  <tr><td><b>SVIP</b></td><td>4</td><td>5 — one location, four entry codes</td></tr>
+</table>
+
+<p>VIP, VVIP and SVIP admit <b>exactly the same number of people</b>. They differ
+only in pricing and access zone, never in headcount.</p>
+
+<div class="note">
+  <b>Children below 12 are free and are not counted.</b> They do not use up an
+  entry code and do not reduce the adult count. They are recorded only so
+  catering and crowd safety know the real number of bodies in the venue.
+</div>
+
+<h3>4.4 The QR codes on a pass</h3>
+<ul>
+  <li><b>Entry codes</b> (&ldquo;Guest 1 QR&rdquo;, and so on) — each admits one person, once.</li>
+  <li><b>Location QR</b> — opens a map to the venue. It is <i>not</i> a ticket and
+      will not admit anyone. Guests can scan it as often as they like.</li>
+</ul>
+
+<h3>4.5 Sending the pass to the guest</h3>
+<p>After issuing, the agent can:</p>
+<ul>
+  <li><b>WhatsApp</b> — sends the pass as an image. The usual choice.</li>
+  <li><b>Email</b> — if the guest gave an address.</li>
+  <li><b>Print / Save as PDF</b> — opens the printer dialogue; choosing
+      &ldquo;Save as PDF&rdquo; produces a file named after the ticket.</li>
+  <li><b>Save as Image</b> — downloads the pass to the phone.</li>
+</ul>
+
+<h3>4.6 My Registrations</h3>
+<p>Agents see a list of every ticket they have personally issued, with guest
+names, ticket types, adults, children and time. They cannot see anyone else's.</p>
+
+<div class="pagebreak"></div>
+
+<h2>5. For Gate Staff</h2>
+
+<h3>5.1 Signing in at a gate</h3>
+<p>Gate staff open the scanner page and enter the <b>gate code</b> and a
+<b>PIN of 4 to 6 digits</b>. A gate is a <i>place</i>, not a person — volunteers
+on the same gate share the PIN, and scans are recorded against the gate.</p>
+
+<h3>5.2 Scanning</h3>
+<p>Point the camera at a QR code. The whole screen changes colour:</p>
+
+<table>
+  <tr><th style="width:22%">Colour</th><th style="width:22%">Meaning</th><th>What to do</th></tr>
+  <tr>
+    <td><span class="pill green">GREEN</span></td>
+    <td>Admitted</td>
+    <td>Let them in.</td>
+  </tr>
+  <tr>
+    <td><span class="pill amber">AMBER</span></td>
+    <td>Already used</td>
+    <td>This code has been scanned before. Do not admit. Call a supervisor.</td>
+  </tr>
+  <tr>
+    <td><span class="pill red">RED</span></td>
+    <td>Not valid</td>
+    <td>Cancelled, unknown, or not a ticket. Do not admit.</td>
+  </tr>
+</table>
+
+<p>The colours are the whole instruction. Staff do not need to read the small
+text to know what to do, which matters in a queue and in poor light.</p>
+
+<h3>5.3 When the internet drops</h3>
+<p>The scanner keeps working. Scans are stored on the phone and sent up as soon
+as the signal returns.</p>
+
+<p>While offline, an admitted guest shows <b>PENDING SYNC</b> in amber rather
+than solid green. <b>Let them in anyway.</b> A gate that stops moving is a worse
+problem than a scan confirmed a few minutes late.</p>
+
+<div class="warn">
+  <b>Honest limitation.</b> If two phones are offline at the same time, the same
+  QR code could be accepted at both. When they reconnect, the second one is
+  recorded as a duplicate and raised as an alert on your dashboard — but that
+  person is already inside. Watch for those alerts on event day.
+</div>
+
+<h2>6. Security — in plain terms</h2>
+
+<table>
+  <tr><th style="width:34%">Protection</th><th>What it means for you</th></tr>
+  <tr><td><b>Nobody joins by themselves</b></td>
+      <td>Registering is not joining. An administrator must approve every agent before they can issue anything.</td></tr>
+  <tr><td><b>Passwords are never stored</b></td>
+      <td>Only a scrambled, one-way version is kept. Nobody — including us — can read a user's password out of the database.</td></tr>
+  <tr><td><b>QR codes are not stored either</b></td>
+      <td>The system keeps only a fingerprint of each code. Even with full database access, nobody can reconstruct a working ticket.</td></tr>
+  <tr><td><b>Ticket numbers cannot be guessed</b></td>
+      <td>They are random, not sequential. Holding one ticket tells you nothing about any other, and nobody can work out how many have been sold.</td></tr>
+  <tr><td><b>A code admits once</b></td>
+      <td>Re-scanning the same code always reports a duplicate. Two staff scanning the same pass at the same instant cannot both admit.</td></tr>
+  <tr><td><b>Every attempt is recorded</b></td>
+      <td>Admissions, duplicates and rejections are all logged with the gate and time. A burst of duplicates at one gate is the signature of a copied ticket.</td></tr>
+  <tr><td><b>Sessions expire</b></td>
+      <td>Administrator 2 hours, agent 8 hours. A phone left on a table does not stay signed in overnight.</td></tr>
+  <tr><td><b>Guessing is throttled</b></td>
+      <td>Repeated failed sign-in attempts are slowed automatically.</td></tr>
+  <tr><td><b>Instant revocation</b></td>
+      <td>Deactivating an agent signs them out immediately, without affecting guests who already hold valid passes.</td></tr>
+</table>
+
+<h3>6.1 What you are responsible for</h3>
+<p>The system cannot protect against these. You must:</p>
+<ul>
+  <li><b>Approve carefully.</b> Approval is the gate. Check each name against your volunteer list.</li>
+  <li><b>Change the starting passwords and gate PINs</b> before the event. The
+      installation defaults are known and must not survive into the live event.</li>
+  <li><b>Rotate a gate PIN</b> if a volunteer leaves mid-event.</li>
+  <li><b>Deactivate promptly</b> when a phone is lost or someone stops working.</li>
+  <li><b>Never share an administrator account.</b> One person, one login — otherwise
+      the audit trail cannot tell you who did what.</li>
+</ul>
+
+<div class="pagebreak"></div>
+
+<h2>7. Event-day checklist</h2>
+
+<table>
+  <tr><th style="width:24%">When</th><th>Do this</th></tr>
+  <tr><td><b>Week before</b></td><td>Change all starting passwords and gate PINs. Create the real gates. Approve your agents.</td></tr>
+  <tr><td><b>Day before</b></td><td>Have each agent sign in once and issue a test ticket. Scan it at a gate. Cancel it afterwards.</td></tr>
+  <tr><td><b>Gates open</b></td><td>Keep System Overview on a screen. Confirm every gate is showing activity.</td></tr>
+  <tr><td><b>During</b></td><td>Watch for duplicate alerts. A cluster at one gate means a pass has been copied and shared.</td></tr>
+  <tr><td><b>After</b></td><td>Export the Ticket Ledger for your records.</td></tr>
+</table>
+
+<h2>8. Common questions</h2>
+
+<h3>A guest lost their ticket.</h3>
+<p>Find them in the Ticket Ledger by name or mobile number to confirm they are
+genuine, then have their agent issue a replacement. The original codes should be
+cancelled so the lost pass cannot also be used.</p>
+
+<h3>An agent says they cannot sign in.</h3>
+<p>Check Agent Approvals — they are probably still waiting for approval. If they
+were approved, check they have not been deactivated in Agent Directory.</p>
+
+<h3>The dashboard shows no data.</h3>
+<p>It will say so plainly rather than showing numbers. If it is blank or reports
+a connection problem, the app cannot reach the server — that is a technical
+issue, not a data loss. Nothing already recorded is affected.</p>
+
+<h3>A guest arrives with a screenshot of someone else's pass.</h3>
+<p>The scanner shows amber for the second person. The code has already been used
+and will not admit twice, no matter how good the copy is.</p>
+
+<h3>Can we still work if the venue Wi-Fi fails?</h3>
+<p>Yes for scanning — it queues and syncs later. Issuing new tickets does need a
+connection, so keep a mobile hotspot at each registration desk.</p>
+
+<table width="100%" style="width:100%; margin-top:34pt; border-collapse:collapse;">
+  <tr>
+    <td style="background-color:#062B59; padding:20pt 14pt; text-align:center;">
+      <p style="margin:0 0 7pt 0; font-size:8.5pt; letter-spacing:3pt; color:#D4AF37; font-weight:bold;">
+        HANDLED AND MANAGED BY
+      </p>
+      <p style="margin:0 0 9pt 0; font-size:17pt; letter-spacing:2pt; color:#ffffff; font-weight:bold;">
+        GLOBAL TECH SOLUTIONS
+      </p>
+      <p style="margin:0; font-size:8.5pt; color:#c9d4e2; line-height:1.5;">
+        Pravasi Sangama 2026 &mdash; E&#8209;Ticketing &amp; Gate Management System<br />
+        Designed, deployed and maintained for the Karnataka Cultural Foundation
+      </p>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>
