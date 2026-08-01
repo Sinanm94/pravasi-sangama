@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronDown, Eye, EyeOff, Loader2, type LucideIcon } from 'lucide-react';
 import { fieldErrorVariants, springSnappy } from '@/lib/motion';
 import { Logo } from './Logo';
+import BrandBackdrop from './BrandBackdrop';
 
 /**
  * Shared chrome for every unauthenticated screen: /login, /login/reset,
@@ -21,8 +22,11 @@ export const GOLD = '#D4AF37';
 
 export function AuthShell({ children }: { children?: React.ReactNode }) {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gray-50 px-4 py-10 font-sans antialiased">
-      <div className="w-full max-w-sm">
+    <div className="relative flex min-h-dvh items-center justify-center bg-gray-50 px-4 py-10 font-sans antialiased">
+      <BrandBackdrop />
+      {/* relative + z-10: the backdrop is z-0, so every card must sit above
+          it or the washes would render over the form. */}
+      <div className="relative z-10 w-full max-w-sm">
         {/* Above the card, on the page background — not inside the navy
             band, which already carries the KCF wordmark and would double up.
             Margin lives on the Logo itself (not this wrapper) so there is

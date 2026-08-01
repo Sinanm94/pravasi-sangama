@@ -297,6 +297,15 @@ Rules:
   pairing and fully legible. Use it for eyebrow text, hairline rules, badges,
   diamonds, and icon accents *over navy* — never as text or an action on a
   white or grey surface.
+
+  > **One deliberate exception: `components/ui/BrandBackdrop.tsx`.** That is a
+  > legibility rule about *type and controls*. The backdrop is neither — it is
+  > washes, dot fields and hairline arcs behind the content, at 3–12% alpha,
+  > `aria-hidden`, `pointer-events-none` and `print:hidden`. Gold on grey there
+  > is not a regression. Its alphas are calibrated, not guessed: composited
+  > over `bg-gray-50` the strongest corner lands ~12 RGB units off the base.
+  > Below ~4 units it is invisible; past ~24 it reads as a stain rather than a
+  > wash. Re-measure if you change them.
 - **Light Gold `#F7E7B5`** is for inner detail on navy (badge hairlines,
   secondary ornament), not for fills.
 - Brand colours are **accents in the app shell**, and **the entire surface on

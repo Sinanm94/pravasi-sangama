@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ChevronDown, Loader2 } from 'lucide-react';
+import BrandBackdrop from '@/components/ui/BrandBackdrop';
 import {
   SEATS_PER_TIER,
   TICKET_TYPES,
@@ -118,8 +119,9 @@ export default function NewRegistrationForm({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 px-4 py-10 font-sans antialiased sm:px-6 sm:py-14">
-      <div className="mx-auto w-full max-w-xl">
+    <div className="relative min-h-screen bg-gray-50 px-4 py-10 font-sans antialiased sm:px-6 sm:py-14">
+      <BrandBackdrop />
+      <div className="relative z-10 mx-auto w-full max-w-xl">
         <form
           onSubmit={handleSubmit}
           noValidate

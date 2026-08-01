@@ -8,6 +8,7 @@ import { apiPost } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
 import { Logo } from '@/components/ui/Logo';
+import BrandBackdrop from '@/components/ui/BrandBackdrop';
 
 const NAVY = '#062B59';
 
@@ -57,9 +58,11 @@ export default function AdminShell({
   };
 
   return (
-    <div className="min-h-dvh bg-gray-50 font-sans antialiased">
+    <div className="relative min-h-dvh bg-gray-50 font-sans antialiased">
+      <BrandBackdrop />
+
       {/* Masthead */}
-      <header style={{ backgroundColor: NAVY }}>
+      <header className="relative z-10" style={{ backgroundColor: NAVY }}>
         <div className={`mx-auto flex ${shellWidth} items-center justify-between gap-4 px-5 py-4 sm:px-8`}>
           {/* items-center here, not just on the outer row: it centers the
               mark against its own two-line text stack, independent of
@@ -127,7 +130,7 @@ export default function AdminShell({
       </header>
 
       {/* Page */}
-      <main className={`mx-auto ${shellWidth} px-5 py-8 sm:px-8 sm:py-10`}>
+      <main className={`relative z-10 mx-auto ${shellWidth} px-5 py-8 sm:px-8 sm:py-10`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-gray-900">

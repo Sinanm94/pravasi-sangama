@@ -20,6 +20,7 @@ import TicketReceipt, {
 import { captureTicket } from '@/lib/shareTicket';
 import { screenVariants, springSurface } from '@/lib/motion';
 import ShareTicketModal from './ShareTicketModal';
+import BrandBackdrop from '@/components/ui/BrandBackdrop';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 
@@ -193,9 +194,12 @@ export default function AgentDashboard({ agent, onBack }: AgentDashboardProps) {
       initial="hidden"
       animate="visible"
       transition={springSurface}
-      className="min-h-dvh bg-gray-50 px-4 pb-12 pt-8 font-sans antialiased sm:px-6 sm:pt-12 print:bg-white print:pb-0"
+      className="relative min-h-dvh bg-gray-50 px-4 pb-12 pt-8 font-sans antialiased sm:px-6 sm:pt-12 print:bg-white print:pb-0"
     >
-      <div className="mx-auto w-full max-w-5xl">
+      {/* print:hidden inside BrandBackdrop keeps this off the printed pass;
+          the print isolation in globals.css would hide it regardless. */}
+      <BrandBackdrop />
+      <div className="relative z-10 mx-auto w-full max-w-5xl">
         {/* Confirmation */}
         <motion.div
           className="flex items-center justify-center gap-2 print:hidden"
