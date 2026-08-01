@@ -251,7 +251,12 @@ export default function TicketReceipt({
 
           <button
             type="button"
-            onClick={() => void printTicket()}
+            onClick={() =>
+              void printTicket({
+                ticketNumber: ticket.ticketNumber,
+                purchaserName: ticket.purchaserName,
+              })
+            }
             className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#062B59] px-5 py-2.5 text-[13px] font-semibold text-white transition-all duration-200 hover:bg-[#031F43] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.97]"
           >
             <Printer className="h-4 w-4" strokeWidth={2.25} />

@@ -150,13 +150,17 @@ export default function ShareTicketModal({
   const handlePrint = useCallback(async () => {
     setBusy('pdf');
     try {
-      await printTicket();
+      // meta drives the suggested PDF filename via document.title.
+      await printTicket({
+        ticketNumber: meta.ticketNumber,
+        purchaserName: meta.purchaserName,
+      });
     } catch {
       toast.error('Could not open the print dialog');
     } finally {
       setBusy(null);
     }
-  }, []);
+  }, [meta]);
 
   const handleImage = useCallback(async () => {
     setBusy('image');
