@@ -46,6 +46,16 @@ back to images and looking at it, and they will bite again:
 | Tables without `cellspacing="0"` | White gutters between cells; a dark header row breaks into segments | Always set it |
 | Flexbox / grid | Not supported | Tables |
 
+| `cellpadding` **and** `width="100%"` together | The padding is silently dropped and cell text sits flush against the cell edge | Pad with spacer cells or a paragraph `margin` |
+| A spacer cell in a *short* table | It absorbs the leftover width instead of staying at its stated size | Use a paragraph `margin-left` instead |
+
+Two things that do work reliably and are worth reaching for first:
+
+- **`margin` on a `<p>` inside a `<td>`** — the most dependable way to inset
+  text inside a coloured panel.
+- **`width` on a `<td>`** in a table that is already full-width — fine for
+  fixed columns such as the masthead's logo cell.
+
 Also: set `page-break-inside: avoid` on tables. Without it a header row can
 land on one page and its rows on the next.
 

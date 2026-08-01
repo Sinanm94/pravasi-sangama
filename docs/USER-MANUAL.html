@@ -77,10 +77,45 @@
 </head>
 <body>
 
-<p class="eyebrow">Karnataka Cultural Foundation</p>
-<h1>Pravasi Sangama 2026</h1>
-<p class="lead">E&#8209;Ticketing &amp; Gate Management — User Manual</p>
-<hr />
+<!-- Masthead. Two-column table rather than a float: LibreOffice has no
+     float support, and this is the only reliable way to sit the mark beside
+     the title block. -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:0 0 4pt 0;">
+  <tr>
+    <td width="94" style="border-bottom:none; vertical-align:top;">
+      <img src="assets/logo-mark.png" alt="" style="width:21mm; height:21mm;" />
+    </td>
+    <td style="border-bottom:none; vertical-align:top;">
+      <p class="eyebrow">Karnataka Cultural Foundation</p>
+      <h1>Pravasi Sangama 2026</h1>
+      <p class="lead">E&#8209;Ticketing &amp; Gate Management</p>
+    </td>
+  </tr>
+</table>
+
+<!-- Navy title bar: gives the masthead a base to sit on, and names the
+     document type without another heading level. -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:14pt 0 0 0;">
+  <tr>
+    <td style="background-color:#062B59; border-bottom:none;">
+      <p style="margin:8pt 12pt 8pt 12pt; font-size:13pt; font-weight:bold; color:#ffffff; letter-spacing:0.5pt;">
+        System User Manual
+      </p>
+    </td>
+  </tr>
+</table>
+
+<!-- Document meta strip -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:0 0 24pt 0;">
+  <tr>
+    <td style="background-color:#f5f5f7; border-bottom:none; font-size:8.5pt; color:#6e6e73;">
+      <p style="margin:7pt 0 7pt 12pt;"><b style="color:#1d1d1f;">Audience</b> &nbsp;Administrators &mdash; also covers agent and gate&#8209;staff screens</p>
+    </td>
+    <td style="background-color:#f5f5f7; border-bottom:none; font-size:8.5pt; color:#6e6e73; text-align:right;">
+      <p style="margin:7pt 12pt 7pt 0;"><b style="color:#1d1d1f;">Version</b> &nbsp;1.0 &nbsp;&middot;&nbsp; Event 15 October 2026</p>
+    </td>
+  </tr>
+</table>
 
 <p>This manual explains how to run the ticketing system for Pravasi Sangama 2026.
 It is written for the <b>administrator</b>, but it also covers what the field
@@ -106,7 +141,7 @@ posted at. Nothing is anonymous.</p>
 
 <h2>2. Who uses it</h2>
 
-<table cellspacing="0" style="page-break-inside:avoid;">
+<table cellspacing="0" cellpadding="8" style="page-break-inside:avoid;">
   <tr><th style="width:22%">Role</th><th style="width:38%">What they can do</th><th>What they cannot do</th></tr>
   <tr>
     <td><b>Administrator</b><br />(Superuser)</td>
@@ -125,12 +160,19 @@ posted at. Nothing is anonymous.</p>
   </tr>
 </table>
 
-<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
-  <tr><td style="background-color:#f5f5f7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
-    <b>Why agents cannot cancel tickets.</b> Only you can. This is deliberate — it
+<!-- Spacer columns, not cellpadding: LibreOffice drops padding on
+     these cells entirely, which left the text flush against the tint
+     edge. A cell with an explicit width attribute it cannot ignore. -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:14pt 0 18pt 0; page-break-inside:avoid;">
+  <tr>
+    <td width="16" style="background-color:#f5f5f7; border-bottom:none;">&nbsp;</td>
+    <td style="background-color:#f5f5f7; border-bottom:none; font-size:9.5pt; line-height:1.5;">
+      <p style="margin:6pt 0 6pt 0;"><b>Why agents cannot cancel tickets.</b> Only you can. This is deliberate — it
   means a mistake at a registration desk cannot quietly erase a record, and
-  every cancellation has one accountable person behind it.
-  </td></tr>
+  every cancellation has one accountable person behind it.</p>
+    </td>
+    <td width="16" style="background-color:#f5f5f7; border-bottom:none;">&nbsp;</td>
+  </tr>
 </table>
 
 <div class="pagebreak"></div>
@@ -149,7 +191,7 @@ if a laptop is left open.</p>
 <p>Every screen has the same navigation bar across the top. You are always one
 click from any section.</p>
 
-<table cellspacing="0" style="page-break-inside:avoid;">
+<table cellspacing="0" cellpadding="8" style="page-break-inside:avoid;">
   <tr><th style="width:26%">Section</th><th>What it is for</th></tr>
   <tr><td><b>System Overview</b></td><td>Live totals and a running feed of gate scans as they happen. Your event-day screen.</td></tr>
   <tr><td><b>Agent Approvals</b></td><td>New agents who have registered and are waiting for you to let them in.</td></tr>
@@ -166,12 +208,19 @@ click from any section.</p>
   <li><b>Reject</b> — final. They would have to register again from scratch.</li>
 </ul>
 
-<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
-  <tr><td style="background-color:#fdf6e7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
-    <b>This is your main security control.</b> Anyone can fill in the registration
+<!-- Spacer columns, not cellpadding: LibreOffice drops padding on
+     these cells entirely, which left the text flush against the tint
+     edge. A cell with an explicit width attribute it cannot ignore. -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:14pt 0 18pt 0; page-break-inside:avoid;">
+  <tr>
+    <td width="16" style="background-color:#fdf6e7; border-bottom:none;">&nbsp;</td>
+    <td style="background-color:#fdf6e7; border-bottom:none; font-size:9.5pt; line-height:1.5;">
+      <p style="margin:6pt 0 6pt 0;"><b>This is your main security control.</b> Anyone can fill in the registration
   form. Nobody can issue a single ticket until you press Approve. Check the name
-  and mobile number against your own list of volunteers before approving.
-  </td></tr>
+  and mobile number against your own list of volunteers before approving.</p>
+    </td>
+    <td width="16" style="background-color:#fdf6e7; border-bottom:none;">&nbsp;</td>
+  </tr>
 </table>
 
 <h3>3.4 Finding a ticket</h3>
@@ -179,12 +228,19 @@ click from any section.</p>
 search by guest name, mobile number, or ticket number. The summary cards at the
 top update to match whatever you have filtered.</p>
 
-<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
-  <tr><td style="background-color:#f5f5f7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
-    The cards count <i>every</i> matching ticket, even when the table below shows
+<!-- Spacer columns, not cellpadding: LibreOffice drops padding on
+     these cells entirely, which left the text flush against the tint
+     edge. A cell with an explicit width attribute it cannot ignore. -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:14pt 0 18pt 0; page-break-inside:avoid;">
+  <tr>
+    <td width="16" style="background-color:#f5f5f7; border-bottom:none;">&nbsp;</td>
+    <td style="background-color:#f5f5f7; border-bottom:none; font-size:9.5pt; line-height:1.5;">
+      <p style="margin:6pt 0 6pt 0;">The cards count <i>every</i> matching ticket, even when the table below shows
   only the most recent few hundred. If the table says it is showing a portion,
-  the totals are still complete.
-  </td></tr>
+  the totals are still complete.</p>
+    </td>
+    <td width="16" style="background-color:#f5f5f7; border-bottom:none;">&nbsp;</td>
+  </tr>
 </table>
 
 <h3>3.5 If an agent leaves or a phone is lost</h3>
@@ -218,7 +274,7 @@ they are not posted to, because they are never asked which unit they are at.</p>
 </ol>
 
 <h3>4.3 Ticket types</h3>
-<table cellspacing="0" style="page-break-inside:avoid;">
+<table cellspacing="0" cellpadding="8" style="page-break-inside:avoid;">
   <tr><th style="width:20%">Type</th><th style="width:20%">Adults admitted</th><th>QR panels on the printed pass</th></tr>
   <tr><td><b>Normal</b></td><td>1</td><td>2 — one location, one entry code</td></tr>
   <tr><td><b>VIP</b></td><td>4</td><td>5 — one location, four entry codes</td></tr>
@@ -229,12 +285,19 @@ they are not posted to, because they are never asked which unit they are at.</p>
 <p>VIP, VVIP and SVIP admit <b>exactly the same number of people</b>. They differ
 only in pricing and access zone, never in headcount.</p>
 
-<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
-  <tr><td style="background-color:#f5f5f7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
-    <b>Children below 12 are free and are not counted.</b> They do not use up an
+<!-- Spacer columns, not cellpadding: LibreOffice drops padding on
+     these cells entirely, which left the text flush against the tint
+     edge. A cell with an explicit width attribute it cannot ignore. -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:14pt 0 18pt 0; page-break-inside:avoid;">
+  <tr>
+    <td width="16" style="background-color:#f5f5f7; border-bottom:none;">&nbsp;</td>
+    <td style="background-color:#f5f5f7; border-bottom:none; font-size:9.5pt; line-height:1.5;">
+      <p style="margin:6pt 0 6pt 0;"><b>Children below 12 are free and are not counted.</b> They do not use up an
   entry code and do not reduce the adult count. They are recorded only so
-  catering and crowd safety know the real number of bodies in the venue.
-  </td></tr>
+  catering and crowd safety know the real number of bodies in the venue.</p>
+    </td>
+    <td width="16" style="background-color:#f5f5f7; border-bottom:none;">&nbsp;</td>
+  </tr>
 </table>
 
 <h3>4.4 The QR codes on a pass</h3>
@@ -270,7 +333,7 @@ on the same gate share the PIN, and scans are recorded against the gate.</p>
 <h3>5.2 Scanning</h3>
 <p>Point the camera at a QR code. The whole screen changes colour:</p>
 
-<table cellspacing="0" style="page-break-inside:avoid;">
+<table cellspacing="0" cellpadding="8" style="page-break-inside:avoid;">
   <tr><th style="width:22%">Colour</th><th style="width:22%">Meaning</th><th>What to do</th></tr>
   <tr>
     <td style="background-color:#047857; color:#ffffff; font-weight:bold; text-align:center;">GREEN</td>
@@ -300,18 +363,25 @@ as the signal returns.</p>
 than solid green. <b>Let them in anyway.</b> A gate that stops moving is a worse
 problem than a scan confirmed a few minutes late.</p>
 
-<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
-  <tr><td style="background-color:#fdf6e7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
-    <b>Honest limitation.</b> If two phones are offline at the same time, the same
+<!-- Spacer columns, not cellpadding: LibreOffice drops padding on
+     these cells entirely, which left the text flush against the tint
+     edge. A cell with an explicit width attribute it cannot ignore. -->
+<table cellspacing="0" cellpadding="0" width="100%" style="margin:14pt 0 18pt 0; page-break-inside:avoid;">
+  <tr>
+    <td width="16" style="background-color:#fdf6e7; border-bottom:none;">&nbsp;</td>
+    <td style="background-color:#fdf6e7; border-bottom:none; font-size:9.5pt; line-height:1.5;">
+      <p style="margin:6pt 0 6pt 0;"><b>Honest limitation.</b> If two phones are offline at the same time, the same
   QR code could be accepted at both. When they reconnect, the second one is
   recorded as a duplicate and raised as an alert on your dashboard — but that
-  person is already inside. Watch for those alerts on event day.
-  </td></tr>
+  person is already inside. Watch for those alerts on event day.</p>
+    </td>
+    <td width="16" style="background-color:#fdf6e7; border-bottom:none;">&nbsp;</td>
+  </tr>
 </table>
 
 <h2>6. Security — in plain terms</h2>
 
-<table cellspacing="0" style="page-break-inside:avoid;">
+<table cellspacing="0" cellpadding="8" style="page-break-inside:avoid;">
   <tr><th style="width:34%">Protection</th><th>What it means for you</th></tr>
   <tr><td><b>Nobody joins by themselves</b></td>
       <td>Registering is not joining. An administrator must approve every agent before they can issue anything.</td></tr>
@@ -349,7 +419,7 @@ problem than a scan confirmed a few minutes late.</p>
 
 <h2>7. Event-day checklist</h2>
 
-<table cellspacing="0" style="page-break-inside:avoid;">
+<table cellspacing="0" cellpadding="8" style="page-break-inside:avoid;">
   <tr><th style="width:24%">When</th><th>Do this</th></tr>
   <tr><td><b>Week before</b></td><td>Change all starting passwords and gate PINs. Create the real gates. Approve your agents.</td></tr>
   <tr><td><b>Day before</b></td><td>Have each agent sign in once and issue a test ticket. Scan it at a gate. Cancel it afterwards.</td></tr>
