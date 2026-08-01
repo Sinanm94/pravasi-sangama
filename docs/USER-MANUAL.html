@@ -3,58 +3,74 @@
 <meta charset="utf-8" />
 <title>Pravasi Sangama 2026 — System User Manual</title>
 <style>
-  @page { size: A4 portrait; margin: 18mm 16mm; }
+  @page { size: A4 portrait; margin: 20mm 18mm; }
+
+  /* LibreOffice's HTML filter applies its own paragraph indents to headings
+     and list items, which is what pushed "8. Common questions" right of
+     "7. Event-day checklist". Zeroing them on every element is the only
+     reliable way to get a single left margin down the whole document. */
+  body, h1, h2, h3, p, ul, ol, li, td, th, div {
+    margin-left: 0;
+    text-indent: 0;
+    font-family: 'Liberation Sans', Arial, Helvetica, sans-serif;
+  }
 
   body {
-    font-family: 'Liberation Sans', Arial, Helvetica, sans-serif;
     font-size: 10.5pt;
-    line-height: 1.55;
-    color: #1c1c1c;
+    line-height: 1.6;
+    color: #1d1d1f;
     margin: 0;
   }
 
-  h1, h2, h3 { font-family: 'Liberation Sans', Arial, Helvetica, sans-serif; }
-  h1 { font-size: 22pt; color: #062B59; margin: 0 0 4pt 0; letter-spacing: -0.3pt; }
+  h1 {
+    font-size: 26pt; color: #062B59; font-weight: bold;
+    letter-spacing: -0.6pt;
+    margin-top: 0; margin-right: 0; margin-bottom: 6pt; margin-left: 0;
+    padding-left: 0; text-indent: 0;
+  }
+  /* No underline rule on headings. A gold hairline under every h2 was the
+     heaviest thing on the page and drew the eye away from the text; spacing
+     carries the hierarchy instead. */
   h2 {
-    font-size: 13pt; color: #062B59; margin: 22pt 0 6pt 0;
-    border-bottom: 1.5pt solid #D4AF37; padding-bottom: 3pt;
+    font-size: 15pt; color: #062B59; font-weight: bold;
+    letter-spacing: -0.2pt;
+    /* Longhand, not the `margin` shorthand: LibreOffice's HTML filter keeps
+       its own Heading-style indent when only the shorthand is given, which
+       left h2 and h3 sitting at three different left edges. */
+    margin-top: 30pt; margin-right: 0; margin-bottom: 10pt; margin-left: 0;
+    padding-left: 0; text-indent: 0;
   }
-  h3 { font-size: 11pt; color: #031F43; margin: 14pt 0 4pt 0; }
-  p  { margin: 0 0 8pt 0; }
-  ul, ol { margin: 0 0 10pt 0; padding-left: 16pt; }
-  li { margin-bottom: 3pt; }
+  h3 {
+    font-size: 11pt; color: #1d1d1f; font-weight: bold;
+    margin-top: 18pt; margin-right: 0; margin-bottom: 5pt; margin-left: 0;
+    padding-left: 0; text-indent: 0;
+  }
 
-  table { border-collapse: collapse; width: 100%; margin: 6pt 0 12pt 0; font-size: 9.5pt; }
+  p  { margin: 0 0 10pt 0; }
+  ul, ol { margin: 0 0 12pt 0; padding-left: 18pt; }
+  li { margin-bottom: 5pt; }
+
+  /* Light header, hairline rules — an Apple-style table rather than a
+     heavy navy bar. It also sidesteps LibreOffice leaving white gaps
+     between dark header cells, which is what looked broken. */
+  table { border-collapse: collapse; width: 100%; margin: 10pt 0 16pt 0; font-size: 9.5pt; }
   th {
-    background-color: #062B59; color: #ffffff; text-align: left;
-    padding: 5pt 7pt; font-size: 8.5pt; letter-spacing: 0.5pt;
-    text-transform: uppercase;
+    background-color: #f5f5f7; color: #062B59; text-align: left;
+    padding: 7pt 9pt; font-size: 8pt; letter-spacing: 0.8pt;
+    text-transform: uppercase; font-weight: bold;
+    border-bottom: 1pt solid #062B59;
   }
-  td { border-bottom: 0.5pt solid #d8d8d8; padding: 5pt 7pt; vertical-align: top; }
+  td {
+    border-bottom: 0.5pt solid #e3e3e6;
+    padding: 8pt 9pt; vertical-align: top; line-height: 1.5;
+  }
 
-  .lead { font-size: 11pt; color: #444; margin-bottom: 14pt; }
+  .lead { font-size: 12pt; color: #6e6e73; margin: 0 0 4pt 0; }
   .eyebrow {
-    font-size: 8pt; letter-spacing: 2pt; text-transform: uppercase;
-    color: #8a6d16; font-weight: bold; margin: 0 0 6pt 0;
+    font-size: 8pt; letter-spacing: 2.5pt; text-transform: uppercase;
+    color: #8a6d16; font-weight: bold; margin: 0 0 8pt 0;
   }
-  .rule { border-top: 2pt solid #062B59; margin: 10pt 0 16pt 0; }
-
-  .note {
-    background-color: #f4f7fb; border-left: 3pt solid #062B59;
-    padding: 8pt 10pt; margin: 8pt 0 12pt 0; font-size: 9.5pt;
-  }
-  .warn {
-    background-color: #fdf6e6; border-left: 3pt solid #D4AF37;
-    padding: 8pt 10pt; margin: 8pt 0 12pt 0; font-size: 9.5pt;
-  }
-
-  .pill {
-    display: inline-block; padding: 1pt 6pt; font-size: 8.5pt;
-    font-weight: bold; color: #ffffff; background-color: #062B59;
-  }
-  .green { background-color: #047857; }
-  .amber { background-color: #b45309; }
-  .red   { background-color: #b91c1c; }
+  hr { border: none; border-top: 0.75pt solid #d2d2d7; margin: 18pt 0 22pt 0; }
 
   .pagebreak { page-break-before: always; }
 </style>
@@ -64,7 +80,7 @@
 <p class="eyebrow">Karnataka Cultural Foundation</p>
 <h1>Pravasi Sangama 2026</h1>
 <p class="lead">E&#8209;Ticketing &amp; Gate Management — User Manual</p>
-<div class="rule"></div>
+<hr />
 
 <p>This manual explains how to run the ticketing system for Pravasi Sangama 2026.
 It is written for the <b>administrator</b>, but it also covers what the field
@@ -90,7 +106,7 @@ posted at. Nothing is anonymous.</p>
 
 <h2>2. Who uses it</h2>
 
-<table>
+<table cellspacing="0" style="page-break-inside:avoid;">
   <tr><th style="width:22%">Role</th><th style="width:38%">What they can do</th><th>What they cannot do</th></tr>
   <tr>
     <td><b>Administrator</b><br />(Superuser)</td>
@@ -109,11 +125,13 @@ posted at. Nothing is anonymous.</p>
   </tr>
 </table>
 
-<div class="note">
-  <b>Why agents cannot cancel tickets.</b> Only you can. This is deliberate — it
+<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
+  <tr><td style="background-color:#f5f5f7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
+    <b>Why agents cannot cancel tickets.</b> Only you can. This is deliberate — it
   means a mistake at a registration desk cannot quietly erase a record, and
   every cancellation has one accountable person behind it.
-</div>
+  </td></tr>
+</table>
 
 <div class="pagebreak"></div>
 
@@ -131,7 +149,7 @@ if a laptop is left open.</p>
 <p>Every screen has the same navigation bar across the top. You are always one
 click from any section.</p>
 
-<table>
+<table cellspacing="0" style="page-break-inside:avoid;">
   <tr><th style="width:26%">Section</th><th>What it is for</th></tr>
   <tr><td><b>System Overview</b></td><td>Live totals and a running feed of gate scans as they happen. Your event-day screen.</td></tr>
   <tr><td><b>Agent Approvals</b></td><td>New agents who have registered and are waiting for you to let them in.</td></tr>
@@ -148,22 +166,26 @@ click from any section.</p>
   <li><b>Reject</b> — final. They would have to register again from scratch.</li>
 </ul>
 
-<div class="warn">
-  <b>This is your main security control.</b> Anyone can fill in the registration
+<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
+  <tr><td style="background-color:#fdf6e7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
+    <b>This is your main security control.</b> Anyone can fill in the registration
   form. Nobody can issue a single ticket until you press Approve. Check the name
   and mobile number against your own list of volunteers before approving.
-</div>
+  </td></tr>
+</table>
 
 <h3>3.4 Finding a ticket</h3>
 <p>Open <b>Ticket Ledger</b>. You can filter by division, unit and agent, and
 search by guest name, mobile number, or ticket number. The summary cards at the
 top update to match whatever you have filtered.</p>
 
-<div class="note">
-  The cards count <i>every</i> matching ticket, even when the table below shows
+<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
+  <tr><td style="background-color:#f5f5f7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
+    The cards count <i>every</i> matching ticket, even when the table below shows
   only the most recent few hundred. If the table says it is showing a portion,
   the totals are still complete.
-</div>
+  </td></tr>
+</table>
 
 <h3>3.5 If an agent leaves or a phone is lost</h3>
 <p>Open <b>Agent Directory</b>, find the agent, and deactivate them. They are
@@ -196,7 +218,7 @@ they are not posted to, because they are never asked which unit they are at.</p>
 </ol>
 
 <h3>4.3 Ticket types</h3>
-<table>
+<table cellspacing="0" style="page-break-inside:avoid;">
   <tr><th style="width:20%">Type</th><th style="width:20%">Adults admitted</th><th>QR panels on the printed pass</th></tr>
   <tr><td><b>Normal</b></td><td>1</td><td>2 — one location, one entry code</td></tr>
   <tr><td><b>VIP</b></td><td>4</td><td>5 — one location, four entry codes</td></tr>
@@ -207,11 +229,13 @@ they are not posted to, because they are never asked which unit they are at.</p>
 <p>VIP, VVIP and SVIP admit <b>exactly the same number of people</b>. They differ
 only in pricing and access zone, never in headcount.</p>
 
-<div class="note">
-  <b>Children below 12 are free and are not counted.</b> They do not use up an
+<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
+  <tr><td style="background-color:#f5f5f7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
+    <b>Children below 12 are free and are not counted.</b> They do not use up an
   entry code and do not reduce the adult count. They are recorded only so
   catering and crowd safety know the real number of bodies in the venue.
-</div>
+  </td></tr>
+</table>
 
 <h3>4.4 The QR codes on a pass</h3>
 <ul>
@@ -246,21 +270,21 @@ on the same gate share the PIN, and scans are recorded against the gate.</p>
 <h3>5.2 Scanning</h3>
 <p>Point the camera at a QR code. The whole screen changes colour:</p>
 
-<table>
+<table cellspacing="0" style="page-break-inside:avoid;">
   <tr><th style="width:22%">Colour</th><th style="width:22%">Meaning</th><th>What to do</th></tr>
   <tr>
-    <td><span class="pill green">GREEN</span></td>
-    <td>Admitted</td>
+    <td style="background-color:#047857; color:#ffffff; font-weight:bold; text-align:center;">GREEN</td>
+    <td><b>Admitted</b></td>
     <td>Let them in.</td>
   </tr>
   <tr>
-    <td><span class="pill amber">AMBER</span></td>
-    <td>Already used</td>
+    <td style="background-color:#b45309; color:#ffffff; font-weight:bold; text-align:center;">AMBER</td>
+    <td><b>Already used</b></td>
     <td>This code has been scanned before. Do not admit. Call a supervisor.</td>
   </tr>
   <tr>
-    <td><span class="pill red">RED</span></td>
-    <td>Not valid</td>
+    <td style="background-color:#b91c1c; color:#ffffff; font-weight:bold; text-align:center;">RED</td>
+    <td><b>Not valid</b></td>
     <td>Cancelled, unknown, or not a ticket. Do not admit.</td>
   </tr>
 </table>
@@ -276,16 +300,18 @@ as the signal returns.</p>
 than solid green. <b>Let them in anyway.</b> A gate that stops moving is a worse
 problem than a scan confirmed a few minutes late.</p>
 
-<div class="warn">
-  <b>Honest limitation.</b> If two phones are offline at the same time, the same
+<table cellspacing="0" width="100%" style="margin:12pt 0 16pt 0; page-break-inside:avoid;">
+  <tr><td style="background-color:#fdf6e7; padding:11pt 13pt; font-size:9.5pt; line-height:1.5; border-bottom:none;">
+    <b>Honest limitation.</b> If two phones are offline at the same time, the same
   QR code could be accepted at both. When they reconnect, the second one is
   recorded as a duplicate and raised as an alert on your dashboard — but that
   person is already inside. Watch for those alerts on event day.
-</div>
+  </td></tr>
+</table>
 
 <h2>6. Security — in plain terms</h2>
 
-<table>
+<table cellspacing="0" style="page-break-inside:avoid;">
   <tr><th style="width:34%">Protection</th><th>What it means for you</th></tr>
   <tr><td><b>Nobody joins by themselves</b></td>
       <td>Registering is not joining. An administrator must approve every agent before they can issue anything.</td></tr>
@@ -323,7 +349,7 @@ problem than a scan confirmed a few minutes late.</p>
 
 <h2>7. Event-day checklist</h2>
 
-<table>
+<table cellspacing="0" style="page-break-inside:avoid;">
   <tr><th style="width:24%">When</th><th>Do this</th></tr>
   <tr><td><b>Week before</b></td><td>Change all starting passwords and gate PINs. Create the real gates. Approve your agents.</td></tr>
   <tr><td><b>Day before</b></td><td>Have each agent sign in once and issue a test ticket. Scan it at a gate. Cancel it afterwards.</td></tr>
@@ -356,22 +382,13 @@ and will not admit twice, no matter how good the copy is.</p>
 <p>Yes for scanning — it queues and syncs later. Issuing new tickets does need a
 connection, so keep a mobile hotspot at each registration desk.</p>
 
-<table width="100%" style="width:100%; margin-top:34pt; border-collapse:collapse;">
-  <tr>
-    <td style="background-color:#062B59; padding:20pt 14pt; text-align:center;">
-      <p style="margin:0 0 7pt 0; font-size:8.5pt; letter-spacing:3pt; color:#D4AF37; font-weight:bold;">
-        HANDLED AND MANAGED BY
-      </p>
-      <p style="margin:0 0 9pt 0; font-size:17pt; letter-spacing:2pt; color:#ffffff; font-weight:bold;">
-        GLOBAL TECH SOLUTIONS
-      </p>
-      <p style="margin:0; font-size:8.5pt; color:#c9d4e2; line-height:1.5;">
-        Pravasi Sangama 2026 &mdash; E&#8209;Ticketing &amp; Gate Management System<br />
-        Designed, deployed and maintained for the Karnataka Cultural Foundation
-      </p>
-    </td>
-  </tr>
-</table>
+<div style="margin-top:34pt;">
+  <!-- Rendered as an image, not CSS: LibreOffice's HTML filter ignores
+       border-radius outright, so a styled <td> prints as a hard rectangle.
+       Regenerate with the ImageMagick command in docs/README.md. -->
+  <img src="assets/managed-by.png" alt="Handled and managed by Global Tech Solutions"
+       style="width:174mm; height:41.9mm;" />
+</div>
 
 </body>
 </html>
