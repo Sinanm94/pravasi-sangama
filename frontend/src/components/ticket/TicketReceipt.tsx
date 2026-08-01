@@ -400,7 +400,7 @@ function Ticket({
               outline. min-h + flex centring keeps it safe for html2canvas,
               which positions inline boxes by baseline. */}
           <span
-            className="inline-flex min-h-[30px] shrink-0 items-center justify-center self-start rounded-[6px] px-4 py-[5px] text-center text-[11px] font-extrabold uppercase leading-normal tracking-[0.14em]"
+            className="inline-flex min-h-[34px] shrink-0 items-center justify-center self-start rounded-[6px] px-4 pb-[4px] pt-[3px] text-center text-[11px] font-extrabold uppercase leading-[16px] tracking-[0.14em]"
             style={{ backgroundColor: GOLD, color: NAVY_DARK }}
           >
             Ticket Receipt
@@ -586,17 +586,24 @@ function Ticket({
             bottom EDGES, so the diamonds — which are 6px boxes — sat level
             with the text's descender line instead of its optical middle. */}
         <footer className="mt-auto flex items-center justify-between pt-6">
-          <p className="text-[9px] font-semibold uppercase leading-normal tracking-[0.22em] text-white/40">
+          <p className="text-[9px] font-semibold uppercase leading-[13px] tracking-[0.22em] text-white/40">
             Non-Transferable Ticket
           </p>
           {/* One flex row, items-center, no margins on the children. The
               diamonds previously sat on the text's descender line because the
               <p> carried its own line box height and the row aligned on edges
               rather than centres. */}
-          <div className="flex shrink-0 items-center justify-center gap-2 leading-none">
-            <Diamond src={ornaments.diamond} />
+          {/* mt-[1px] on the glyphs, not translate-y. html2canvas rasterises
+              transforms through its own matrix and small translations drift;
+              a margin is plain box layout it cannot get wrong. All-caps text
+              has no descenders, so its optical middle sits ~1px below the
+              line box's centre — that is what the nudge compensates for. */}
+          <div className="flex shrink-0 items-center justify-center gap-2">
+            <span className="mt-[1px] flex shrink-0 items-center">
+              <Diamond src={ornaments.diamond} />
+            </span>
             <p
-              className="m-0 text-[9px] font-semibold uppercase leading-normal tracking-[0.22em]"
+              className="m-0 text-[9px] font-semibold uppercase leading-[13px] tracking-[0.22em]"
               style={{ color: `${GOLD}CC` }}
             >
               {isPremium ? 'Admits 4 Guests' : 'Admits 1 Guest'}
@@ -605,7 +612,9 @@ function Ticket({
                   Children are free and never consume a guest QR (§4.2). */}
               {` · +${ticket.childrenBelow12 ?? 0} Children Below 12`}
             </p>
-            <Diamond src={ornaments.diamond} />
+            <span className="mt-[1px] flex shrink-0 items-center">
+              <Diamond src={ornaments.diamond} />
+            </span>
           </div>
         </footer>
       </div>
@@ -665,21 +674,22 @@ function StubItem({
       {/* min-w-0 is what actually lets the child clip or wrap — a flex item
           defaults to min-width:auto and will overflow its parent instead. */}
       <div className="min-w-0 flex-1">
-        <dt className="pb-[1px] text-[8px] font-semibold uppercase leading-normal tracking-[0.16em] text-white/40">
+        <dt className="pb-[2px] text-[8px] font-semibold uppercase leading-[12px] tracking-[0.16em] text-white/40">
           {label}
         </dt>
-        {/* leading-normal + pb-[3px], NOT a tight leading.
-            html2canvas derives the box height from line-height and then
-            `overflow: hidden` clips anything past it — so descenders in
-            "Rajesh", "Deepa" or a 'g' in the type label were sliced at the
-            baseline in the PDF while looking fine in the browser. The
-            padding is the safety margin the raster needs; overflow-hidden
-            stays because it is what makes the ellipsis work horizontally. */}
+        {/* EXPLICIT px line-height, never leading-normal.
+            html2canvas resolves `line-height: normal` with its own
+            approximation rather than the browser's font-metric value, so the
+            box it rasterises does not match the one the browser laid out —
+            which is why descenders kept getting sliced no matter how the
+            padding was tuned. A number is the same in both engines. ~1.5x the
+            font size, plus pb for the raster's rounding. overflow-hidden
+            stays here: it is what makes the ellipsis work horizontally. */}
         <dd
           className={
             isCode
-              ? 'mt-0.5 break-all pb-[3px] text-[10.5px] font-semibold leading-normal tracking-[-0.01em] text-white tabular-nums'
-              : 'mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap pb-[3px] text-[12px] font-semibold leading-normal text-white'
+              ? 'mt-0.5 break-all pb-[3px] text-[10.5px] font-semibold leading-[16px] tracking-[-0.01em] text-white tabular-nums'
+              : 'mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap pb-[3px] text-[12px] font-semibold leading-[18px] text-white'
           }
         >
           {value}
@@ -793,15 +803,13 @@ function QrPanel({
           nowrap + ellipsis: "Location" and "Guest 1" fit, but the label is
           the one string here that could be re-worded later, and a wrapped
           label would push every panel to a different height. */}
-      {/* pt-1 + leading-normal, and NO overflow-hidden.
-          The clip came from overflow-hidden on a box whose height was the
-          tight default line box for 8.5px text: uppercase ascenders sit above
-          that box's top edge, so html2canvas shaved the tops off "GUEST 1"
-          and "LOCATION". These labels are fixed strings that always fit at
-          112px, so nothing needs clipping — the ellipsis was insurance
-          against a problem this panel does not have, and it cost the glyphs. */}
+      {/* Explicit leading-[13px] on 8.5px text, padded top and bottom, and
+          no overflow-hidden. These labels are fixed strings that always fit
+          at 112px, so nothing here needs clipping — the ellipsis was
+          insurance against a problem this panel does not have, and it cost
+          the tops of the uppercase ascenders. */}
       <p
-        className="mb-2 whitespace-nowrap pt-1 text-center text-[8.5px] font-bold uppercase leading-normal tracking-[0.1em]"
+        className="mb-2 whitespace-nowrap pb-[2px] pt-1 text-center text-[8.5px] font-bold uppercase leading-[13px] tracking-[0.1em]"
         style={{ color: GOLD }}
       >
         {code.label}
@@ -829,14 +837,14 @@ function QrPanel({
             panel's block is the same depth regardless of caption length, and
             nowrap+ellipsis as the hard stop rather than a silent overflow. */}
         <div
-          className="flex min-h-[20px] items-center justify-center px-2 py-[5px] text-center"
+          className="flex min-h-[24px] items-center justify-center px-2 pb-[5px] pt-[3px] text-center"
           style={{ backgroundColor: NAVY_DARK }}
         >
           <span
-            className={`block w-full overflow-hidden text-ellipsis whitespace-nowrap font-bold uppercase leading-normal text-white ${
+            className={`block w-full whitespace-nowrap font-bold uppercase text-white ${
               compact
-                ? 'text-[5.5px] tracking-[0.04em]'
-                : 'text-[7px] tracking-[0.08em]'
+                ? 'text-[5.5px] leading-[10px] tracking-[0.04em]'
+                : 'text-[7px] leading-[12px] tracking-[0.08em]'
             }`}
           >
             {code.caption}
@@ -889,7 +897,7 @@ function HexBadge({
           baseline as the label — a separate <svg> would need its own vertical
           centring and html2canvas would measure it independently. */}
       <span
-        className="relative z-10 flex w-full items-center justify-center gap-2 text-[12px] font-extrabold uppercase leading-normal tracking-[0.2em]"
+        className="relative z-10 flex w-full items-center justify-center gap-2 pb-[3px] text-[12px] font-extrabold uppercase leading-[17px] tracking-[0.2em]"
         style={{ color: GOLD }}
       >
         <span aria-hidden className="text-[9px] leading-none">
