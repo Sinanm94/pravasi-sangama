@@ -45,7 +45,6 @@ back to images and looking at it, and they will bite again:
 | Descendant selectors (`.a .b`) | Not resolved | Inline styles |
 | Tables without `cellspacing="0"` | White gutters between cells; a dark header row breaks into segments | Always set it |
 | Flexbox / grid | Not supported | Tables |
-
 | `cellpadding` **and** `width="100%"` together | The padding is silently dropped and cell text sits flush against the cell edge | Pad with spacer cells or a paragraph `margin` |
 | A spacer cell in a *short* table | It absorbs the leftover width instead of staying at its stated size | Use a paragraph `margin-left` instead |
 
