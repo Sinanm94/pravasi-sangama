@@ -388,8 +388,14 @@ function Ticket({
         </div>
 
         <div className="flex flex-1 flex-col px-5 py-6">
+          {/* inline-flex + items-center, not a bare inline span with py-1.
+              html2canvas positions an inline box by its baseline, so vertical
+              padding did not centre the glyphs — the text sat low and dropped
+              through the gold border in the PDF. A flex container centres on
+              the box, and min-h fixes the pill's height independently of how
+              the engine measures the 9px text. */}
           <span
-            className="self-start rounded-full border px-3 py-1 text-[9px] font-bold uppercase tracking-[0.18em]"
+            className="inline-flex min-h-[22px] shrink-0 items-center justify-center self-start rounded-full border px-3 py-[3px] text-[9px] font-bold uppercase leading-normal tracking-[0.18em]"
             style={{ borderColor: GOLD, color: GOLD }}
           >
             Ticket Receipt
@@ -556,14 +562,17 @@ function Ticket({
         )}
 
         {/* Footer */}
-        <footer className="mt-auto flex items-end justify-between pt-6">
-          <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-white/40">
+        {/* items-center, not items-end. items-end aligned both sides on their
+            bottom EDGES, so the diamonds — which are 6px boxes — sat level
+            with the text's descender line instead of its optical middle. */}
+        <footer className="mt-auto flex items-center justify-between pt-6">
+          <p className="text-[9px] font-semibold uppercase leading-normal tracking-[0.22em] text-white/40">
             Non-Transferable Ticket
           </p>
           <div className="flex items-center gap-2">
             <Diamond src={ornaments.diamond} />
             <p
-              className="text-[9px] font-semibold uppercase tracking-[0.22em]"
+              className="text-[9px] font-semibold uppercase leading-normal tracking-[0.22em]"
               style={{ color: `${GOLD}CC` }}
             >
               {isPremium ? 'Admits 4 Guests' : 'Admits 1 Guest'}
@@ -620,14 +629,21 @@ function StubItem({
       {/* min-w-0 is what actually lets the child clip or wrap — a flex item
           defaults to min-width:auto and will overflow its parent instead. */}
       <div className="min-w-0 flex-1">
-        <dt className="text-[8px] font-semibold uppercase tracking-[0.16em] text-white/40">
+        <dt className="pb-[1px] text-[8px] font-semibold uppercase leading-normal tracking-[0.16em] text-white/40">
           {label}
         </dt>
+        {/* leading-normal + pb-[3px], NOT a tight leading.
+            html2canvas derives the box height from line-height and then
+            `overflow: hidden` clips anything past it — so descenders in
+            "Rajesh", "Deepa" or a 'g' in the type label were sliced at the
+            baseline in the PDF while looking fine in the browser. The
+            padding is the safety margin the raster needs; overflow-hidden
+            stays because it is what makes the ellipsis work horizontally. */}
         <dd
           className={
             isCode
-              ? 'mt-0.5 break-all text-[10.5px] font-semibold leading-[1.35] tracking-[-0.01em] text-white tabular-nums'
-              : 'mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap text-[12px] font-semibold leading-[1.35] text-white'
+              ? 'mt-0.5 break-all pb-[3px] text-[10.5px] font-semibold leading-normal tracking-[-0.01em] text-white tabular-nums'
+              : 'mt-0.5 overflow-hidden text-ellipsis whitespace-nowrap pb-[3px] text-[12px] font-semibold leading-normal text-white'
           }
         >
           {value}
@@ -680,8 +696,15 @@ function QrPanel({
           nowrap + ellipsis: "Location" and "Guest 1" fit, but the label is
           the one string here that could be re-worded later, and a wrapped
           label would push every panel to a different height. */}
+      {/* pt-1 + leading-normal, and NO overflow-hidden.
+          The clip came from overflow-hidden on a box whose height was the
+          tight default line box for 8.5px text: uppercase ascenders sit above
+          that box's top edge, so html2canvas shaved the tops off "GUEST 1"
+          and "LOCATION". These labels are fixed strings that always fit at
+          112px, so nothing needs clipping — the ellipsis was insurance
+          against a problem this panel does not have, and it cost the glyphs. */}
       <p
-        className="mb-2 overflow-hidden text-ellipsis whitespace-nowrap text-center text-[8.5px] font-bold uppercase tracking-[0.1em]"
+        className="mb-2 whitespace-nowrap pt-1 text-center text-[8.5px] font-bold uppercase leading-normal tracking-[0.1em]"
         style={{ color: GOLD }}
       >
         {code.label}
@@ -708,11 +731,11 @@ function QrPanel({
             panel's block is the same depth regardless of caption length, and
             nowrap+ellipsis as the hard stop rather than a silent overflow. */}
         <div
-          className="flex min-h-[18px] items-center justify-center px-2 py-1.5 text-center"
+          className="flex min-h-[20px] items-center justify-center px-2 py-[5px] text-center"
           style={{ backgroundColor: NAVY_DARK }}
         >
           <span
-            className={`block w-full overflow-hidden text-ellipsis whitespace-nowrap font-bold uppercase leading-[1.5] text-white ${
+            className={`block w-full overflow-hidden text-ellipsis whitespace-nowrap font-bold uppercase leading-normal text-white ${
               compact
                 ? 'text-[5.5px] tracking-[0.04em]'
                 : 'text-[7px] tracking-[0.08em]'
