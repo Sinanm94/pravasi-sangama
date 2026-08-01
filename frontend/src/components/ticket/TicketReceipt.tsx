@@ -31,7 +31,6 @@ const NAVY = '#062B59'; // primary surface
 const NAVY_DARK = '#031F43'; // QR label block, date box, footer
 const GOLD = '#D4AF37'; // borders, diamonds, badge
 const GOLD_LIGHT = '#F7E7B5'; // highlights
-const GREY_LIGHT = '#E6E6E6'; // dividers on white panels
 
 // Maroon is intentionally absent: it has no role in the official ticket
 // palette. It survives only in this file's app chrome (search bar, action
@@ -481,8 +480,11 @@ function Ticket({
       {/* flex-1 + min-w-0: takes exactly the 750px the stub leaves, and lets
           truncate/ellipsis work on descendants — without min-w-0 a flex item
           refuses to shrink below its content and children overflow instead. */}
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col px-8 py-6">
-        <header>
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col">
+        {/* --- Navy header --- */}
+        <header className="relative px-8 pb-5 pt-6">
+          <DotGrid className="right-4 top-3" src={ornaments.cornerDots} />
+          <GoldSwoosh className="right-0 top-0" />
           <div className="flex items-center gap-2.5">
             {brand.logo && (
               <img
@@ -513,11 +515,17 @@ function Ticket({
           )}
         </header>
 
-        {/* Tier badge — premium only. The Normal pass leads with its date
-            block instead, per the official layouts. */}
-        {isPremium &&
-          (ribbonSrc ? (
-            <div className="relative mt-5 flex shrink-0 self-start">
+        {/* --- White central card ---
+            The badges and QR panels sit on white, per the original design.
+            Everything inside inverts to navy type: gold at this size on white
+            measures ~2:1 contrast and is unreadable (§5.3), so nothing gold
+            may cross onto this surface as text or a hairline. */}
+        <div className="mx-5 rounded-lg bg-white px-5 pb-5 pt-4">
+          <div className="flex items-center justify-between gap-4">
+            {/* Tier badge — premium only, as before. */}
+            {isPremium &&
+              (ribbonSrc ? (
+                <div className="relative flex shrink-0">
               <img
                 src={ribbonSrc}
                 alt={
@@ -537,12 +545,16 @@ function Ticket({
                 </span>
               )}
             </div>
-          ) : (
-            <HexBadge
-              label={`${TICKET_TYPE_LABELS[ticket.ticketType]} Ticket`}
-              className="mt-5 self-start"
-            />
-          ))}
+              ) : (
+                <HexBadge
+                  label={`${TICKET_TYPE_LABELS[ticket.ticketType]} Ticket`}
+                />
+              ))}
+
+            {/* Right-aligned date badge. ml-auto so it stays hard right even
+                on Normal, where there is no tier badge to push against. */}
+            <DateBadge date={ticket.eventDate} className="ml-auto" />
+          </div>
 
         {/* ---- QR region ---- */}
         {isPremium ? (
@@ -553,7 +565,7 @@ function Ticket({
              hard against the body padding at the ends. Budget at 750px body
              - 64px padding = 686px usable: 5x112 (560) + 4 diamonds (~28)
              + 8 gaps x 8px (64) = 652. It fits with room, deterministically. */
-          <div className="mt-6 flex items-stretch justify-center gap-1.5">
+          <div className="mt-5 flex items-stretch justify-center gap-1">
             {codes.map((code, i) => (
               <Fragment key={code.key}>
                 {i > 0 && <DiamondSpacer src={ornaments.diamond} />}
@@ -564,11 +576,9 @@ function Ticket({
         ) : (
           /* Three sections: date box | location info | admission.
              Thin vertical rules with a gold diamond at their midpoint. */
-          <div className="mt-6 flex items-stretch justify-center gap-4">
-            <DateBlock date={ticket.eventDate} />
-
-            <RuleWithDiamond src={ornaments.diamond} />
-
+          /* No DateBlock here any more — the date is the badge at the top of
+             the card, and printing it twice on one pass reads as an error. */
+          <div className="mt-5 flex items-stretch justify-center gap-4">
             {codes
               .filter((c) => c.isLocation)
               .map((code) => (
@@ -584,12 +594,15 @@ function Ticket({
               ))}
           </div>
         )}
+        </div>
+        {/* --- /white card --- */}
 
         {/* Footer */}
         {/* items-center, not items-end. items-end aligned both sides on their
             bottom EDGES, so the diamonds — which are 6px boxes — sat level
             with the text's descender line instead of its optical middle. */}
-        <footer className="mt-auto flex items-center justify-between pt-6">
+        <footer className="relative mt-auto flex items-center justify-between px-8 pb-6 pt-5">
+          <DotGrid className="bottom-2 right-4" src={ornaments.cornerDots} />
           <p className="text-[9px] font-semibold uppercase leading-[13px] tracking-[0.22em] text-white/40">
             Non-Transferable Ticket
           </p>
@@ -764,7 +777,16 @@ function Glyph({
   );
 }
 
-function Diamond({ src, size = 5 }: { src?: string; size?: number }) {
+function Diamond({
+  src,
+  size = 5,
+  onWhite = false,
+}: {
+  src?: string;
+  size?: number;
+  /** Gold is invisible on the white card; navy is the readable counterpart. */
+  onWhite?: boolean;
+}) {
   if (src) {
     return (
       <img
@@ -813,8 +835,8 @@ function QrPanel({
           insurance against a problem this panel does not have, and it cost
           the tops of the uppercase ascenders. */}
       <p
-        className="mb-2 whitespace-nowrap pb-[2px] pt-1 text-center text-[8.5px] font-bold uppercase leading-[13px] tracking-[0.1em]"
-        style={{ color: GOLD }}
+        className="mb-2 whitespace-nowrap pb-[2px] pt-1 text-center text-[8.5px] font-extrabold uppercase leading-[13px] tracking-[0.1em]"
+        style={{ color: NAVY_DARK }}
       >
         {code.label}
       </p>
@@ -822,8 +844,8 @@ function QrPanel({
       <div
         className="overflow-hidden rounded-[5px] bg-white"
         style={{
-          border: `2px solid ${NAVY}`,
-          boxShadow: '0 6px 18px rgba(3,31,67,0.35)',
+          border: `2.5px solid ${NAVY}`,
+          boxShadow: '0 2px 8px rgba(3,31,67,0.14)',
         }}
       >
         <div className={compact ? 'p-2' : 'p-2.5'}>
@@ -916,44 +938,10 @@ function HexBadge({
   );
 }
 
-/** Dark date box — the Normal pass's left section. */
-function DateBlock({ date }: { date: string }) {
-  // "15, Oct 2026" → day on its own line, month/year beneath.
-  const [day, rest] = date.includes(',')
-    ? [date.split(',')[0]!.trim(), date.split(',').slice(1).join(',').trim()]
-    : [date, ''];
-
-  return (
-    <div
-      className="flex w-[148px] flex-col items-center justify-center rounded-[5px] px-3 py-4"
-      style={{ backgroundColor: NAVY_DARK, border: `1px solid ${GOLD}55` }}
-    >
-      <span
-        className="text-[9px] font-bold uppercase tracking-[0.18em]"
-        style={{ color: GOLD }}
-      >
-        Event Date
-      </span>
-      <span className="mt-2 text-[40px] font-extrabold leading-none text-white">
-        {day}
-      </span>
-      {rest && (
-        <span
-          className="mt-1.5 text-[13px] font-semibold uppercase tracking-[0.12em]"
-          style={{ color: GOLD_LIGHT }}
-        >
-          {rest}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** Thin vertical rule with a gold diamond at its midpoint. */
 function RuleWithDiamond({ src }: { src?: string }) {
   return (
     <div className="relative mx-3 flex w-4 shrink-0 items-stretch justify-center">
-      <span className="w-px" style={{ backgroundColor: `${GREY_LIGHT}33` }} />
+      <span className="w-px" style={{ backgroundColor: `${NAVY}1f` }} />
       <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         <Diamond src={src} size={7} />
       </span>
@@ -976,14 +964,87 @@ function DiamondSpacer({ src }: { src?: string }) {
     <span className="flex w-4 shrink-0 flex-col items-center justify-center gap-1 self-stretch">
       <span
         className="w-px flex-1"
-        style={{ backgroundColor: `${GOLD}40` }}
+        style={{ backgroundColor: `${NAVY}26` }}
       />
-      <Diamond src={src} size={6} />
+      <Diamond src={src} size={6} onWhite />
       <span
         className="w-px flex-1"
-        style={{ backgroundColor: `${GOLD}40` }}
+        style={{ backgroundColor: `${NAVY}26` }}
       />
     </span>
+  );
+}
+
+/**
+ * Event-date badge — the right-hand counterpart to the tier badge.
+ *
+ * A navy cap holding a small gold square, then a light body carrying the
+ * date in navy. Deliberately the tier badge's inverse: dark-shape-with-gold
+ * type beside light-shape-with-navy type reads as a pair rather than two of
+ * the same thing.
+ */
+function DateBadge({
+  date,
+  className = '',
+}: {
+  date: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`flex h-[46px] shrink-0 items-stretch overflow-hidden rounded-[4px] ${className}`}
+      style={{ border: `2px solid ${GOLD}` }}
+    >
+      <span
+        className="flex w-[26px] shrink-0 items-center justify-center"
+        style={{ backgroundColor: NAVY_DARK }}
+      >
+        <span
+          className="block h-[9px] w-[9px]"
+          style={{ backgroundColor: GOLD }}
+        />
+      </span>
+
+      <span
+        className="flex items-center px-4 text-[13px] font-extrabold uppercase leading-[17px] tracking-[0.12em]"
+        style={{ backgroundColor: GOLD_LIGHT, color: NAVY_DARK }}
+      >
+        {date}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Gold curved accent for the navy areas.
+ *
+ * Inline SVG rather than a CSS border-radius trick: a quarter-ring drawn with
+ * `border-radius` + transparent borders renders inconsistently once the page
+ * is scaled by a print engine, where a stroked path is resolution-independent
+ * and prints as true vector.
+ */
+function GoldSwoosh({ className = '' }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 120 120"
+      className={`pointer-events-none absolute h-[120px] w-[120px] ${className}`}
+    >
+      <path
+        d="M120 0 A120 120 0 0 1 0 120"
+        fill="none"
+        stroke={GOLD}
+        strokeWidth="2"
+        opacity="0.28"
+      />
+      <path
+        d="M120 22 A98 98 0 0 1 22 120"
+        fill="none"
+        stroke={GOLD}
+        strokeWidth="1"
+        opacity="0.18"
+      />
+    </svg>
   );
 }
 
