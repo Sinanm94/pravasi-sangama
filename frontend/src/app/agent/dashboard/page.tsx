@@ -93,12 +93,18 @@ function LedgerScreen() {
 
       {/* Masthead */}
       <header className="relative z-10" style={{ backgroundColor: NAVY }}>
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
+        {/* Full-bleed, matching AdminShell: the mark sits at the viewport's
+            left edge and sign-out at its right. */}
+        <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
             <Logo className="h-9 w-9" />
             <div className="min-w-0">
+              {/* Wider tracking than Tailwind's tracking-widest (0.1em),
+                  which would have been narrower than what was here. 0.28em is
+                  the top of §5.2's eyebrow range. A unit name is variable
+                  length, so this one truncates rather than nowraps. */}
               <p
-                className="text-[9px] font-semibold uppercase tracking-[0.24em]"
+                className="truncate text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.28em]"
                 style={{ color: GOLD }}
               >
                 {user?.unitName ?? 'Registration Desk'}

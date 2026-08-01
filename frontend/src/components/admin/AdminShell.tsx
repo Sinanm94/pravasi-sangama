@@ -63,15 +63,23 @@ export default function AdminShell({
 
       {/* Masthead */}
       <header className="relative z-10" style={{ backgroundColor: NAVY }}>
-        <div className={`mx-auto flex ${shellWidth} items-center justify-between gap-4 px-5 py-4 sm:px-8`}>
+        {/* Full-bleed, NOT mx-auto max-w-*. The row was already
+            justify-between, so the branding was left-aligned — but inside a
+            centred max-width container, which is why it read as centred on a
+            wide screen. The page body below stays contained; a full-bleed
+            header over contained content is the intended look. */}
+        <div className="flex items-center justify-between gap-4 px-5 py-4 sm:px-8">
           {/* items-center here, not just on the outer row: it centers the
               mark against its own two-line text stack, independent of
               whatever height the sign-out button ends up being. */}
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="flex min-w-0 shrink items-center gap-3">
             <Logo className="h-9 w-9" />
             <div className="min-w-0">
+              {/* whitespace-nowrap so the wider tracking cannot push it onto
+                  a second line, which would shove the title down and unbalance
+                  the row against the sign-out button. */}
               <p
-                className="text-[9px] font-semibold uppercase tracking-[0.24em]"
+                className="whitespace-nowrap text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.28em]"
                 style={{ color: '#D4AF37' }}
               >
                 Karnataka Cultural Foundation
@@ -93,7 +101,7 @@ export default function AdminShell({
         </div>
 
         {/* Section nav — the active pill slides between items */}
-        <nav className={`mx-auto ${shellWidth} px-5 sm:px-8`}>
+        <nav className="px-5 sm:px-8">
           <div className="flex gap-1 overflow-x-auto pb-px">
             {SECTIONS.map((s) => {
               const active =
