@@ -124,7 +124,7 @@ export default function TicketReceipt({
       slot.kind === 'LOCATION'
         ? {
             key: 'loc',
-            label: 'Location',
+            label: 'Location QR',
             caption: 'Scan for location',
             /* VENUE_INFO_URL, never the backend's LOCATION payload. That
              * payload is a bare UUID: a guest pointing a camera at it gets
@@ -137,7 +137,7 @@ export default function TicketReceipt({
             key: `g${slot.guestIndex}`,
             // Normal admits exactly one person, so its guest panel is
             // labelled by what it grants rather than by index.
-            label: premium ? `Guest ${slot.guestIndex}` : 'One Free Entry',
+            label: premium ? `Guest ${slot.guestIndex} QR` : 'One Free Entry',
             caption: 'Scan for admission',
             value:
               payloadFor('GUEST', slot.guestIndex) ??
@@ -158,7 +158,7 @@ export default function TicketReceipt({
     if (!premium) {
       planned.unshift({
         key: 'venue',
-        label: 'Location',
+        label: 'Location QR',
         caption: 'Scan for location',
         value: VENUE_INFO_URL,
         isLocation: true,
@@ -394,48 +394,68 @@ function Ticket({
               through the gold border in the PDF. A flex container centres on
               the box, and min-h fixes the pill's height independently of how
               the engine measures the 9px text. */}
+          {/* Solid gold fill with navy type, per the mockup — not a hollow
+              pill. Gold on navy is the brand's own pairing (§5.3) and the
+              filled block is what makes it read as a stamp rather than an
+              outline. min-h + flex centring keeps it safe for html2canvas,
+              which positions inline boxes by baseline. */}
           <span
-            className="inline-flex min-h-[22px] shrink-0 items-center justify-center self-start rounded-full border px-3 py-[3px] text-[9px] font-bold uppercase leading-normal tracking-[0.18em]"
-            style={{ borderColor: GOLD, color: GOLD }}
+            className="inline-flex min-h-[30px] shrink-0 items-center justify-center self-start rounded-[6px] px-4 py-[5px] text-center text-[11px] font-extrabold uppercase leading-normal tracking-[0.14em]"
+            style={{ backgroundColor: GOLD, color: NAVY_DARK }}
           >
             Ticket Receipt
           </span>
 
-          <dl className="mt-6 space-y-3.5">
+          {/* Vertical accent rail down the list, per the mockup. border-l on
+              the <dl> rather than an absolutely positioned bar: html2canvas
+              rasterises borders reliably, where an absolute element inside a
+              transformed ancestor can land at the wrong offset. */}
+          <dl
+            className="mt-6 border-l pl-3"
+            style={{ borderColor: `${GOLD}59` }}
+          >
             <StubItem
               label="Request Number"
+              shape="square"
               value={ticket.requestNumber}
               diamondSrc={ornaments.diamond}
               variant="code"
             />
             <StubItem
               label="Ticket Number"
+              shape="diamond"
               value={ticket.ticketNumber}
               diamondSrc={ornaments.diamond}
               variant="code"
             />
             <StubItem
               label="Ticket Type"
+              shape="circle"
               value={TICKET_TYPE_LABELS[ticket.ticketType]}
               diamondSrc={ornaments.diamond}
             />
             <StubItem
               label="Purchaser"
+              shape="circle"
               value={ticket.purchaserName}
               diamondSrc={ornaments.diamond}
             />
             <StubItem
               label="Mobile"
+              shape="square"
               value={ticket.mobile}
               diamondSrc={ornaments.diamond}
             />
             <StubItem
               label="Children Below 12"
+              shape="diamond"
               value={String(ticket.childrenBelow12 ?? 0)}
               diamondSrc={ornaments.diamond}
             />
             <StubItem
               label="Event Date"
+              shape="circle"
+              last
               value={ticket.eventDate}
               diamondSrc={ornaments.diamond}
             />
@@ -529,7 +549,7 @@ function Ticket({
              hard against the body padding at the ends. Budget at 750px body
              - 64px padding = 686px usable: 5x112 (560) + 4 diamonds (~28)
              + 8 gaps x 8px (64) = 652. It fits with room, deterministically. */
-          <div className="mt-6 flex items-stretch justify-center gap-2">
+          <div className="mt-6 flex items-stretch justify-center gap-1.5">
             {codes.map((code, i) => (
               <Fragment key={code.key}>
                 {i > 0 && <DiamondSpacer src={ornaments.diamond} />}
@@ -569,10 +589,14 @@ function Ticket({
           <p className="text-[9px] font-semibold uppercase leading-normal tracking-[0.22em] text-white/40">
             Non-Transferable Ticket
           </p>
-          <div className="flex items-center gap-2">
+          {/* One flex row, items-center, no margins on the children. The
+              diamonds previously sat on the text's descender line because the
+              <p> carried its own line box height and the row aligned on edges
+              rather than centres. */}
+          <div className="flex shrink-0 items-center justify-center gap-2 leading-none">
             <Diamond src={ornaments.diamond} />
             <p
-              className="text-[9px] font-semibold uppercase leading-normal tracking-[0.22em]"
+              className="m-0 text-[9px] font-semibold uppercase leading-normal tracking-[0.22em]"
               style={{ color: `${GOLD}CC` }}
             >
               {isPremium ? 'Admits 4 Guests' : 'Admits 1 Guest'}
@@ -613,18 +637,30 @@ function StubItem({
   value,
   diamondSrc,
   variant = 'text',
+  shape = 'diamond',
+  last = false,
 }: {
   label: string;
   value: string;
   diamondSrc?: string;
   variant?: 'text' | 'code';
+  /** Varies down the list, per the mockup, so rows are distinguishable. */
+  shape?: GlyphShape;
+  /** Suppresses the divider on the final row. */
+  last?: boolean;
 }) {
   const isCode = variant === 'code';
 
   return (
-    <div className="flex items-start gap-2">
+    /* Dashed divider between rows — solid-bottom borders read as a table,
+       which the mockup deliberately is not. Padding above and below keeps
+       the rule clear of the descenders fixed in the previous pass. */
+    <div
+      className={`flex items-start gap-2 py-2 ${last ? '' : 'border-b border-dashed'}`}
+      style={last ? undefined : { borderColor: `${GOLD}33` }}
+    >
       <span className="mt-[5px] shrink-0">
-        <Diamond src={diamondSrc} />
+        <Glyph src={diamondSrc} shape={shape} />
       </span>
       {/* min-w-0 is what actually lets the child clip or wrap — a flex item
           defaults to min-width:auto and will overflow its parent instead. */}
@@ -650,6 +686,67 @@ function StubItem({
         </dd>
       </div>
     </div>
+  );
+}
+
+export type GlyphShape = 'diamond' | 'square' | 'circle';
+
+/**
+ * Stub row marker. Same asset-or-CSS-fallback contract as Diamond (§9), but
+ * the CSS fallback varies by shape.
+ *
+ * Every shape is a plain bordered/filled box — no clip-path, no ::before —
+ * because html2canvas implements neither and would flatten them to squares
+ * in the PDF. The diamond is a 45deg rotation, which it does rasterise.
+ */
+function Glyph({
+  src,
+  shape,
+  size = 5,
+}: {
+  src?: string;
+  shape: GlyphShape;
+  size?: number;
+}) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden
+        className="inline-block w-auto"
+        style={{ height: size + 1 }}
+      />
+    );
+  }
+
+  if (shape === 'circle') {
+    return (
+      <span
+        className="inline-block rounded-full"
+        style={{ backgroundColor: GOLD, height: size, width: size }}
+      />
+    );
+  }
+
+  if (shape === 'square') {
+    return (
+      <span
+        className="inline-block"
+        style={{
+          border: `1px solid ${GOLD}`,
+          height: size + 1,
+          width: size + 1,
+        }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className="inline-block rotate-45"
+      style={{ backgroundColor: GOLD, height: size, width: size }}
+    />
   );
 }
 
@@ -718,10 +815,11 @@ function QrPanel({
         }}
       >
         <div className={compact ? 'p-2' : 'p-2.5'}>
-          <TicketQr
-            value={code.value}
-            className={compact ? 'h-[92px] w-full' : 'h-[128px] w-full'}
-          />
+          {/* 88 + p-2 (16) + border (4) = 108 inside a 112px panel: 4px of
+              slack. At 92 it summed to exactly 112 and any sub-pixel rounding
+              in the raster would clip the code's quiet zone — the part a
+              scanner needs most. */}
+          <TicketQr value={code.value} size={compact ? 88 : 120} />
         </div>
 
         {/* Caption block — #031F43 with white text.
@@ -774,7 +872,7 @@ function HexBadge({
           points="14,1 198,1 211,23 198,45 14,45 1,23"
           fill={NAVY_DARK}
           stroke={GOLD}
-          strokeWidth="2"
+          strokeWidth="3"
         />
         {/* Inner hairline — the doubled edge is what makes it read as a seal */}
         <polygon
@@ -786,11 +884,21 @@ function HexBadge({
         />
       </svg>
 
+      {/* Stars flank the label, per the mockup. Rendered as text glyphs
+          rather than SVG so they inherit the gold colour and sit on the same
+          baseline as the label — a separate <svg> would need its own vertical
+          centring and html2canvas would measure it independently. */}
       <span
-        className="relative z-10 flex w-full items-center justify-center text-[12px] font-extrabold uppercase tracking-[0.2em]"
+        className="relative z-10 flex w-full items-center justify-center gap-2 text-[12px] font-extrabold uppercase leading-normal tracking-[0.2em]"
         style={{ color: GOLD }}
       >
+        <span aria-hidden className="text-[9px] leading-none">
+          ★
+        </span>
         {label}
+        <span aria-hidden className="text-[9px] leading-none">
+          ★
+        </span>
       </span>
     </div>
   );
@@ -842,12 +950,27 @@ function RuleWithDiamond({ src }: { src?: string }) {
 }
 
 /** Bare gold diamond between premium QR panels — no rule. */
+/**
+ * Column separator for the QR rail: a hairline rule broken by a diamond.
+ *
+ * Built as a flex column (rule / diamond / rule) rather than an absolutely
+ * positioned diamond over a full-height line. html2canvas resolves absolute
+ * offsets against the nearest positioned ancestor, and inside a transformed
+ * or scaled capture that lands in the wrong place — a flex column has no
+ * such dependency.
+ */
 function DiamondSpacer({ src }: { src?: string }) {
   return (
-    // px-0: the parent's `gap` is the single source of spacing now. Padding
-    // here as well would double it and push the rail over its width.
-    <span className="flex shrink-0 items-center px-0">
+    <span className="flex w-4 shrink-0 flex-col items-center justify-center gap-1 self-stretch">
+      <span
+        className="w-px flex-1"
+        style={{ backgroundColor: `${GOLD}40` }}
+      />
       <Diamond src={src} size={6} />
+      <span
+        className="w-px flex-1"
+        style={{ backgroundColor: `${GOLD}40` }}
+      />
     </span>
   );
 }
@@ -890,9 +1013,23 @@ function DotGrid({ className = '', src }: { className?: string; src?: string }) 
 /* white card edge; 2 modules is the practical floor, 4 is the spec.   */
 /* ------------------------------------------------------------------ */
 
-function TicketQr({ value, className }: { value: string; className?: string }) {
+/**
+ * An EXPLICIT pixel size, never width/height="100%".
+ *
+ * html2canvas serialises an SVG and rasterises it separately from the DOM
+ * box, and a percentage-sized SVG has no intrinsic dimensions for it to
+ * resolve against — so it rendered the code larger than its 92px slot. The
+ * overflow painted over the caption block and the card's overflow-hidden
+ * sliced "SCAN FOR ADMISSION" in half. A number is unambiguous to both the
+ * browser and the raster.
+ */
+function TicketQr({ value, size }: { value: string; size: number }) {
   return (
-    <div className={className} aria-label="Ticket QR code" role="img">
+    <div
+      aria-label="Ticket QR code"
+      role="img"
+      style={{ width: size, height: size, margin: '0 auto' }}
+    >
       <QRCodeSVG
         value={value}
         level="Q"
@@ -901,9 +1038,8 @@ function TicketQr({ value, className }: { value: string; className?: string }) {
         // decode needs luminance separation, not literal black.
         bgColor="#ffffff"
         fgColor={NAVY}
-        width="100%"
-        height="100%"
-        style={{ display: 'block', width: '100%', height: '100%' }}
+        size={size}
+        style={{ display: 'block' }}
       />
     </div>
   );
