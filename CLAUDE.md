@@ -358,6 +358,23 @@ don't land on a dead field.
 
 ### 6.2 Print-friendly CSS
 
+**PDF export is `window.print()`, not a rasteriser.** `lib/printTicket.ts`
+sets `data-printing="ticket"` on `<html>`, the `@media print` block in
+`globals.css` hides everything except `[data-print-ticket]`, and the browser
+lays the page out itself — so text and QR codes stay vector.
+
+The old path captured the pass with html2canvas and wrapped the PNG in jsPDF.
+That produced a PDF of pixels, and because html2canvas approximates line
+boxes rather than implementing CSS layout, it clipped descenders and
+mis-centred badges no matter how padding was tuned. **Do not reintroduce it.**
+In particular, never set `line-height: normal` on the pass: html2canvas
+resolves `normal` with its own approximation, so the box it rasterises does
+not match the one the browser laid out. Every text node on the ticket carries
+an explicit px line-height for that reason.
+
+html2canvas remains — correctly — for the **PNG** an agent shares over
+WhatsApp (`lib/shareTicket.ts`), where the output is an image anyway.
+
 Tickets are printed and saved as PDF constantly. Every ticket-bearing screen must:
 
 - Mark all app chrome `print:hidden` (search bars, action bars, nav, toasts).
@@ -486,8 +503,10 @@ let the web tier mint tokens, which is a worse trade than an empty shell.
 
 **Known debt:**
 
-1. `npm audit` flags transitive dev/build dependencies (html2canvas, jspdf).
-   None are on a request path; clear before production.
+1. `npm audit` flags `nodemailer`, and `sharp`/`postcss` transitively via
+   Next. None are on a request path; clear before production. (html2canvas
+   and jspdf are no longer among them — jspdf was removed with the raster
+   PDF path.)
 2. The ticket has no true perforation notches — deliberately omitted, since
    background-colored cutout circles break in print and email.
 3. Socket rooms are a single `superusers` room. Division-scoped rooms (§10.5)

@@ -19,6 +19,7 @@ import {
 } from '@pravasi/shared';
 import { QRCodeSVG } from 'qrcode.react';
 import { TICKET_ASSETS, type TicketAssets } from '@/lib/ticketAssets';
+import { printTicket } from '@/lib/printTicket';
 
 /* ------------------------------------------------------------------ */
 /* Brand tokens — kept literal so the ticket renders identically       */
@@ -251,7 +252,7 @@ export default function TicketReceipt({
 
           <button
             type="button"
-            onClick={() => window.print()}
+            onClick={() => void printTicket()}
             className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#062B59] px-5 py-2.5 text-[13px] font-semibold text-white transition-all duration-200 hover:bg-[#031F43] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.97]"
           >
             <Printer className="h-4 w-4" strokeWidth={2.25} />
@@ -310,6 +311,9 @@ function Ticket({
   return (
     <article
       ref={ticketRef}
+      /* Hook for the print isolation in globals.css. An attribute rather than
+         a class so Tailwind's purge can never strip it. */
+      data-print-ticket
       /* FIXED width, not min-w. html2canvas captures at node.scrollWidth,
          so a min-width let the pass grow with its container and the raster
          changed aspect ratio between desktop and phone. 1000px divides
@@ -317,7 +321,7 @@ function Ticket({
          columns on the same horizontal plane with no sub-pixel rounding —
          percentage widths were the alignment drift. print: overrides let
          the browser fit it to paper (§6.2). */
-      className="relative flex w-[1000px] shrink-0 overflow-hidden rounded-2xl text-white shadow-[0_20px_60px_-15px_rgba(6,43,89,0.45)] print:w-full print:min-w-0 print:shadow-none"
+      className="relative flex w-[1000px] shrink-0 overflow-hidden rounded-2xl text-white shadow-[0_20px_60px_-15px_rgba(6,43,89,0.45)] print:shadow-none"
       style={{
         // Navy stays as the base layer. If the background art 404s in
         // production or is stripped by an email client, the pass is still

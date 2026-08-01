@@ -49,6 +49,45 @@
   }
 
   @page {
-    margin: 12mm;
+    /* Landscape, and tight margins. The pass is 1000px wide; A4 landscape is
+       ~1122px at 96dpi, so 8mm (~30px) a side leaves ~1062px — it fits at
+       100% with no browser downscaling, which is what keeps the QR modules
+       on exact pixel boundaries. */
+    size: A4 landscape;
+    margin: 8mm;
+  }
+}
+
+/**
+ * Print isolation — set by lib/printTicket.ts for the duration of the dialog.
+ *
+ * Everything is hidden with `visibility`, then the pass and its subtree are
+ * turned back on. visibility (not display) because it leaves the element tree
+ * intact: `display: none` on an ancestor would take the ticket down with it,
+ * and hunting for the exact ancestor chain to spare is brittle in an app
+ * whose layout changes.
+ *
+ * The pass is then pinned with `position: fixed`, which in a print context
+ * resolves against the page box — so it lands at the top-left of the sheet
+ * regardless of how far the screen was scrolled or what its on-screen
+ * ancestors were positioned as.
+ */
+@media print {
+  html[data-printing='ticket'] body * {
+    visibility: hidden !important;
+  }
+
+  html[data-printing='ticket'] [data-print-ticket],
+  html[data-printing='ticket'] [data-print-ticket] * {
+    visibility: visible !important;
+  }
+
+  html[data-printing='ticket'] [data-print-ticket] {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    /* No drop shadow on paper — it prints as a grey smear. */
+    box-shadow: none !important;
   }
 }

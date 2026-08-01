@@ -6,14 +6,14 @@ import { toast } from 'sonner';
 import {
   Check,
   Download,
-  FileText,
+  Printer,
   Loader2,
   Mail,
   MessageCircle,
   Send,
   X,
 } from 'lucide-react';
-import { downloadTicketPDFFromBlob } from '@/lib/pdfTicket';
+import { printTicket } from '@/lib/printTicket';
 import { shareTicketBlob, ticketFileName, whatsappTextUrl } from '@/lib/shareTicket';
 import {
   backdropVariants,
@@ -138,21 +138,25 @@ export default function ShareTicketModal({
     }
   }, [getImageBlob, meta]);
 
-  const handlePdf = useCallback(async () => {
+  /**
+   * Hands off to the browser's print dialog, where "Save as PDF" is a
+   * destination. No capture, no jsPDF — the PDF is produced by the same
+   * engine that laid the page out, so its text and QR codes stay vector.
+   *
+   * Deliberately no success toast: the browser does not report whether the
+   * user saved, printed or cancelled, and claiming "PDF saved" after a
+   * dismissed dialog would be a lie the agent acts on.
+   */
+  const handlePrint = useCallback(async () => {
     setBusy('pdf');
     try {
-      const blob = await getImageBlob();
-      await downloadTicketPDFFromBlob(blob, {
-        ticketNumber: meta.ticketNumber,
-        purchaserName: meta.purchaserName,
-      });
-      toast.success('PDF saved', { description: meta.ticketNumber });
+      await printTicket();
     } catch {
-      toast.error('Could not build the PDF');
+      toast.error('Could not open the print dialog');
     } finally {
       setBusy(null);
     }
-  }, [getImageBlob, meta]);
+  }, []);
 
   const handleImage = useCallback(async () => {
     setBusy('image');
@@ -378,12 +382,12 @@ export default function ShareTicketModal({
             <Divider />
 
             <Option
-              icon={FileText}
+              icon={Printer}
               tint="bg-[#062B59]/[0.07] text-[#062B59]"
-              label="Save as PDF"
-              hint="Print-ready, sized to the ticket"
+              label="Print / Save as PDF"
+              hint="Opens the print dialog — choose Save as PDF"
               busy={busy === 'pdf'}
-              onClick={handlePdf}
+              onClick={handlePrint}
             />
 
             <Divider />
