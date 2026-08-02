@@ -1,8 +1,8 @@
 # App Icons
 
-**Generated — do not hand-edit.** Rendered from `../Pravasi-Sangama-mark.svg`
-(the flame alone: the source SVG with its viewBox cropped past the wordmark).
-The full lockup is unreadable below ~64px, so it is never the icon source.
+**Generated — do not hand-edit.** Rendered from `../Pravasi-sangama-mark.png` (the swoosh alone, cropped
+from the full lockup). The lockup is unreadable below ~64px, so it is never
+the icon source.
 
 | File                    | Size    | Purpose    | Consumer                        |
 | ----------------------- | ------- | ---------- | ------------------------------- |
@@ -35,7 +35,7 @@ Requires ImageMagick. Run from `frontend/public`:
 ```bash
 gen() {
   inner=$(python3 -c "print(int($1*$2))")
-  magick -background none -density 400 Pravasi-Sangama-mark.svg -resize ${inner}x${inner} \
+  magick -background none Pravasi-sangama-mark.png -resize ${inner}x${inner} \
     -background white -gravity center -extent ${1}x${1} -strip PNG32:"icons/$3"
 }
 gen 192 0.76 icon-192.png

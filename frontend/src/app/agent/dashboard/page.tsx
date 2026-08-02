@@ -97,7 +97,8 @@ function LedgerScreen() {
             edge of the cards. */}
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            <Logo className="h-9 w-9" />
+            {/* plate: the artwork is purple and vanishes on navy — see Logo.tsx */}
+            <Logo className="h-8 w-8" plate />
             <div className="min-w-0">
               {/* Wider tracking than Tailwind's tracking-widest (0.1em),
                   which would have been narrower than what was here. 0.28em is

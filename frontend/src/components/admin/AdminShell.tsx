@@ -75,7 +75,8 @@ export default function AdminShell({
               mark against its own two-line text stack, independent of
               whatever height the sign-out button ends up being. */}
           <div className="flex min-w-0 shrink items-center gap-3">
-            <Logo className="h-9 w-9" />
+            {/* plate: the artwork is purple and vanishes on navy — see Logo.tsx */}
+            <Logo className="h-8 w-8" plate />
             <div className="min-w-0">
               {/* whitespace-nowrap so the wider tracking cannot push it onto
                   a second line, which would shove the title down and unbalance
