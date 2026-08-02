@@ -14,22 +14,48 @@
  * service worker that replayed or cached an admission would corrupt the
  * headcount in ways the queue is specifically designed to prevent.
  *
- * Bump CACHE_VERSION on any change to this file or the precache list.
+ * Bump CACHE_VERSION on any change to this file or the precache list. The
+ * activate step deletes every older ps26-shell-* cache, so the bump is the
+ * invalidation mechanism.
  */
 
-const CACHE_VERSION = 'v1';
+/* v2 — new brand artwork (violet logo). The version bump is what actually
+ * invalidates: `activate` deletes every ps26-shell-* cache that is not the
+ * current one, so a rename drops the whole previous shell in one step. */
+const CACHE_VERSION = 'v2';
 const CACHE_NAME = `ps26-shell-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
 /** Navigation waits this long for the network before falling back to cache. */
 const NAVIGATION_TIMEOUT_MS = 3000;
 
+/**
+ * Precached with `cache: 'reload'` below, which bypasses the HTTP cache.
+ *
+ * That matters more than the version bump for the icons. A stale worker cache
+ * was only half the reason the old favicon survived: the browser's own HTTP
+ * cache would happily hand the same stale bytes back to a fresh SW fetch.
+ * `reload` forces these specific URLs to the network on every install.
+ *
+ * /favicon.ico, /icon.png and /apple-icon.png are App Router routes, served
+ * at those exact unhashed paths — so they are cacheable, and were being
+ * cached: `isStaticAsset` treats anything with destination 'image' as a
+ * static asset, and a favicon request is an image.
+ */
 const PRECACHE_URLS = [
   OFFLINE_URL,
   '/manifest.json',
+  '/favicon.ico',
+  '/icon.png',
+  '/apple-icon.png',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
+  '/icons/apple-touch-icon.png',
 ];
+
+/** Anything matching these is force-evicted on activate — see below. */
+const ICON_PATH_PATTERNS = ['/favicon.ico', '/icon.png', '/apple-icon.png', '/icons/'];
 
 /* ------------------------------------------------------------------ */
 /* Install — precache the offline shell                                */
@@ -69,10 +95,39 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
       const keys = await caches.keys();
+
+      // 1. Drop every previous shell version outright.
       await Promise.all(
         keys
           .filter((key) => key.startsWith('ps26-shell-') && key !== CACHE_NAME)
           .map((key) => caches.delete(key)),
+      );
+
+      /* 2. Belt and braces: sweep icon entries out of whatever caches remain,
+       *    including the current one.
+       *
+       *    The version bump alone should be sufficient — but only for caches
+       *    this worker named. A cache left by an earlier deploy under a
+       *    different name, or an icon written into the current cache by
+       *    stale-while-revalidate between install and activate, would survive
+       *    it. Icons are a handful of small files; re-fetching them costs
+       *    nothing and removes the guesswork. */
+      const remaining = await caches.keys();
+      await Promise.all(
+        remaining.map(async (key) => {
+          const cache = await caches.open(key);
+          const requests = await cache.keys();
+          await Promise.all(
+            requests
+              .filter((req) => {
+                const path = new URL(req.url).pathname;
+                return ICON_PATH_PATTERNS.some((p) =>
+                  p.endsWith('/') ? path.startsWith(p) : path === p,
+                );
+              })
+              .map((req) => cache.delete(req)),
+          );
+        }),
       );
 
       await self.clients.claim();
@@ -107,10 +162,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  /* Icons are network-first, everything else stale-while-revalidate.
+   *
+   * This is the root cause of the stuck favicon, not just the stale cache.
+   * SWR is correct for /_next/static/* because those URLs are content-hashed
+   * — the bytes at a given URL never change, so "stale" is never wrong. Icon
+   * paths are NOT hashed: /favicon.ico is /favicon.ico across every deploy,
+   * with different bytes behind it. Under SWR that guarantees users see the
+   * previous deploy's icon, every time, forever.
+   *
+   * A version bump fixes it once. This fixes it permanently. */
+  if (isIconPath(url.pathname)) {
+    event.respondWith(networkFirstAsset(request));
+    return;
+  }
+
   if (isStaticAsset(url, request)) {
     event.respondWith(staleWhileRevalidate(request));
   }
 });
+
+function isIconPath(pathname) {
+  return ICON_PATH_PATTERNS.some((p) =>
+    p.endsWith('/') ? pathname.startsWith(p) : pathname === p,
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /* Strategies                                                          */
@@ -144,6 +220,28 @@ async function staleWhileRevalidate(request) {
 
   const response = await network;
   return response ?? Response.error();
+}
+
+/**
+ * Network-first for unhashed assets whose bytes change between deploys.
+ *
+ * Falls back to cache so an installed gate PWA still shows its icon with no
+ * signal. Nothing here is on the scanning path, so the round trip costs
+ * nothing that matters.
+ */
+async function networkFirstAsset(request) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const response = await withTimeout(fetch(request), NAVIGATION_TIMEOUT_MS);
+    if (isCacheable(response)) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    return cached ?? Response.error();
+  }
 }
 
 /**
