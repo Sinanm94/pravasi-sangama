@@ -26,6 +26,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
 
 const VIOLET = '#5E17EB';
+const VIOLET_DEEP = '#37098C';
 
 export default function AgentDashboardPage() {
   return (
@@ -91,9 +92,11 @@ function LedgerScreen() {
       <BrandBackdrop />
 
       {/* Masthead */}
-      {/* White, matching AdminShell — the dark violet logo needs a light
-          surface behind it (§5.3). */}
-      <header className="relative z-10 border-b border-gray-900/[0.07] bg-white">
+      {/* White for the logo's sake (§5.3), with a deep-violet rule beneath —
+          the agent shell has no nav rail, so this stands in for AdminShell's
+          dark band and keeps the two shells anchored the same way. */}
+      <header className="relative z-10 border-b-[3px] bg-white"
+              style={{ borderBottomColor: VIOLET_DEEP }}>
         {/* Same max-w as <main> below, so the mark lines up with the left
             edge of the cards. */}
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">

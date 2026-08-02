@@ -11,6 +11,8 @@ import { Logo } from '@/components/ui/Logo';
 import BrandBackdrop from '@/components/ui/BrandBackdrop';
 
 const VIOLET = '#5E17EB';
+const VIOLET_DEEP = '#37098C';
+const AMBER = '#FFA51F';
 
 /**
  * Chrome for every superuser screen: masthead, section nav, sign out.
@@ -69,12 +71,17 @@ export default function AdminShell({
       <BrandBackdrop />
 
       {/* Masthead */}
-      {/* WHITE, not a dark band. The logo is dark violet and disappears on a
-          dark surface (§5.3); inverting the masthead is the fix, rather than
-          putting the mark on a chip. A white bar over the grey page still
-          reads as chrome because of the hairline beneath it. */}
-      <header className="relative z-10 border-b border-gray-900/[0.07] bg-white">
-        <div className={`mx-auto flex ${SHELL_WIDTH} items-center justify-between gap-4 px-5 py-4 sm:px-8`}>
+      {/* Two-tone chrome.
+          Band 1 is WHITE because the logo is dark violet and vanishes on a
+          dark surface (§5.3). Band 2 is deep violet, which is what gives the
+          page its structural weight back — with a white masthead over white
+          cards on a near-white page there was nothing anchoring the layout.
+          Each band paints full-bleed while its contents stay on SHELL_WIDTH,
+          so the colour reaches the viewport edges but the mark still lines up
+          with the cards below. */}
+      <header className="relative z-10">
+        <div className="bg-white">
+          <div className={`mx-auto flex ${SHELL_WIDTH} items-center justify-between gap-4 px-5 py-4 sm:px-8`}>
           {/* items-center here, not just on the outer row: it centers the
               mark against its own two-line text stack, independent of
               whatever height the sign-out button ends up being. */}
@@ -106,9 +113,11 @@ export default function AdminShell({
             <LogOut className="h-3.5 w-3.5" strokeWidth={2.25} />
             <span className="hidden sm:inline">Sign out</span>
           </button>
+          </div>
         </div>
 
-        {/* Section nav — the active pill slides between items */}
+        {/* Section nav — deep violet, the page's one dark anchor. */}
+        <div style={{ backgroundColor: VIOLET_DEEP }}>
         <nav className={`mx-auto ${SHELL_WIDTH} px-5 sm:px-8`}>
           <div className="flex gap-1 overflow-x-auto pb-px">
             {SECTIONS.map((s) => {
@@ -123,7 +132,9 @@ export default function AdminShell({
                 >
                   <span
                     className={`relative z-10 inline-flex items-center gap-1.5 ${
-                      active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-800'
+                      active
+                        ? 'text-white'
+                        : 'text-white/60 hover:text-white/85'
                     }`}
                   >
                     <s.icon className="h-3.5 w-3.5" strokeWidth={2.25} />
@@ -135,7 +146,7 @@ export default function AdminShell({
                       layoutId="admin-nav-underline"
                       transition={springSurface}
                       className="absolute inset-x-3 bottom-0 h-[2px] rounded-full"
-                      style={{ backgroundColor: VIOLET }}
+                      style={{ backgroundColor: AMBER }}
                     />
                   )}
                 </Link>
@@ -143,6 +154,7 @@ export default function AdminShell({
             })}
           </div>
         </nav>
+        </div>
       </header>
 
       {/* Page */}

@@ -36,18 +36,17 @@ export const metadata: Metadata = {
     // Lets the camera view run edge-to-edge when installed on iOS.
     statusBarStyle: 'black-translucent',
   },
+  /* No `icons` block. app/favicon.ico, app/icon.png and app/apple-icon.png
+   * are App Router file conventions — Next emits the <link> tags from them
+   * and they take precedence over metadata.icons, so declaring both only
+   * duplicates the tags.
+   *
+   * favicon.ico specifically matters: browsers request /favicon.ico by
+   * convention regardless of any <link>, and while that 404'd they kept
+   * showing the previously cached icon. */
   formatDetection: {
     // Stops iOS turning ticket and mobile numbers into tap-to-call links.
     telephone: false,
-  },
-  icons: {
-    // The square mark, not the portrait lockup — a favicon is 16–32px, where
-    // the wordmark is unreadable noise.
-    icon: [
-      { url: '/Pravasi-sangama-mark.png', type: 'image/png' },
-      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
-    ],
-    apple: '/icons/apple-touch-icon.png',
   },
 };
 
