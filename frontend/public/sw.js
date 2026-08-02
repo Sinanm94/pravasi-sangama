@@ -19,10 +19,16 @@
  * invalidation mechanism.
  */
 
-/* v2 — new brand artwork (violet logo). The version bump is what actually
- * invalidates: `activate` deletes every ps26-shell-* cache that is not the
- * current one, so a rename drops the whole previous shell in one step. */
-const CACHE_VERSION = 'v2';
+/* v3 — same icon URLs, new bytes: favicon.ico/icon.png/icon-192/icon-512
+ * went from a flattened-white background to true alpha transparency (the
+ * mark/apple/maskable icons stay opaque on purpose — see icons/README.md).
+ * The precache LIST is unchanged, only what is behind those URLs, so this
+ * bump exists purely to make an already-active worker notice: the browser
+ * only re-runs install/activate when sw.js's own bytes change, and the
+ * force-eviction logic below only runs on activate. Without this, a client
+ * already on v2 would keep serving the old opaque PNGs forever regardless of
+ * what is deployed. */
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = `ps26-shell-${CACHE_VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
