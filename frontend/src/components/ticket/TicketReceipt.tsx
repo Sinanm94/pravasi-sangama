@@ -26,15 +26,21 @@ import { printTicket } from '@/lib/printTicket';
 /* wherever it is mounted (print, PDF, email preview).                 */
 /* ------------------------------------------------------------------ */
 
-/** Official brand palette (§5.3). The ticket uses navy + gold only. */
-const NAVY = '#062B59'; // primary surface
-const NAVY_DARK = '#031F43'; // QR label block, date box, footer
-const GOLD = '#D4AF37'; // borders, diamonds, badge
-const GOLD_LIGHT = '#F7E7B5'; // highlights
+/**
+ * Official brand palette (§5.3), sampled from the event logo.
+ *
+ * The surface is `#37098C`, NOT the brighter `#5E17EB` the UI uses for
+ * buttons. Amber on the bright violet measures 3.81:1 and fails at the 8-10px
+ * this pass sets its eyebrows and captions in; on `#37098C` it is 6.74:1,
+ * which is where the old gold-on-navy sat (6.67:1). White on it is 13.3:1.
+ */
+const VIOLET = '#37098C'; // primary surface
+const VIOLET_DARK = '#2E0775'; // QR caption block, date box, footer
+const AMBER = '#FFA51F'; // borders, diamonds, badge
+const AMBER_LIGHT = '#FFD79A'; // highlights
 
-// Maroon is intentionally absent: it has no role in the official ticket
-// palette. It survives only in this file's app chrome (search bar, action
-// pills) as literal Tailwind classes.
+// The ticket is violet + amber only. Navy and gold were the previous scheme
+// and must not reappear here.
 
 export interface TicketData {
   requestNumber: string;
@@ -205,7 +211,7 @@ export default function TicketReceipt({
           </div>
           <button
             type="submit"
-            className="shrink-0 rounded-xl bg-[#062B59] px-6 py-3 text-[13px] font-semibold uppercase tracking-[0.06em] text-white transition-all duration-200 hover:bg-[#031F43] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.98]"
+            className="shrink-0 rounded-xl bg-[#5E17EB] px-6 py-3 text-[13px] font-semibold uppercase tracking-[0.06em] text-white transition-all duration-200 hover:bg-[#2E0775] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#5E17EB]/20 active:scale-[0.98]"
           >
             Search
           </button>
@@ -257,7 +263,7 @@ export default function TicketReceipt({
                 purchaserName: ticket.purchaserName,
               })
             }
-            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#062B59] px-5 py-2.5 text-[13px] font-semibold text-white transition-all duration-200 hover:bg-[#031F43] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.97]"
+            className="inline-flex shrink-0 items-center gap-2 rounded-full bg-[#5E17EB] px-5 py-2.5 text-[13px] font-semibold text-white transition-all duration-200 hover:bg-[#2E0775] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#5E17EB]/20 active:scale-[0.97]"
           >
             <Printer className="h-4 w-4" strokeWidth={2.25} />
             Print / Save PDF
@@ -330,7 +336,7 @@ function Ticket({
         // Navy stays as the base layer. If the background art 404s in
         // production or is stripped by an email client, the pass is still
         // navy and still readable — it just loses its texture.
-        backgroundColor: NAVY,
+        backgroundColor: VIOLET,
         backgroundImage: assets.background
           ? `url(${assets.background})`
           : undefined,
@@ -360,7 +366,7 @@ function Ticket({
           hasDividerArt ? '' : 'border-r-2 border-dashed'
         }`}
         style={{
-          borderColor: hasDividerArt ? undefined : `${GOLD}80`,
+          borderColor: hasDividerArt ? undefined : `${AMBER}80`,
           backgroundImage: assets.stubBackground
             ? `url(${assets.stubBackground})`
             : undefined,
@@ -389,7 +395,7 @@ function Ticket({
         <div className="flex w-9 shrink-0 items-center justify-center overflow-hidden border-r border-white/5">
           <span
             className="-rotate-90 whitespace-nowrap text-[9px] font-bold uppercase tracking-[0.2em]"
-            style={{ color: GOLD }}
+            style={{ color: AMBER }}
           >
             {ticket.ticketNumber}
           </span>
@@ -409,7 +415,7 @@ function Ticket({
               which positions inline boxes by baseline. */}
           <span
             className="inline-flex min-h-[34px] shrink-0 items-center justify-center self-start rounded-[6px] px-4 pb-[4px] pt-[3px] text-center text-[11px] font-extrabold uppercase leading-[16px] tracking-[0.14em]"
-            style={{ backgroundColor: GOLD, color: NAVY_DARK }}
+            style={{ backgroundColor: AMBER, color: VIOLET_DARK }}
           >
             Ticket Receipt
           </span>
@@ -420,7 +426,7 @@ function Ticket({
               transformed ancestor can land at the wrong offset. */}
           <dl
             className="mt-6 border-l pl-3"
-            style={{ borderColor: `${GOLD}59` }}
+            style={{ borderColor: `${AMBER}59` }}
           >
             <StubItem
               label="Request Number"
@@ -472,7 +478,7 @@ function Ticket({
           <div className="mt-auto pt-6">
             <div
               className="h-px w-full opacity-30"
-              style={{ backgroundColor: GOLD }}
+              style={{ backgroundColor: AMBER }}
             />
             <p className="mt-3 text-[8px] uppercase tracking-[0.2em] text-white/40">
               Retain this stub
@@ -501,7 +507,7 @@ function Ticket({
             )}
             <p
               className="text-[10px] font-semibold uppercase tracking-[0.28em]"
-              style={{ color: GOLD }}
+              style={{ color: AMBER }}
             >
               {ticket.organization ?? 'Karnataka Cultural Foundation'}
             </p>
@@ -551,7 +557,7 @@ function Ticket({
                 {!ribbonHasLabel && (
                   <span
                     className="absolute inset-0 flex items-center justify-center px-6 text-[13px] font-extrabold uppercase tracking-[0.18em]"
-                    style={{ color: NAVY }}
+                    style={{ color: VIOLET }}
                   >
                     {TICKET_TYPE_LABELS[ticket.ticketType]} Ticket
                   </span>
@@ -631,7 +637,7 @@ function Ticket({
             </span>
             <p
               className="m-0 text-[9px] font-semibold uppercase leading-[13px] tracking-[0.22em]"
-              style={{ color: `${GOLD}CC` }}
+              style={{ color: `${AMBER}CC` }}
             >
               {isPremium ? 'Admits 4 Guests' : 'Admits 1 Guest'}
               {/* Printed even when zero: a gate reading "+0 Children" knows
@@ -693,7 +699,7 @@ function StubItem({
        the rule clear of the descenders fixed in the previous pass. */
     <div
       className={`flex items-start gap-2 py-2 ${last ? '' : 'border-b border-dashed'}`}
-      style={last ? undefined : { borderColor: `${GOLD}33` }}
+      style={last ? undefined : { borderColor: `${AMBER}33` }}
     >
       <span className="mt-[5px] shrink-0">
         <Glyph src={diamondSrc} shape={shape} />
@@ -761,7 +767,7 @@ function Glyph({
     return (
       <span
         className="inline-block rounded-full"
-        style={{ backgroundColor: GOLD, height: size, width: size }}
+        style={{ backgroundColor: AMBER, height: size, width: size }}
       />
     );
   }
@@ -771,7 +777,7 @@ function Glyph({
       <span
         className="inline-block"
         style={{
-          border: `1px solid ${GOLD}`,
+          border: `1px solid ${AMBER}`,
           height: size + 1,
           width: size + 1,
         }}
@@ -782,7 +788,7 @@ function Glyph({
   return (
     <span
       className="inline-block rotate-45"
-      style={{ backgroundColor: GOLD, height: size, width: size }}
+      style={{ backgroundColor: AMBER, height: size, width: size }}
     />
   );
 }
@@ -812,7 +818,7 @@ function Diamond({
   return (
     <span
       className="inline-block rotate-45"
-      style={{ backgroundColor: GOLD, height: size, width: size }}
+      style={{ backgroundColor: AMBER, height: size, width: size }}
     />
   );
 }
@@ -846,7 +852,7 @@ function QrPanel({
           the tops of the uppercase ascenders. */}
       <p
         className="mb-2 whitespace-nowrap pb-[2px] pt-1 text-center text-[8.5px] font-extrabold uppercase leading-[13px] tracking-[0.1em]"
-        style={{ color: NAVY_DARK }}
+        style={{ color: VIOLET_DARK }}
       >
         {code.label}
       </p>
@@ -854,7 +860,7 @@ function QrPanel({
       <div
         className="overflow-hidden rounded-[5px] bg-white"
         style={{
-          border: `2.5px solid ${NAVY}`,
+          border: `2.5px solid ${VIOLET}`,
           boxShadow: '0 2px 8px rgba(3,31,67,0.14)',
         }}
       >
@@ -866,7 +872,7 @@ function QrPanel({
           <TicketQr value={code.value} size={compact ? 88 : 120} />
         </div>
 
-        {/* Caption block — #031F43 with white text.
+        {/* Caption block — #2E0775 with white text.
             The old box was px-1 py-[5px] with leading-tight, so "SCAN FOR
             ADMISSION" sat against both edges and its descenders touched the
             bottom. Now: real horizontal padding, a minimum height so every
@@ -874,7 +880,7 @@ function QrPanel({
             nowrap+ellipsis as the hard stop rather than a silent overflow. */}
         <div
           className="flex min-h-[24px] items-center justify-center px-2 pb-[5px] pt-[3px] text-center"
-          style={{ backgroundColor: NAVY_DARK }}
+          style={{ backgroundColor: VIOLET_DARK }}
         >
           <span
             className={`block w-full whitespace-nowrap font-bold uppercase text-white ${
@@ -914,15 +920,15 @@ function HexBadge({
       >
         <polygon
           points="14,1 198,1 211,23 198,45 14,45 1,23"
-          fill={NAVY_DARK}
-          stroke={GOLD}
+          fill={VIOLET_DARK}
+          stroke={AMBER}
           strokeWidth="3"
         />
         {/* Inner hairline — the doubled edge is what makes it read as a seal */}
         <polygon
           points="19,6 194,6 205,23 194,40 19,40 7,23"
           fill="none"
-          stroke={GOLD_LIGHT}
+          stroke={AMBER_LIGHT}
           strokeWidth="0.75"
           opacity="0.55"
         />
@@ -934,7 +940,7 @@ function HexBadge({
           centring and html2canvas would measure it independently. */}
       <span
         className="relative z-10 flex w-full items-center justify-center gap-2 pb-[3px] text-[12px] font-extrabold uppercase leading-[17px] tracking-[0.2em]"
-        style={{ color: GOLD }}
+        style={{ color: AMBER }}
       >
         <span aria-hidden className="text-[9px] leading-none">
           ★
@@ -951,7 +957,7 @@ function HexBadge({
 function RuleWithDiamond({ src }: { src?: string }) {
   return (
     <div className="relative mx-3 flex w-4 shrink-0 items-stretch justify-center">
-      <span className="w-px" style={{ backgroundColor: `${NAVY}1f` }} />
+      <span className="w-px" style={{ backgroundColor: `${VIOLET}1f` }} />
       <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
         <Diamond src={src} size={7} />
       </span>
@@ -974,12 +980,12 @@ function DiamondSpacer({ src }: { src?: string }) {
     <span className="flex w-4 shrink-0 flex-col items-center justify-center gap-1 self-stretch">
       <span
         className="w-px flex-1"
-        style={{ backgroundColor: `${NAVY}26` }}
+        style={{ backgroundColor: `${VIOLET}26` }}
       />
       <Diamond src={src} size={6} onWhite />
       <span
         className="w-px flex-1"
-        style={{ backgroundColor: `${NAVY}26` }}
+        style={{ backgroundColor: `${VIOLET}26` }}
       />
     </span>
   );
@@ -1003,21 +1009,21 @@ function DateBadge({
   return (
     <div
       className={`flex h-[46px] shrink-0 items-stretch overflow-hidden rounded-[4px] ${className}`}
-      style={{ border: `2px solid ${GOLD}` }}
+      style={{ border: `2px solid ${AMBER}` }}
     >
       <span
         className="flex w-[26px] shrink-0 items-center justify-center"
-        style={{ backgroundColor: NAVY_DARK }}
+        style={{ backgroundColor: VIOLET_DARK }}
       >
         <span
           className="block h-[9px] w-[9px]"
-          style={{ backgroundColor: GOLD }}
+          style={{ backgroundColor: AMBER }}
         />
       </span>
 
       <span
         className="flex items-center px-4 text-[13px] font-extrabold uppercase leading-[17px] tracking-[0.12em]"
-        style={{ backgroundColor: GOLD_LIGHT, color: NAVY_DARK }}
+        style={{ backgroundColor: AMBER_LIGHT, color: VIOLET_DARK }}
       >
         {date}
       </span>
@@ -1043,14 +1049,14 @@ function GoldSwoosh({ className = '' }: { className?: string }) {
       <path
         d="M120 0 A120 120 0 0 1 0 120"
         fill="none"
-        stroke={GOLD}
+        stroke={AMBER}
         strokeWidth="2"
         opacity="0.28"
       />
       <path
         d="M120 22 A98 98 0 0 1 22 120"
         fill="none"
-        stroke={GOLD}
+        stroke={AMBER}
         strokeWidth="1"
         opacity="0.18"
       />
@@ -1073,7 +1079,7 @@ function DotGrid({ className = '', src }: { className?: string; src?: string }) 
               backgroundRepeat: 'no-repeat',
             }
           : {
-              backgroundImage: `radial-gradient(${GOLD} 1px, transparent 1px)`,
+              backgroundImage: `radial-gradient(${AMBER} 1px, transparent 1px)`,
               backgroundSize: '8px 8px',
             }
       }
@@ -1120,7 +1126,7 @@ function TicketQr({ value, size }: { value: string; size: number }) {
         // Navy on white keeps the ticket's palette without hurting contrast:
         // decode needs luminance separation, not literal black.
         bgColor="#ffffff"
-        fgColor={NAVY}
+        fgColor={VIOLET}
         size={size}
         style={{ display: 'block' }}
       />

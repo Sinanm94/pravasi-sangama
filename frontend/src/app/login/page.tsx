@@ -31,7 +31,7 @@ import {
   AuthOutcome,
   AuthShell,
   Field,
-  NAVY,
+  VIOLET,
   SelectField,
   SubtleButton,
   Submit,

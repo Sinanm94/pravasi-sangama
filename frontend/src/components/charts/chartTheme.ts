@@ -3,10 +3,10 @@ import type { ScanResult, TicketType } from '@pravasi/shared';
 /**
  * Chart palette.
  *
- * The raw brand colours (§5.3) are the *ticket's* palette, tuned for a navy
- * surface. On a white dashboard card they fail a categorical-palette audit:
- * `#062B59` and `#031F43` both sit far below the light-mode lightness band and
- * read as the same near-black next to each other.
+ * The raw brand colours (§5.3) are the *ticket's* palette, tuned for a deep
+ * violet surface. On a white dashboard card they fail a categorical-palette
+ * audit: `#37098C` and `#2E0775` both sit far below the light-mode lightness
+ * band and read as the same near-black next to each other.
  *
  * These are brand-derived steps lifted into that band. Verified with the
  * palette validator against surface #fcfcfb:
@@ -26,9 +26,9 @@ export const TIER_COLORS: Record<TicketType, string> = {
   SVIP: '#c9a227', // gold, lifted
 };
 
-/** Single-series bars keep the true brand navy — no adjacent hue to separate
- *  from, and it carries strong contrast against white. */
-export const BAR_NAVY = '#062B59';
+/** Single-series bars keep the true brand violet — no adjacent hue to
+ *  separate from, and at 7.5:1 it carries strong contrast against white. */
+export const BAR_VIOLET = '#5E17EB';
 
 /** Recessive chrome. Grid and axes must never compete with the marks. */
 export const CHART_INK = {

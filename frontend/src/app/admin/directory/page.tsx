@@ -18,7 +18,7 @@ import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
 import { apiGet, errorMessage } from '@/lib/apiClient';
 import { springSurface } from '@/lib/motion';
 
-const NAVY = '#062B59';
+const VIOLET = '#5E17EB';
 
 /** Columns the table can be ordered by. */
 type SortKey = 'name' | 'unit' | 'tickets' | 'seats' | 'last';
@@ -185,7 +185,7 @@ function DirectoryScreen() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name, mobile, email, unit or division"
           aria-label="Search agents"
-          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#062B59]/40 focus:outline-none focus:ring-4 focus:ring-[#062B59]/10"
+          className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
         />
       </div>
 
@@ -340,7 +340,7 @@ function AgentRow({
             className="h-full rounded-full"
             style={{
               width: `${Math.round((agent.ticketsIssued / busiest) * 100)}%`,
-              backgroundColor: NAVY,
+              backgroundColor: VIOLET,
             }}
           />
         </div>

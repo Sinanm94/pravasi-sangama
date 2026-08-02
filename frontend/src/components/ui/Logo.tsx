@@ -13,22 +13,12 @@ import Link from 'next/link';
  * Below roughly 64px the wordmark in `full` is an illegible smudge, so
  * anything small — nav bars, footers, badges — must use `mark`. The mark file
  * is a straight crop of the same PNG (660×660 at +652+471), so the two can
- * never drift apart; regenerate it with the command in the repo README if the
- * source artwork changes.
+ * never drift apart.
  *
- * ---------------------------------------------------------------------
- * `plate` — REQUIRED on navy.
- *
- * The artwork is purple. Measured against the navy masthead, ~59% of its ink
- * sits at 1.0–1.5:1 contrast: the deep-violet and black passes disappear
- * entirely and the mark reads as broken rather than as a logo. (The previous
- * red/orange artwork measured 3.7:1 and needed no help.) On white it is
- * 8.9–13:1 and perfect.
- *
- * `plate` plants it on a small light rounded square, which is the standard
- * treatment for a dark-ink logo on a dark surface and keeps the brand colour
- * exact. Do not "fix" this by recolouring the artwork.
- * ---------------------------------------------------------------------
+ * The artwork is dark violet, so it needs a LIGHT surface behind it. That is
+ * why the mastheads are white rather than a dark band — see §5.3. It carries
+ * no plate or chip of its own; if it is ever placed on a dark surface it will
+ * disappear, and the surface is what should change.
  *
  * `unoptimized`: the source is already a compressed PNG served from /public
  * and is only ever rendered small; running it through the optimizer buys
@@ -46,14 +36,11 @@ export function Logo({
   /** Drop the home link where the surrounding surface is already a target. */
   linked = true,
   priority = false,
-  /** Light backing square. Use on any navy surface — see the note above. */
-  plate = false,
 }: {
   className?: string;
   variant?: keyof typeof SOURCES;
   linked?: boolean;
   priority?: boolean;
-  plate?: boolean;
 }) {
   const { src, box } = SOURCES[variant];
 
@@ -72,15 +59,7 @@ export function Logo({
     />
   );
 
-  const framed = plate ? (
-    <span className="inline-flex shrink-0 items-center justify-center rounded-xl bg-white p-1.5 shadow-sm ring-1 ring-black/5">
-      {image}
-    </span>
-  ) : (
-    image
-  );
-
-  if (!linked) return framed;
+  if (!linked) return image;
 
   return (
     <Link
@@ -88,7 +67,7 @@ export function Logo({
       aria-label="Pravasi Sangama 2026 — home"
       className="inline-flex shrink-0 rounded-xl transition-opacity duration-200 hover:opacity-80 focus:outline-none focus-visible:ring-4 focus-visible:ring-white/30"
     >
-      {framed}
+      {image}
     </Link>
   );
 }

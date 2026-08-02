@@ -7,10 +7,11 @@
     /* Official brand palette — CLAUDE.md §5.3.
        Montserrat is loaded via next/font in app/layout.tsx, not @import: it is
        self-hosted, so the gate PWA still renders correctly with no network. */
-    --brand-navy: #062b59;
-    --brand-navy-dark: #031f43;
-    --brand-gold: #d4af37;
-    --brand-gold-light: #f7e7b5;
+    --brand-violet: #5e17eb;
+    --brand-violet-deep: #37098c;
+    --brand-violet-dark: #2e0775;
+    --brand-amber: #ffa51f;
+    --brand-amber-light: #ffd79a;
     --brand-grey: #e6e6e6;
   }
 
@@ -33,7 +34,7 @@
 
 /**
  * Tickets are printed and saved as PDF constantly (CLAUDE.md §6.2). Without
- * these, browsers strip the navy ticket fill and print a white rectangle.
+ * these, browsers strip the violet ticket fill and print a white rectangle.
  */
 @media print {
   html,

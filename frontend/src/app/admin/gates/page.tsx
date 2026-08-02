@@ -35,7 +35,7 @@ import {
 import { inputClass } from '@/components/ui/AuthShell';
 import { springSnappy, springSurface } from '@/lib/motion';
 
-const NAVY = '#062B59';
+const VIOLET = '#5E17EB';
 
 /**
  * IMPORTANT — read before touching the PIN handling below.
@@ -358,9 +358,9 @@ function CreateGateCard({
         <div className="flex items-center gap-2.5">
           <span
             className="flex h-8 w-8 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${NAVY}12` }}
+            style={{ backgroundColor: `${VIOLET}12` }}
           >
-            <Plus className="h-4 w-4" strokeWidth={2.5} style={{ color: NAVY }} />
+            <Plus className="h-4 w-4" strokeWidth={2.5} style={{ color: VIOLET }} />
           </span>
           <p className="text-[15px] font-semibold text-gray-900">Add a gate</p>
         </div>
@@ -419,7 +419,7 @@ function CreateGateCard({
           type="submit"
           disabled={busy}
           className="mt-5 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-[13px] font-semibold uppercase tracking-[0.06em] text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-          style={{ backgroundColor: NAVY }}
+          style={{ backgroundColor: VIOLET }}
         >
           {busy ? (
             <Loader2 className="h-4 w-4 animate-spin" />

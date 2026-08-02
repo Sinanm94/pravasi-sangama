@@ -345,13 +345,13 @@ export default function ShareTicketModal({
                         if (e.key === 'Enter') void handleEmail();
                       }}
                       placeholder="name@example.com"
-                      className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#062B59]/40 focus:outline-none focus:ring-4 focus:ring-[#062B59]/10"
+                      className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
                     />
                     <button
                       type="button"
                       onClick={handleEmail}
                       disabled={!email.trim() || emailState === 'sending'}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#062B59] px-4 py-3 text-[13px] font-semibold text-white transition-all duration-200 hover:bg-[#031F43] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-[#5E17EB] px-4 py-3 text-[13px] font-semibold text-white transition-all duration-200 hover:bg-[#2E0775] active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
                     >
                       {emailState === 'sending' ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -387,7 +387,7 @@ export default function ShareTicketModal({
 
             <Option
               icon={Printer}
-              tint="bg-[#062B59]/[0.07] text-[#062B59]"
+              tint="bg-[#5E17EB]/[0.07] text-[#5E17EB]"
               label="Print / Save as PDF"
               hint="Opens the print dialog — choose Save as PDF"
               busy={busy === 'pdf'}

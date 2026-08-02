@@ -29,7 +29,7 @@ import {
   type RecentScanEntry,
 } from '@pravasi/shared';
 import {
-  BAR_NAVY,
+  BAR_VIOLET,
   CHART_INK,
   SCAN_RESULT_STYLES,
   TIER_COLORS,
@@ -277,7 +277,7 @@ export default function SuperuserDashboard({
                     {/* 4px rounded data-end, anchored to the baseline */}
                     <Bar
                       dataKey="tickets"
-                      fill={BAR_NAVY}
+                      fill={BAR_VIOLET}
                       radius={[4, 4, 0, 0]}
                       maxBarSize={56}
                     />
@@ -932,7 +932,7 @@ function DashboardUnavailable({ onRetry }: { onRetry: () => void }) {
           type="button"
           onClick={onRetry}
           className="mt-6 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-[14px] font-semibold text-white transition-all duration-200 hover:brightness-110 active:scale-[0.98]"
-          style={{ backgroundColor: '#062B59' }}
+          style={{ backgroundColor: '#5E17EB' }}
         >
           <RefreshCw className="h-4 w-4" strokeWidth={2.25} />
           Try again

@@ -23,7 +23,7 @@ import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
 import { apiGet, errorMessage } from '@/lib/apiClient';
 import { springSurface } from '@/lib/motion';
 
-const NAVY = '#062B59';
+const VIOLET = '#5E17EB';
 
 interface Filters {
   divisionId: string;
@@ -252,7 +252,7 @@ function LedgerScreen() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Name, mobile or ticket no."
-                className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#062B59]/40 focus:outline-none focus:ring-4 focus:ring-[#062B59]/10"
+                className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
               />
             </div>
           </div>
@@ -431,7 +431,7 @@ function SelectFilter({
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#062B59]/40 focus:outline-none focus:ring-4 focus:ring-[#062B59]/10"
+          className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
         >
           <option value="">{placeholder}</option>
           {options.map((o) => (
@@ -494,7 +494,7 @@ function StatCard({
           animate={{ opacity: 1 }}
           transition={springSurface}
           className="mt-4 text-[34px] font-semibold leading-none tracking-[-0.02em] tabular-nums text-gray-900"
-          style={{ color: NAVY }}
+          style={{ color: VIOLET }}
         >
           {value.toLocaleString()}
         </motion.p>

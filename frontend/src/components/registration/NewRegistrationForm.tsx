@@ -149,8 +149,8 @@ export default function NewRegistrationForm({
           </header>
 
           {/* Agent context */}
-          <section className="mt-7 rounded-2xl border-l-4 border-[#062B59] bg-[#062B59]/5 px-5 py-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#062B59]/70">
+          <section className="mt-7 rounded-2xl border-l-4 border-[#5E17EB] bg-[#5E17EB]/5 px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#5E17EB]/70">
               Issuing Agent
             </p>
             <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-3">
@@ -286,7 +286,7 @@ export default function NewRegistrationForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="mt-9 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#062B59] px-6 py-4 text-[14px] font-semibold uppercase tracking-[0.06em] text-white shadow-sm transition-all duration-200 hover:bg-[#031F43] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
+            className="mt-9 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#5E17EB] px-6 py-4 text-[14px] font-semibold uppercase tracking-[0.06em] text-white shadow-sm transition-all duration-200 hover:bg-[#2E0775] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#5E17EB]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
           >
             {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
             {isSubmitting ? 'Saving…' : 'Save Registration'}
@@ -313,7 +313,7 @@ const inputClass = (hasError: boolean) =>
     'placeholder:text-gray-400 transition-all duration-200 focus:outline-none',
     hasError
       ? 'border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-500/10'
-      : 'border-gray-200 focus:border-[#062B59]/40 focus:ring-4 focus:ring-[#062B59]/10',
+      : 'border-gray-200 focus:border-[#5E17EB]/40 focus:ring-4 focus:ring-[#5E17EB]/10',
   ].join(' ');
 
 function Field({
@@ -334,7 +334,7 @@ function Field({
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <span className="text-[13px] font-medium text-gray-700">
           {label}
-          {required && <span className="ml-0.5 text-[#062B59]">*</span>}
+          {required && <span className="ml-0.5 text-[#5E17EB]">*</span>}
         </span>
         {hint && (
           <span className="text-[12px] font-normal text-gray-400">{hint}</span>

@@ -52,7 +52,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#062B59',
+  themeColor: '#5E17EB',
   width: 'device-width',
   initialScale: 1,
   // Agents hold phones at arm's length in bright sun; pinch-zoom stays on.

@@ -25,19 +25,27 @@ const config: Config = {
         ],
       },
       colors: {
-        // Official brand palette. These are the only navy/gold values in the
-        // system — do not introduce a shade that is not listed here.
+        // Official brand palette, sampled from the event logo. These are the
+        // only violet/amber values in the system — do not introduce a shade
+        // that is not listed here.
+        //
+        // `violet` and `violet-deep` are BOTH needed and are not
+        // interchangeable. The action colour has to read on white; the ticket
+        // surface has to let amber read on IT. One value cannot do both:
+        // amber on `violet` measures 3.81:1, which fails at the 8-10px the
+        // ticket sets its eyebrows in.
         brand: {
-          navy: '#062B59', // primary — backgrounds, headers
-          'navy-dark': '#031F43', // shadows, footer, buttons, QR label block
-          gold: '#D4AF37', // accents, borders, icons
-          'gold-light': '#F7E7B5', // highlights, light accents
+          violet: '#5E17EB', // primary action — buttons, focus rings, links
+          'violet-deep': '#37098C', // dark surfaces — ticket body, bands
+          'violet-dark': '#2E0775', // deepest — caption blocks, footers
+          amber: '#FFA51F', // accents, borders, icons (on dark only)
+          'amber-light': '#FFD79A', // highlights, small text on dark violet
           grey: '#E6E6E6', // dividers, subtle lines
         },
       },
       boxShadow: {
         card: '0 8px 30px rgb(0 0 0 / 0.04)',
-        ticket: '0 20px 60px -15px rgb(6 43 89 / 0.45)',
+        ticket: '0 20px 60px -15px rgb(55 9 140 / 0.45)',
       },
     },
   },

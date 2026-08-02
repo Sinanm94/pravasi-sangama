@@ -10,7 +10,7 @@ import { springSurface } from '@/lib/motion';
 import { Logo } from '@/components/ui/Logo';
 import BrandBackdrop from '@/components/ui/BrandBackdrop';
 
-const NAVY = '#062B59';
+const VIOLET = '#5E17EB';
 
 /**
  * Chrome for every superuser screen: masthead, section nav, sign out.
@@ -69,25 +69,30 @@ export default function AdminShell({
       <BrandBackdrop />
 
       {/* Masthead */}
-      <header className="relative z-10" style={{ backgroundColor: NAVY }}>
+      {/* WHITE, not a dark band. The logo is dark violet and disappears on a
+          dark surface (§5.3); inverting the masthead is the fix, rather than
+          putting the mark on a chip. A white bar over the grey page still
+          reads as chrome because of the hairline beneath it. */}
+      <header className="relative z-10 border-b border-gray-900/[0.07] bg-white">
         <div className={`mx-auto flex ${SHELL_WIDTH} items-center justify-between gap-4 px-5 py-4 sm:px-8`}>
           {/* items-center here, not just on the outer row: it centers the
               mark against its own two-line text stack, independent of
               whatever height the sign-out button ends up being. */}
           <div className="flex min-w-0 shrink items-center gap-3">
-            {/* plate: the artwork is purple and vanishes on navy — see Logo.tsx */}
-            <Logo className="h-8 w-8" plate />
+            <Logo className="h-9 w-9" />
             <div className="min-w-0">
               {/* whitespace-nowrap so the wider tracking cannot push it onto
                   a second line, which would shove the title down and unbalance
                   the row against the sign-out button. */}
+              {/* Amber on white is 1.97:1 — unreadable, the same trap gold had
+                  (§5.3). The overline takes the violet instead. */}
               <p
                 className="whitespace-nowrap text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.28em]"
-                style={{ color: '#D4AF37' }}
+                style={{ color: VIOLET }}
               >
                 Karnataka Cultural Foundation
               </p>
-              <p className="mt-0.5 truncate text-[15px] font-semibold text-white">
+              <p className="mt-0.5 truncate text-[15px] font-semibold text-gray-900">
                 Pravasi Sangama 2026 · Administration
               </p>
             </div>
@@ -96,7 +101,7 @@ export default function AdminShell({
           <button
             type="button"
             onClick={() => void signOut()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20 hover:text-white active:scale-[0.97]"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-colors hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
           >
             <LogOut className="h-3.5 w-3.5" strokeWidth={2.25} />
             <span className="hidden sm:inline">Sign out</span>
@@ -118,7 +123,7 @@ export default function AdminShell({
                 >
                   <span
                     className={`relative z-10 inline-flex items-center gap-1.5 ${
-                      active ? 'text-white' : 'text-white/55 hover:text-white/80'
+                      active ? 'text-gray-900' : 'text-gray-500 hover:text-gray-800'
                     }`}
                   >
                     <s.icon className="h-3.5 w-3.5" strokeWidth={2.25} />
@@ -130,7 +135,7 @@ export default function AdminShell({
                       layoutId="admin-nav-underline"
                       transition={springSurface}
                       className="absolute inset-x-3 bottom-0 h-[2px] rounded-full"
-                      style={{ backgroundColor: '#D4AF37' }}
+                      style={{ backgroundColor: VIOLET }}
                     />
                   )}
                 </Link>

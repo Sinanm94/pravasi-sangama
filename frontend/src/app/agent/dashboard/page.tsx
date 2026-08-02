@@ -25,8 +25,7 @@ import { apiGet, apiPost, errorMessage } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
 
-const NAVY = '#062B59';
-const GOLD = '#D4AF37';
+const VIOLET = '#5E17EB';
 
 export default function AgentDashboardPage() {
   return (
@@ -92,25 +91,27 @@ function LedgerScreen() {
       <BrandBackdrop />
 
       {/* Masthead */}
-      <header className="relative z-10" style={{ backgroundColor: NAVY }}>
+      {/* White, matching AdminShell — the dark violet logo needs a light
+          surface behind it (§5.3). */}
+      <header className="relative z-10 border-b border-gray-900/[0.07] bg-white">
         {/* Same max-w as <main> below, so the mark lines up with the left
             edge of the cards. */}
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-4 sm:px-8">
           <div className="flex min-w-0 items-center gap-3">
-            {/* plate: the artwork is purple and vanishes on navy — see Logo.tsx */}
-            <Logo className="h-8 w-8" plate />
+            <Logo className="h-9 w-9" />
             <div className="min-w-0">
               {/* Wider tracking than Tailwind's tracking-widest (0.1em),
                   which would have been narrower than what was here. 0.28em is
                   the top of §5.2's eyebrow range. A unit name is variable
                   length, so this one truncates rather than nowraps. */}
+              {/* Amber on white is 1.97:1 — the overline takes violet. */}
               <p
                 className="truncate text-[10px] font-semibold uppercase leading-[1.4] tracking-[0.28em]"
-                style={{ color: GOLD }}
+                style={{ color: VIOLET }}
               >
                 {user?.unitName ?? 'Registration Desk'}
               </p>
-              <p className="mt-0.5 truncate text-[15px] font-semibold text-white">
+              <p className="mt-0.5 truncate text-[15px] font-semibold text-gray-900">
                 {user?.agentName ?? 'Agent'}
               </p>
             </div>
@@ -119,7 +120,7 @@ function LedgerScreen() {
           <button
             type="button"
             onClick={() => void signOut()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-white/10 px-3.5 py-2 text-[12px] font-medium text-white/80 transition-colors hover:bg-white/20 hover:text-white active:scale-[0.97]"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-colors hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
           >
             <LogOut className="h-3.5 w-3.5" strokeWidth={2.25} />
             <span className="hidden sm:inline">Sign out</span>
@@ -158,8 +159,8 @@ function LedgerScreen() {
             <button
               type="button"
               onClick={() => router.push('/ticketing')}
-              className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-[13px] font-semibold text-white transition-all duration-200 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.98]"
-              style={{ backgroundColor: NAVY }}
+              className="inline-flex items-center gap-2 rounded-2xl px-5 py-2.5 text-[13px] font-semibold text-white transition-all duration-200 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#5E17EB]/20 active:scale-[0.98]"
+              style={{ backgroundColor: VIOLET }}
             >
               <Plus className="h-4 w-4" strokeWidth={2.75} />
               New Registration
@@ -208,7 +209,7 @@ function LedgerScreen() {
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by name, mobile, ticket or request number"
             aria-label="Search your registrations"
-            className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#062B59]/40 focus:outline-none focus:ring-4 focus:ring-[#062B59]/10"
+            className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
           />
         </div>
 

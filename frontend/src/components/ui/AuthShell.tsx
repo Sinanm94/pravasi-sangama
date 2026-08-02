@@ -16,9 +16,15 @@ import BrandBackdrop from './BrandBackdrop';
  * `page.tsx`, so a route file physically cannot host shared primitives.
  */
 
-/** Official palette (§5.3). Navy is the action colour; gold accents navy. */
-export const NAVY = '#062B59';
-export const GOLD = '#D4AF37';
+/**
+ * Official palette (§5.3). Violet is the action colour; amber accents violet.
+ *
+ * VIOLET_DEEP, not VIOLET, for the card band: amber on the brighter violet is
+ * 3.81:1 and the eyebrow below is 10px. On #37098C it is 6.74:1.
+ */
+export const VIOLET = '#5E17EB';
+export const VIOLET_DEEP = '#37098C';
+export const AMBER = '#FFA51F';
 
 export function AuthShell({ children }: { children?: React.ReactNode }) {
   return (
@@ -27,29 +33,32 @@ export function AuthShell({ children }: { children?: React.ReactNode }) {
       {/* relative + z-10: the backdrop is z-0, so every card must sit above
           it or the washes would render over the form. */}
       <div className="relative z-10 w-full max-w-sm">
-        {/* Above the card, on the page background — not inside the navy
+        {/* Above the card, on the page background — not inside the violet
             band, which already carries the KCF wordmark and would double up.
             Margin lives on the Logo itself (not this wrapper) so there is
             only one mb-6 in play — stacking one on each would double the gap
             above the card, since margin on a flex item still adds to the
             wrapper's own auto height. */}
         <div className="flex justify-center">
-          {/* The MARK, not the full lockup: the navy band directly below
+          {/* The MARK, not the full lockup: the violet band directly below
               already spells out "Pravasi Sangama 2026" in type, and the
               lockup would print the same words a second time 40px above it. */}
           <Logo variant="mark" className="mb-6 h-24 w-24" priority />
         </div>
 
         <div className="overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
-          {/* Gold at 10px on white measures ~2:1 contrast. On navy it is the
-              brand's own pairing and fully legible, so the accent lives here. */}
+          {/* Amber at 10px on white measures ~2:1. On deep violet it is the
+              brand's own pairing and fully legible, so the accent lives here.
+              The band stays coloured rather than going white: no logo sits in
+              it, so there is no contrast problem to solve, and a white band
+              would leave the whole card colourless. */}
           <div
             className="px-7 pb-6 pt-7 text-center"
-            style={{ backgroundColor: NAVY }}
+            style={{ backgroundColor: VIOLET_DEEP }}
           >
             <p
               className="text-[10px] font-semibold uppercase tracking-[0.28em]"
-              style={{ color: GOLD }}
+              style={{ color: AMBER }}
             >
               Karnataka Cultural Foundation
             </p>
@@ -59,7 +68,7 @@ export function AuthShell({ children }: { children?: React.ReactNode }) {
             <span
               aria-hidden
               className="mx-auto mt-4 block h-px w-14"
-              style={{ backgroundColor: GOLD }}
+              style={{ backgroundColor: AMBER }}
             />
           </div>
 
@@ -83,9 +92,9 @@ export function AuthHeader({
     <div className="flex items-start gap-3 pb-1">
       <span
         className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${NAVY}12` }}
+        style={{ backgroundColor: `${VIOLET}12` }}
       >
-        <Icon className="h-4 w-4" strokeWidth={2.25} style={{ color: NAVY }} />
+        <Icon className="h-4 w-4" strokeWidth={2.25} style={{ color: VIOLET }} />
       </span>
       <div className="min-w-0">
         <p className="text-[15px] font-semibold text-gray-900">{title}</p>
@@ -105,7 +114,7 @@ export const inputClass = (hasError: boolean) =>
     'placeholder:text-gray-400 transition-all duration-200 focus:outline-none',
     hasError
       ? 'border-red-300 focus:border-red-400 focus:ring-4 focus:ring-red-500/10'
-      : 'border-gray-200 focus:border-[#062B59]/40 focus:ring-4 focus:ring-[#062B59]/10',
+      : 'border-gray-200 focus:border-[#5E17EB]/40 focus:ring-4 focus:ring-[#5E17EB]/10',
   ].join(' ');
 
 type FieldProps = {
@@ -254,7 +263,7 @@ function FieldLabel({
       <span className="text-[13px] font-medium text-gray-700">
         {label}
         {required && (
-          <span className="ml-0.5" style={{ color: NAVY }}>
+          <span className="ml-0.5" style={{ color: VIOLET }}>
             *
           </span>
         )}
@@ -299,8 +308,8 @@ export function Submit({
     <button
       type="submit"
       disabled={busy}
-      className="flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-[14px] font-semibold uppercase tracking-[0.06em] text-white transition-all duration-200 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#062B59]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
-      style={{ backgroundColor: NAVY }}
+      className="flex w-full items-center justify-center gap-2 rounded-2xl px-6 py-4 text-[14px] font-semibold uppercase tracking-[0.06em] text-white transition-all duration-200 hover:brightness-110 focus:outline-none focus-visible:ring-4 focus-visible:ring-[#5E17EB]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 disabled:active:scale-100"
+      style={{ backgroundColor: VIOLET }}
     >
       {busy && <Loader2 className="h-4 w-4 animate-spin" />}
       {busy ? busyLabel : children}

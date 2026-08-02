@@ -1,7 +1,7 @@
-const GOLD = '#D4AF37';
+const AMBER = '#FFA51F';
 
 /**
- * Decorative gold ornament for the empty page background.
+ * Decorative amber ornament for the empty page background.
  *
  * THREE LAYERS, none of them a coloured blob:
  *
@@ -24,7 +24,7 @@ const GOLD = '#D4AF37';
  *   - `fixed`, so a long ledger scrolls over a stationary field rather than
  *     dragging a repeating pattern with it.
  *
- * §5.3 bans gold on a light surface as TEXT OR AN ACTION — a contrast rule
+ * §5.3 bans amber on a light surface as TEXT OR AN ACTION — a contrast rule
  * about 10–11px type. None of this is type or a control.
  */
 export default function BrandBackdrop() {
@@ -39,7 +39,7 @@ export default function BrandBackdrop() {
       <div
         className="absolute inset-0"
         style={{
-          background: `linear-gradient(135deg, ${GOLD}1F 0%, ${GOLD}0D 26%, transparent 58%)`,
+          background: `linear-gradient(135deg, ${AMBER}1F 0%, ${AMBER}0D 26%, transparent 58%)`,
         }}
       />
 
@@ -50,7 +50,7 @@ export default function BrandBackdrop() {
       <div
         className="absolute inset-0"
         style={{
-          backgroundImage: `radial-gradient(${GOLD}80 1px, transparent 1px)`,
+          backgroundImage: `radial-gradient(${AMBER}80 1px, transparent 1px)`,
           backgroundSize: '22px 22px',
           maskImage:
             'radial-gradient(ellipse 62% 62% at 50% 46%, transparent 38%, #000 100%)',
@@ -72,7 +72,7 @@ export default function BrandBackdrop() {
           cx="50"
           cy="50"
           r="46"
-          stroke={GOLD}
+          stroke={AMBER}
           strokeOpacity="0.32"
           strokeWidth="0.18"
           vectorEffect="non-scaling-stroke"
@@ -81,7 +81,7 @@ export default function BrandBackdrop() {
           cx="50"
           cy="50"
           r="37"
-          stroke={GOLD}
+          stroke={AMBER}
           strokeOpacity="0.20"
           strokeWidth="0.14"
           vectorEffect="non-scaling-stroke"
@@ -97,7 +97,7 @@ export default function BrandBackdrop() {
           cx="50"
           cy="50"
           r="46"
-          stroke={GOLD}
+          stroke={AMBER}
           strokeOpacity="0.30"
           strokeWidth="0.18"
           vectorEffect="non-scaling-stroke"
@@ -106,7 +106,7 @@ export default function BrandBackdrop() {
           cx="50"
           cy="50"
           r="35"
-          stroke={GOLD}
+          stroke={AMBER}
           strokeOpacity="0.18"
           strokeWidth="0.14"
           vectorEffect="non-scaling-stroke"

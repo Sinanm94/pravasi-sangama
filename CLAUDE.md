@@ -272,63 +272,63 @@ contrast is most of the "Apple" feel.
 
 ### 5.3 Brand palette — official
 
-These five values are the brand. Do not introduce a navy or gold shade that is
+Sampled from the event logo. Do not introduce a violet or amber shade that is
 not on this list.
 
-| Token       | Hex       | Use                                                          |
-| ----------- | --------- | ------------------------------------------------------------ |
-| Navy Blue   | `#062B59` | Primary. Ticket surface, headers, QR panel borders, QR fill   |
-| Navy Dark   | `#031F43` | Shadows, footer, buttons, QR caption block, date box          |
-| Gold        | `#D4AF37` | Accents, borders, icons, diamonds, hex badge                  |
-| Light Gold  | `#F7E7B5` | Highlights, light accents, badge inner hairline               |
-| Light Grey  | `#E6E6E6` | Dividers, subtle lines                                        |
+| Token         | Hex       | Use                                                        |
+| ------------- | --------- | ---------------------------------------------------------- |
+| Violet        | `#5E17EB` | **Primary action.** Buttons, focus rings, links, active states |
+| Violet Deep   | `#37098C` | Dark surfaces — the ticket body, the login card's band      |
+| Violet Dark   | `#2E0775` | Deepest — QR caption blocks, date box, ticket footer        |
+| Amber         | `#FFA51F` | Accents, borders, icons, diamonds (on dark violet only)     |
+| Amber Light   | `#FFD79A` | Highlights, small text on dark violet                       |
+| Light Grey    | `#E6E6E6` | Dividers, subtle lines                                      |
 
-Available as `brand-navy`, `brand-navy-dark`, `brand-gold`, `brand-gold-light`,
-`brand-grey` in Tailwind, and as `--brand-*` custom properties in `globals.css`.
+Available as `brand-violet`, `brand-violet-deep`, `brand-violet-dark`,
+`brand-amber`, `brand-amber-light`, `brand-grey` in Tailwind, and as
+`--brand-*` custom properties in `globals.css`.
 
 Rules:
 
-- **Navy `#062B59` is the single action colour**, everywhere. Primary buttons,
-  focus rings, required-field markers, links, active borders. There is no
-  second action colour.
-- **Button hover/press is Navy Dark `#031F43`.** Never a lightened navy.
-- **Gold only appears on navy surfaces.** At 10–11px on white it measures
-  roughly 2:1 contrast and is unreadable. On navy it is the brand's own
-  pairing and fully legible. Use it for eyebrow text, hairline rules, badges,
-  diamonds, and icon accents *over navy* — never as text or an action on a
-  white or grey surface.
-
-  > **One deliberate exception: `components/ui/BrandBackdrop.tsx`.** That is a
-  > legibility rule about *type and controls*. The backdrop is neither — it is
-  > an `aria-hidden`, `pointer-events-none`, `print:hidden` layer behind the
-  > content.
-  >
-  > It is built from a masked dot lattice, hairline arcs and one flat diagonal
-  > gradient — **not** soft radial washes. Those were tried at four strengths
-  > and read as stains at every one of them: too faint to see, or obviously
-  > like a spill, with nothing usable in between. On a light surface ornament
-  > has to come from texture and line work; a blurred coloured circle always
-  > looks like a mistake. Judge any change by looking at it, not by measuring
-  > the pixel delta — that measurement misled twice.
-
-- **Light Gold `#F7E7B5`** is for inner detail on navy (badge hairlines,
-  secondary ornament), not for fills.
+- **Violet `#5E17EB` is the single action colour**, everywhere. Primary
+  buttons, focus rings, required-field markers, links, active borders. There
+  is no second action colour. It measures 7.5:1 on white.
+- **`#5E17EB` and `#37098C` are not interchangeable, and one value cannot
+  replace both.** The action colour has to read on white; the ticket surface
+  has to let *amber* read on it. Amber on `#5E17EB` is 3.81:1 — fine for
+  display type, failing at the 8–10px the ticket sets its eyebrows in. On
+  `#37098C` it is 6.74:1, and white on it is 13.3:1.
+- **Amber only appears on dark violet.** On white it measures 1.97:1 and is
+  unreadable — the same trap the previous gold had at 2.10:1. Use it for
+  eyebrow text, hairline rules, badges, diamonds and icon accents *over deep
+  violet* — never as text or an action on a white or grey surface.
+- **Mastheads are white, not a dark band.** The logo artwork is dark violet
+  and disappears on a dark surface (~59% of its ink measures 1.0–1.5:1 on the
+  old navy). Inverting the masthead is the fix; do not put the mark on a
+  white chip, and do not recolour supplied artwork.
+- On a white masthead the overline takes **violet**, not amber, for the same
+  1.97:1 reason.
 - Brand colours are **accents in the app shell**, and **the entire surface on
-  the ticket**. Do not navy-wash the dashboard.
-- Inside the ticket, apply brand colours via inline `style` with the `NAVY` /
-  `NAVY_DARK` / `GOLD` / `GOLD_LIGHT` / `GREY_LIGHT` constants — not Tailwind
-  arbitrary classes. Reason: gold is used at multiple alphas (`33`, `55`, full),
-  and inline styles survive print/PDF/email rendering far more reliably than
+  the ticket**. Do not violet-wash the dashboard.
+- Inside the ticket, apply brand colours via inline `style` with the `VIOLET` /
+  `VIOLET_DARK` / `AMBER` / `AMBER_LIGHT` constants — not Tailwind arbitrary
+  classes. Reason: amber is used at multiple alphas (`33`, `55`, full), and
+  inline styles survive print/PDF/email rendering far more reliably than
   generated utility classes.
 - **Semantic colours are exempt and universal.** Emerald = admitted/success,
-  amber = duplicate/pending, red = invalid/error. These are never re-themed to
-  brand colours — a gate agent reads them pre-linguistically.
+  amber-600 = duplicate/pending, red = invalid/error. These are never
+  re-themed to brand colours — a gate agent reads them pre-linguistically.
+  Note the semantic amber is Tailwind's, not `brand-amber`; they are different
+  values doing different jobs.
 - The dashboard chart palette is a **separate, validated set** in
-  `components/charts/chartTheme.ts`. Brand navy and navy-dark fail a
-  categorical palette audit on a white surface; do not substitute them there.
+  `components/charts/chartTheme.ts`. It is deliberately independent of the
+  brand and was audited for categorical distinction on white — do not
+  substitute brand violet into it beyond `BAR_VIOLET`, which is the
+  single-series bar and has no adjacent hue to separate from.
 
-> **There is no maroon in this system.** `#800000` was retired from both the
-> ticket and the app shell. If it reappears in a diff, it is a regression.
+> **There is no navy or gold in this system.** `#062B59` and `#D4AF37` were
+> the palette before the logo changed. If either reappears in a diff, it is a
+> regression. (`#800000` maroon was retired even earlier.)
 
 ### 5.3.1 Typography — Montserrat
 
@@ -346,7 +346,7 @@ tightening and a wide soft ring — this approximates the macOS focus glow, whic
 single ring cannot:
 
 ```
-focus:border-[#062B59]/40 focus:ring-4 focus:ring-[#062B59]/10
+focus:border-[#5E17EB]/40 focus:ring-4 focus:ring-[#5E17EB]/10
 ```
 
 Error state swaps the hue, never the structure:
@@ -395,7 +395,7 @@ Tickets are printed and saved as PDF constantly. Every ticket-bearing screen mus
 - Neutralize mobile layout hacks for print: `print:min-w-0`,
   `print:overflow-visible`, `print:shadow-none`.
 - `globals.css` must carry `-webkit-print-color-adjust: exact;` and
-  `print-color-adjust: exact;` — without it browsers strip the navy ticket fill
+  `print-color-adjust: exact;` — without it browsers strip the violet ticket fill
   and print a white rectangle.
 
 ### 6.3 Defensive UI fallbacks
