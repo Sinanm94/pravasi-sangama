@@ -50,10 +50,19 @@ const GATES = [
 ] as const;
 
 /* No PIN: units stopped being an authentication factor in §3.2, and
- * migration 004 dropped access_code_hash. A unit is a posting, not a login. */
+ * migration 004 dropped access_code_hash. A unit is a posting, not a login.
+ *
+ * Codes are DEV-prefixed on purpose. The originals (5BUILDING, DEERA) shared
+ * a namespace with the real production roster provisioned by
+ * provision-unit-admins.ts (BAT01 = 5 Building, BAT04 = Deera in the same
+ * BATHA sector) — db:seed got run against production once, and the two
+ * ended up coexisting as duplicate phantom locations in the signup picker
+ * until migration 006 retired them. A dev fixture and a real unit must never
+ * be able to collide on unit_code again; the prefix is what guarantees that,
+ * not discipline about when db:seed gets run. */
 const UNITS = [
-  { unit_code: '5BUILDING', name: '5 Building', sector: 'BATHA' },
-  { unit_code: 'DEERA', name: 'Deera', sector: 'BATHA' },
+  { unit_code: 'DEV5BUILDING', name: '5 Building (Dev)', sector: 'BATHA' },
+  { unit_code: 'DEVDEERA', name: 'Deera (Dev)', sector: 'BATHA' },
 ] as const;
 
 const AGENTS = [
@@ -62,21 +71,21 @@ const AGENTS = [
     name: 'Rajesh Nair',
     email: 'rajesh.nair@example.com',
     password: 'agent1234',
-    unit_code: '5BUILDING',
+    unit_code: 'DEV5BUILDING',
   },
   {
     mobile_number: '8888999956',
     name: 'Suma Bhat',
     email: 'suma.bhat@example.com',
     password: 'agent1234',
-    unit_code: '5BUILDING',
+    unit_code: 'DEV5BUILDING',
   },
   {
     mobile_number: '8888999957',
     name: 'Praveen Shetty',
     email: 'praveen.shetty@example.com',
     password: 'agent1234',
-    unit_code: 'DEERA',
+    unit_code: 'DEVDEERA',
   },
 ] as const;
 
