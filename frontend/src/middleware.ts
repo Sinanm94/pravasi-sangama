@@ -39,6 +39,8 @@ const ROUTE_ROLES: Array<{ prefix: string; allow: AuthRole[] }> = [
   // The agent's own ledger. Same role as /ticketing; a separate prefix
   // because the URL is not nested under it.
   { prefix: '/agent', allow: ['AGENT'] },
+  // A unit admin's own approvals screen — scoped to one unit, nothing else.
+  { prefix: '/unit', allow: ['UNIT_ADMIN'] },
   // Agents scan between registrations; gate accounts do nothing else.
   { prefix: '/scanner', allow: ['AGENT', 'SCANNER'] },
 ];
@@ -108,6 +110,7 @@ export function middleware(req: NextRequest) {
 export function homeFor(role: AuthRole): string {
   if (role === 'SUPERUSER') return '/dashboard';
   if (role === 'AGENT') return '/agent/dashboard';
+  if (role === 'UNIT_ADMIN') return '/unit/dashboard';
   // A gate session can only scan — there is nowhere else for it to go.
   if (role === 'SCANNER') return '/scanner';
   return '/login';
@@ -120,6 +123,7 @@ export const config = {
     '/admin/:path*',
     '/ticketing/:path*',
     '/agent/:path*',
+    '/unit/:path*',
     '/scanner/:path*',
   ],
 };

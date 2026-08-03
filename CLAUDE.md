@@ -24,7 +24,7 @@ gate staff scan QR codes; a superuser watches the whole thing live.
 
 ---
 
-## 2. System Architecture — Four Roles
+## 2. System Architecture — Five Roles
 
 The hierarchy is strictly nested. Every ticket traces back to exactly one agent,
 who belongs to exactly one unit, inside exactly one division.
@@ -33,6 +33,7 @@ who belongs to exactly one unit, inside exactly one division.
 Superuser
    └── Division (District)
           └── Unit (Location / venue-adjacent posting)
+                 ├── Unit Admin (approves agents for this unit only)
                  └── Agent (human, identified by mobile number)
 ```
 
@@ -48,13 +49,23 @@ sector `BATHA`). A unit is the *scope* every agent token carries, and every
 ticket is written against it. It is no longer an authentication factor: units
 stopped being a login step in §3.2.
 
+**Unit Admin** (migration 005) — Decentralises agent approval. A named person's
+account, scoped to exactly one unit, whose only capability is approving or
+rejecting agent registrations posted to that unit — no analytics, no ticket
+ledger, no CRUD. Exists to remove the superuser as the sole approval bottleneck
+across 30+ locations run by non-technical volunteers. See §3.3.
+
 **Agent** — The human issuing tickets. Assigned to one unit. Identified by mobile
 number. Cannot access analytics, cannot edit or revoke issued tickets, and can
 only see registrations made from their own unit.
 
 > **Rule:** authorization is always evaluated bottom-up from the token's
 > `unitId` → `divisionId`. Never trust a client-supplied division or unit id on a
-> write path.
+> write path. A Unit Admin's approval endpoint enforces this as a SQL predicate
+> keyed on the caller's own `unit_admins.id` — its direct `unit_id` **or**
+> anything it covers via `supervisor_unit_assignments` (migration 007, §3.3) —
+> not an application-level check a reviewer could miss. See
+> `admin.repository.decideAgent`'s `restrictToAdminId`.
 
 ---
 
@@ -120,6 +131,86 @@ backend (route, controller, service, `findUnitsByCode`, `createUnitSession`,
 reads it. Reinstating location authentication means writing the endpoint
 again, not flipping a flag — which is the honest state of affairs, not an
 oversight.
+
+### 3.3 Unit Admin login — decentralised approvals (migrations 005, 007)
+
+Route: `/login` → "Unit admin sign in". Single step: **Unit ID** (e.g. `BAT01`)
++ **password**, same shape as superuser login, against a dedicated
+`unit_admins` table — not a repurposed `agents` row and not a reinstatement of
+§3.2's deleted unit-login. That flow authenticated a *location* so an unnamed
+person could unlock it; a `unit_admins` row is a *named person's* account,
+same idea as `superusers`, just scoped to a subtree instead of the whole
+system. The two are unrelated despite both saying "unit".
+
+**Scope is two things, unioned: `unit_admins.unit_id` (nullable, single unit)
+and `supervisor_unit_assignments` (migration 007, many-to-many).** The 30
+location admins use only the first — one row, one unit, same as the original
+design. A **Zone Supervisor** uses the second: no direct `unit_id`, instead
+one row per unit it covers in `supervisor_unit_assignments(admin_id, unit_id)`.
+The two are not exclusive — an admin can have both a direct posting and zone
+coverage — and both `unit-admin.repository.listAgentsForAdmin` and
+`admin.repository.decideAgent`'s `restrictToAdminId` resolve the full union in
+a single SQL predicate keyed on the caller's own `unit_admins.id`, so a row
+outside *either* half of the scope matches zero rows at the database level,
+not "filtered out after the fact." An account with neither a `unit_id` nor any
+assignment row can still sign in — a real, expected state for a freshly
+provisioned account, not an error — but every approvals query naturally
+returns empty (nothing to union), and the dashboard renders an explicit
+**"No unit assigned yet"** screen rather than guessing a scope or showing
+everything.
+
+**The dashboard (`/unit/dashboard`) is deliberately not `AdminShell`.** No nav
+rail, no analytics, no ticket ledger — one screen, one job, for a volunteer who
+may never have used the rest of the system. Pending agents get two buttons
+sized to be unmissable on a phone in daylight; approved agents are a plain
+read-only list underneath. There is nothing else on the screen to navigate to.
+
+**Superuser retains unrestricted approval**, unchanged — `admin.repository
+.decideAgent` called from `/admin/approvals` passes no `restrictToAdminId`,
+which is what §2's "ultimate authority" means concretely. A superuser
+overriding a unit admin's queue needs no special path; it is the same
+endpoint it always was.
+
+**Provisioning is a dedicated script, not `db:seed`:**
+
+```bash
+npm run db:provision-units -w @pravasi/backend
+```
+
+`backend/src/db/provision-unit-admins.ts` creates the 30 real units, 33
+`unit_admins` rows (one per unit, plus the 3 Zone Supervisor accounts), and
+now also the Zone Supervisors' `supervisor_unit_assignments` rows. Unlike
+`db:seed` it has **no `NODE_ENV` guard** — this is real event data, meant to
+run once against production, not disposable dev fixtures — but it *is*
+idempotent, safe to re-run.
+
+> ⚠ **The 33 passwords are short, guessable (`<code>PW`), and committed to
+> that file in plaintext.** That trade mirrors gate PINs (§2, Option A) —
+> volunteers, no password manager — and is not a reason to skip rotation.
+> Rotate every one before the event:
+>
+> ```bash
+> npm run db:rotate -w @pravasi/backend -- audit-unit-admins   # who's still exposed
+> npm run db:rotate -w @pravasi/backend -- unit-admin BAT01    # one at a time
+> ```
+
+**Resolved: Zone Supervisor coverage uses the mapping table (Option B),
+seeded with a placeholder split — replace before the event.** The 3 accounts
+(`ZON01`–`ZON03`) stay unscoped on `unit_admins.unit_id` (`NULL`) and instead
+get rows in `supervisor_unit_assignments`, seeded by `provision-unit-admins.ts`
+as `UNITS` chunked into three groups of ten **in array declaration order**
+(`UNITS[0..9]` → `ZON01`, `[10..19]` → `ZON02`, `[20..29]` → `ZON03`). This is
+explicitly **not** a geographic assignment — nobody has specified which
+sectors each supervisor should actually cover — it exists purely so every
+zone dashboard is populated and testable out of the box. Replace it with the
+real split once decided: delete the stale rows for a zone from
+`supervisor_unit_assignments` and insert the correct set (direct SQL, or edit
+the chunking in `provision-unit-admins.ts` and re-run — the insert is
+`ON CONFLICT (admin_id, unit_id) DO NOTHING`, so a rerun only adds, never
+removes; removal of an incorrect assignment is manual by design, the same way
+a wrongly-approved agent isn't auto-corrected either). A supervisor can also
+be given a direct `unit_id` posting on top of its zone rows — the two
+mechanisms compose.
 
 ---
 
@@ -480,16 +571,29 @@ pravasi-sangama/
   routing layers. **Neither is an authorization boundary** — see §11.
 - `frontend/src/app/` — `/login`, `/dashboard`, `/ticketing`, `/scanner`,
   `/agent/dashboard` (agent ledger), `/admin/approvals`, `/admin/directory`,
-  `/admin/tickets` (master ledger), `/admin/gates`.
+  `/admin/tickets` (master ledger), `/admin/gates`, `/unit/dashboard` (unit
+  admin's own approvals — §3.3).
 - `backend/src/modules/admin/` — approvals, gates, agent directory, and the
   master ticket ledger (`GET /api/admin/tickets` + `/filter-options`).
   Ledger totals are a SQL aggregate over the whole filtered set, deliberately
   not a sum of the returned rows — the row list is capped and would
   under-report. Both queries share one parameterised WHERE builder so the
   summary cards can never describe a different set than the table.
+- `backend/src/modules/unit-admin/` — a unit admin's own approvals queue
+  (§3.3). Reuses `admin.repository.decideAgent`/`writeAudit` rather than a
+  parallel implementation of the race-safe UPDATE (§10.2's "the row is the
+  lock" applies here too), passing its own admin id as `restrictToAdminId`
+  and letting the SQL resolve direct unit + zone-assignment scope as a union.
+- `backend/src/db/provision-unit-admins.ts` — one-time provisioning for the
+  Unit Admin tier (30 units, 33 accounts, plus a placeholder 10/10/10 zone
+  split into `supervisor_unit_assignments`). Not `db:seed`: real production
+  data, no `NODE_ENV` guard, but idempotent. Run once, then rotate every
+  password — see §3.3.
 
 **Not yet built:** divisions/units/agents CRUD, ticket revocation, real QR
-encoding, `gate:offline` heartbeat.
+encoding, `gate:offline` heartbeat, a superuser UI for editing zone coverage
+(direct SQL against `supervisor_unit_assignments` only — see §3.3), replacing
+the placeholder 10/10/10 zone split with the real geographic assignment.
 
 ---
 
@@ -509,8 +613,9 @@ properly, and redirects on mismatch. It also covers client-side navigations.
 Do not add a check to the frontend and consider a route secured.
 
 Route groups (`(admin)`, `(agent)`) produce **no URL segment**. The live paths
-are `/dashboard`, `/ticketing`, `/scanner`, and `middleware.ts` matches those
-literal paths — adding a page means adding it to `ROUTE_ROLES` *and* `matcher`.
+are `/dashboard`, `/ticketing`, `/scanner`, `/agent`, `/unit`, and
+`middleware.ts` matches those literal paths — adding a page means adding it to
+`ROUTE_ROLES` *and* `matcher`.
 
 Sharing `JWT_SECRET` with Next to verify in middleware was rejected: it would
 let the web tier mint tokens, which is a worse trade than an empty shell.

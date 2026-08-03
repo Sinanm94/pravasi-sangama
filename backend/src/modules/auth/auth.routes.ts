@@ -57,5 +57,12 @@ authRoutes.get('/gates', controller.publicGates);
 /* --- Superuser (spec §4) — there is deliberately no signup route -- */
 authRoutes.post('/superuser-login', loginLimiter, controller.superuserLogin);
 
+/* --- Unit admin (§2) — decentralised approvals, no signup route --- */
+authRoutes.post(
+  '/unit-admin-login',
+  loginLimiter,
+  controller.unitAdminLogin,
+);
+
 authRoutes.get('/session', controller.currentSession);
 authRoutes.post('/logout', controller.logout);

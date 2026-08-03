@@ -142,17 +142,22 @@ export function qrCodePlanFor(
 /* Roles                                                               */
 /* ------------------------------------------------------------------ */
 
-export const AUTH_ROLES = ['AGENT', 'SCANNER', 'SUPERUSER'] as const;
+export const AUTH_ROLES = ['AGENT', 'SCANNER', 'SUPERUSER', 'UNIT_ADMIN'] as const;
 /**
  * SCANNER — a gate, not a person. Verifies codes; cannot issue anything.
  *
+ * UNIT_ADMIN — approves/rejects agent registrations for ONE unit only.
+ * Decentralises the approval bottleneck at SUPERUSER; a superuser still
+ * retains unrestricted approval across every unit (§2).
+ *
  * There is no UNIT_PENDING: agent login is a single step and mints a full
- * AGENT token directly (§3.2).
+ * AGENT token directly (§3.2). UNIT_ADMIN is unrelated to that deleted
+ * flow — it authenticates a person, not a location. See migration 005.
  */
 export type AuthRole = (typeof AUTH_ROLES)[number];
 
 /** Persisted `user_role` enum — same set, named for the database. */
-export const USER_ROLES = ['SUPERUSER', 'AGENT', 'SCANNER'] as const;
+export const USER_ROLES = ['SUPERUSER', 'AGENT', 'SCANNER', 'UNIT_ADMIN'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 export const APPROVAL_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'] as const;

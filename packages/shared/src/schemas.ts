@@ -48,6 +48,25 @@ export const SuperuserLoginSchema = z.object({
 export type SuperuserLoginInput = z.infer<typeof SuperuserLoginSchema>;
 
 /* ------------------------------------------------------------------ */
+/* Auth — unit admin (decentralised approvals)                         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The login field is labelled "Unit ID" in the UI (e.g. `BAT01`) but wired
+ * as `username` — same field name as SuperuserLoginSchema, same table shape
+ * (unit_admins mirrors superusers). Not `.min(8)` like the superuser
+ * password: these accounts are provisioned in bulk with short fixed
+ * passwords (e.g. `BAT01PW`) for non-technical volunteers, matching the
+ * gate-PIN trade-off already made in §3.2.
+ */
+export const UnitAdminLoginSchema = z.object({
+  username: z.string().trim().min(1, 'Enter your Unit ID').max(64),
+  password: z.string().min(4, 'Password is required').max(128),
+});
+
+export type UnitAdminLoginInput = z.infer<typeof UnitAdminLoginSchema>;
+
+/* ------------------------------------------------------------------ */
 /* Agent self-registration (spec §3)                                   */
 /* ------------------------------------------------------------------ */
 

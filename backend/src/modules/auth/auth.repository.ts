@@ -76,6 +76,82 @@ export async function touchSuperuserLogin(id: string): Promise<void> {
   await query(`UPDATE superusers SET last_login_at = NOW() WHERE id = $1`, [id]);
 }
 
+/* ================================================================== */
+/* Unit admin (decentralised approvals, migration 005)                 */
+/* ================================================================== */
+
+export interface UnitAdminRow {
+  id: string;
+  username: string;
+  password_hash: string;
+  name: string;
+  is_active: boolean;
+  /** Null for an unscoped ("zone") account — see UnitAdminClaims. */
+  unit_id: string | null;
+}
+
+export async function findUnitAdminByUsername(
+  username: string,
+): Promise<UnitAdminRow | null> {
+  const { rows } = await query<UnitAdminRow>(
+    `SELECT id, username, password_hash, name, is_active, unit_id
+       FROM unit_admins
+      WHERE LOWER(username) = LOWER($1)
+      LIMIT 1`,
+    [username],
+  );
+  return rows[0] ?? null;
+}
+
+export async function touchUnitAdminLogin(id: string): Promise<void> {
+  await query(`UPDATE unit_admins SET last_login_at = NOW() WHERE id = $1`, [id]);
+}
+
+/** Re-read on every session describe, so a deactivated account or a unit
+ *  reassignment takes effect on the next request rather than at token expiry —
+ *  same reasoning as findLiveGateSession. */
+export async function findActiveUnitAdminById(
+  id: string,
+): Promise<UnitAdminRow | null> {
+  const { rows } = await query<UnitAdminRow>(
+    `SELECT id, username, password_hash, name, is_active, unit_id
+       FROM unit_admins
+      WHERE id = $1 AND is_active`,
+    [id],
+  );
+  return rows[0] ?? null;
+}
+
+export interface UnitAdminUnitRow {
+  unit_id: string;
+  unit_code: string;
+  unit_name: string;
+  unit_sector: string | null;
+  division_id: string;
+  division_name: string;
+  division_code: string;
+}
+
+/** Only called when unit_id is known non-null — see describeSession. */
+export async function loadUnitAdminUnit(
+  unitId: string,
+): Promise<UnitAdminUnitRow | null> {
+  const { rows } = await query<UnitAdminUnitRow>(
+    `SELECT u.id            AS unit_id,
+            u.unit_code,
+            u.name          AS unit_name,
+            u.sector        AS unit_sector,
+            d.id            AS division_id,
+            d.name          AS division_name,
+            d.code          AS division_code
+       FROM units u
+       JOIN divisions d ON d.id = u.division_id
+      WHERE u.id = $1`,
+    [unitId],
+  );
+  return rows[0] ?? null;
+}
+
 /**
  * A session created and bound to its agent in one insert.
  *
@@ -392,7 +468,7 @@ export async function revokeGateSession(sessionId: string): Promise<void> {
 }
 
 export async function writeAudit(params: {
-  actorRole: 'SUPERUSER' | 'AGENT' | null;
+  actorRole: 'SUPERUSER' | 'AGENT' | 'UNIT_ADMIN' | null;
   actorId: string | null;
   action: string;
   entityType?: string | null;

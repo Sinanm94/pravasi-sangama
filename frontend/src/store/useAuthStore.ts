@@ -32,6 +32,10 @@ export interface SessionUser {
   gateId?: string;
   gateCode?: string;
   gateName?: string;
+  /** UNIT_ADMIN sessions only. `unitName` above carries the unit when the
+   *  account is scoped — absent when it is not (a "zone" account). */
+  unitAdminId?: string;
+  unitAdminName?: string;
 }
 
 type HydrationStatus = 'idle' | 'loading' | 'ready';
@@ -72,6 +76,8 @@ function toUser(session: SessionResponse): SessionUser {
     gateId: session.gate?.id,
     gateCode: session.gate?.gateCode,
     gateName: session.gate?.name,
+    unitAdminId: session.unitAdmin?.id,
+    unitAdminName: session.unitAdmin?.name,
   };
 }
 

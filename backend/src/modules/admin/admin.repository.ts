@@ -37,20 +37,42 @@ export async function listAgentsByStatus(
 /**
  * Decides a pending registration.
  *
- * `approval_status = 'PENDING'` is the guard: two superusers acting on the
+ * `approval_status = 'PENDING'` is the guard: two approvers acting on the
  * same row means exactly one UPDATE matches, so an approval cannot silently
  * overwrite a rejection made a second earlier.
+ *
+ * `restrictToAdminId` is how a UNIT_ADMIN's scope is enforced — as a SQL
+ * predicate, not an app-level "if" a reviewer could miss. It is the admin's
+ * own id, not a unit id: a unit_admin's scope is now the UNION of its own
+ * `unit_admins.unit_id` (may be NULL) and every `unit_id` it has been handed
+ * via `supervisor_unit_assignments` (a zone supervisor covering several
+ * units — see migration 007). Resolving that inside the same UPDATE, rather
+ * than precomputing a unit id list in the app, keeps the scope check
+ * atomic with the decision — no separate lookup that could go stale between
+ * "what units do I cover" and "commit the approval". Passing an admin id
+ * that ends up covering zero matching units behaves exactly like a row that
+ * was already decided; the controller cannot tell the two apart, which is
+ * correct — neither is any of that caller's business. A superuser call
+ * leaves this undefined and is unrestricted, per §2's "ultimate authority".
  */
 export async function decideAgent(params: {
   agentId: string;
   decision: 'APPROVED' | 'REJECTED';
-  superuserId: string;
+  approvedBy: string;
+  approvedByRole: 'SUPERUSER' | 'UNIT_ADMIN';
   reason?: string | null;
-}): Promise<{ id: string; name: string; email: string | null } | null> {
+  restrictToAdminId?: string;
+}): Promise<{
+  id: string;
+  name: string;
+  email: string | null;
+  unit_id: string;
+} | null> {
   const { rows } = await query<{
     id: string;
     name: string;
     email: string | null;
+    unit_id: string;
   }>(
     /*
      * Both uses of $2 carry an explicit ::approval_status cast.
@@ -62,16 +84,37 @@ export async function decideAgent(params: {
      * not enough; the two deductions must agree.
      */
     `UPDATE agents
-        SET approval_status  = $2::approval_status,
-            approved_at      = NOW(),
-            approved_by      = $3,
-            rejected_reason  = $4,
+        SET approval_status   = $2::approval_status,
+            approved_at       = NOW(),
+            approved_by       = $3,
+            approved_by_role  = $6::actor_role,
+            rejected_reason   = $4,
             -- A rejected account must not be able to authenticate at all.
             is_active        = ($2::approval_status = 'APPROVED')
       WHERE id = $1
         AND approval_status = 'PENDING'
-     RETURNING id, name, email`,
-    [params.agentId, params.decision, params.superuserId, params.reason ?? null],
+        -- NULL means "no restriction" (a superuser). A UNIT_ADMIN call always
+        -- supplies its own admin id here, never NULL — see
+        -- unit-admin.controller. The OR covers a direct unit posting and a
+        -- zone assignment identically; the caller does not know or care
+        -- which one matched.
+        AND (
+          $5::uuid IS NULL
+          OR unit_id = (SELECT unit_id FROM unit_admins WHERE id = $5::uuid)
+          OR unit_id IN (
+               SELECT unit_id FROM supervisor_unit_assignments
+                WHERE admin_id = $5::uuid
+             )
+        )
+     RETURNING id, name, email, unit_id`,
+    [
+      params.agentId,
+      params.decision,
+      params.approvedBy,
+      params.reason ?? null,
+      params.restrictToAdminId ?? null,
+      params.approvedByRole,
+    ],
   );
   return rows[0] ?? null;
 }
@@ -245,6 +288,8 @@ export async function setGateActive(
 
 export async function writeAudit(params: {
   superuserId: string;
+  /** Defaults to SUPERUSER — every existing call site in this file is one. */
+  actorRole?: 'SUPERUSER' | 'UNIT_ADMIN';
   action: string;
   entityType: string;
   entityId: string;
@@ -254,7 +299,7 @@ export async function writeAudit(params: {
   await query(
     `INSERT INTO audit_logs
        (actor_role, actor_id, action, entity_type, entity_id, metadata, ip_address)
-     VALUES ('SUPERUSER', $1, $2, $3, $4, $5, $6)`,
+     VALUES ($7::actor_role, $1, $2, $3, $4, $5, $6)`,
     [
       params.superuserId,
       params.action,
@@ -262,6 +307,7 @@ export async function writeAudit(params: {
       params.entityId,
       JSON.stringify(params.metadata ?? {}),
       params.ip ?? null,
+      params.actorRole ?? 'SUPERUSER',
     ],
   );
 }

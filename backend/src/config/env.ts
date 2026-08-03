@@ -24,6 +24,13 @@ const schema = z.object({
   AGENT_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(480),
   SUPERUSER_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(120),
   /**
+   * Between agent (480) and superuser (120). A unit head checks this on
+   * their own phone occasionally through the day rather than holding it
+   * open for a shift, but the account can approve real agents, so it should
+   * not linger signed in for days like a bookmark.
+   */
+  UNIT_ADMIN_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().default(240),
+  /**
    * Gate scanner sessions. Long enough to cover one event day without a
    * volunteer re-entering the PIN, short enough that a shared PIN cannot mint
    * a token that outlives the event.

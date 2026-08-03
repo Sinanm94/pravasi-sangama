@@ -6,6 +6,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
+  Building2,
   CheckCircle2,
   Mail,
   ScanLine,
@@ -65,6 +66,7 @@ function LoginFlow() {
 
   const [tab, setTab] = useState<Tab>('login');
   const [adminMode, setAdminMode] = useState(false);
+  const [unitAdminMode, setUnitAdminMode] = useState(false);
 
   const next = params.get('next');
 
@@ -72,7 +74,7 @@ function LoginFlow() {
     if (status === 'idle') void hydrate();
   }, [status, hydrate]);
 
-  const showTabs = !adminMode;
+  const showTabs = !adminMode && !unitAdminMode;
 
   return (
     <AuthShell>
@@ -83,6 +85,14 @@ function LoginFlow() {
             router.replace(next ?? '/dashboard');
           }}
           onBack={() => setAdminMode(false)}
+        />
+      ) : unitAdminMode ? (
+        <UnitAdminForm
+          onDone={(session) => {
+            login(session);
+            router.replace(next ?? '/unit/dashboard');
+          }}
+          onBack={() => setUnitAdminMode(false)}
         />
       ) : (
         <>
@@ -142,6 +152,12 @@ function LoginFlow() {
             <div className="mt-6 space-y-2.5 border-t border-gray-100 pt-5">
               <SubtleButton icon={ShieldCheck} onClick={() => setAdminMode(true)}>
                 Administrator sign in
+              </SubtleButton>
+              <SubtleButton
+                icon={Building2}
+                onClick={() => setUnitAdminMode(true)}
+              >
+                Unit admin sign in
               </SubtleButton>
               <SubtleButton
                 icon={ScanLine}
@@ -559,6 +575,74 @@ function AdminForm({
         name="username"
         value={username}
         onChange={setUsername}
+        autoComplete="username"
+        required
+      />
+      <Field
+        label="Password"
+        type="password"
+        value={password}
+        onChange={setPassword}
+        autoComplete="current-password"
+        required
+      />
+      <Submit busy={busy} busyLabel="Signing in…">
+        Sign In
+      </Submit>
+
+      <SubtleButton icon={ArrowLeft} onClick={onBack} className="pt-1">
+        Back to agent sign in
+      </SubtleButton>
+    </form>
+  );
+}
+
+/* ================================================================== */
+/* Tab 4 — Unit admin sign in (decentralised approvals, §2)             */
+/* ================================================================== */
+
+function UnitAdminForm({
+  onDone,
+  onBack,
+}: {
+  onDone: (s: SessionResponse) => void;
+  onBack: () => void;
+}) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+    setBusy(true);
+    try {
+      onDone(
+        await apiPost<SessionResponse>('/auth/unit-admin-login', {
+          username: username.trim(),
+          password,
+        }),
+      );
+    } catch (err) {
+      toast.error('Sign in failed', { description: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <AuthHeader
+        icon={Building2}
+        title="Unit admin sign in"
+        subtitle="Approve agents for your unit"
+      />
+      <Field
+        label="Unit ID"
+        hint="e.g. BAT01"
+        type="text"
+        name="username"
+        value={username}
+        onChange={(v) => setUsername(v.toUpperCase())}
         autoComplete="username"
         required
       />

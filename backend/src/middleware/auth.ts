@@ -1,5 +1,9 @@
 import type { RequestHandler } from 'express';
-import { SESSION_COOKIE_NAME, type AgentClaims } from '@pravasi/shared';
+import {
+  SESSION_COOKIE_NAME,
+  type AgentClaims,
+  type UnitAdminClaims,
+} from '@pravasi/shared';
 import { verifySession } from '../lib/jwt.js';
 import { forbidden, unauthorized } from '../lib/errors.js';
 
@@ -31,6 +35,27 @@ export const requireSuperuser: RequestHandler = (req, _res, next) => {
   }
   next();
 };
+
+export const requireUnitAdmin: RequestHandler = (req, _res, next) => {
+  if (!req.auth) return next(unauthorized());
+  if (req.auth.role !== 'UNIT_ADMIN') {
+    return next(forbidden('Unit admin access required'));
+  }
+  next();
+};
+
+/**
+ * Authorization is always evaluated from the token's own unitId, never a
+ * client-supplied one — same rule as `agentScope` (§2). `unitId` may be
+ * null (an unscoped "zone" account); callers must treat that as "nothing
+ * assigned yet", never as "no restriction".
+ */
+export function unitAdminScope(req: Express.Request): UnitAdminClaims {
+  if (!req.auth || req.auth.role !== 'UNIT_ADMIN') {
+    throw unauthorized();
+  }
+  return req.auth;
+}
 
 /**
  * Gate scanning is open to a bound AGENT or a SCANNER gate session.

@@ -67,8 +67,11 @@ export const decideAgent = handle(async (req, res) => {
   const decided = await repo.decideAgent({
     agentId,
     decision: input.decision,
-    superuserId: actor,
+    approvedBy: actor,
+    approvedByRole: 'SUPERUSER',
     reason: input.reason ?? null,
+    // No restrictToAdminId — §2's "ultimate authority": a superuser overrides
+    // any unit.
   });
 
   // Zero rows means it was not PENDING — already decided, or no such agent.

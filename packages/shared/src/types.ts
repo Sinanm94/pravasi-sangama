@@ -93,10 +93,24 @@ export interface SuperuserClaims {
   superuserId: string;
 }
 
+/**
+ * Scoped to ONE unit — approvals only, nothing else (§2). `unitId` is
+ * nullable: a small number of seeded accounts ("zone supervisors") are
+ * provisioned before their coverage is decided. An unscoped token is valid
+ * to sign in with, but every approvals query returns empty rather than
+ * guessing a scope — see unit-admin.repository.ts.
+ */
+export interface UnitAdminClaims {
+  role: Extract<AuthRole, 'UNIT_ADMIN'>;
+  unitAdminId: string;
+  unitId: string | null;
+}
+
 export type SessionClaims =
   | AgentClaims
   | ScannerClaims
-  | SuperuserClaims;
+  | SuperuserClaims
+  | UnitAdminClaims;
 
 /* ------------------------------------------------------------------ */
 /* Gate scanning                                                       */
@@ -306,6 +320,13 @@ export interface SessionResponse {
   division?: Pick<Division, 'id' | 'name' | 'code'>;
   agent?: Pick<Agent, 'id' | 'name' | 'mobileNumber'>;
   gate?: { id: string; gateCode: string; name: string };
+  /**
+   * UNIT_ADMIN only. `unit` above carries the scope when assigned — absent
+   * entirely, not merely null, when the account has none yet (see
+   * UnitAdminClaims). The client must render an explicit "no unit assigned"
+   * state for that case, not an empty-looking approvals screen.
+   */
+  unitAdmin?: { id: string; name: string; username: string };
   expiresAt: string;
 }
 
@@ -343,6 +364,17 @@ export interface PendingAgent {
   unitName: string;
   divisionName: string;
   createdAt: string;
+}
+
+/**
+ * GET /api/unit-admin/agents. Two arrays, not one list with a status field —
+ * the dashboard renders them completely differently (huge Approve/Reject
+ * buttons vs. a plain read-only list), and this shape makes mixing them up
+ * a type error instead of a runtime bug.
+ */
+export interface UnitAdminAgentListResponse {
+  pending: PendingAgent[];
+  approved: PendingAgent[];
 }
 
 export interface GateSummary {

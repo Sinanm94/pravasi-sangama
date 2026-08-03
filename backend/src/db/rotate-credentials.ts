@@ -2,6 +2,7 @@ import { createInterface } from 'node:readline';
 import { Writable } from 'node:stream';
 import { hashSecret, verifySecret } from '../lib/crypto.js';
 import { closePool, query } from './index.js';
+import { UNIT_ADMIN_INITIAL_PASSWORDS } from './provision-unit-admins.js';
 
 /**
  * Credential rotation for a live deployment.
@@ -23,9 +24,11 @@ import { closePool, query } from './index.js';
  *
  * Usage:
  *   npm run db:rotate -w @pravasi/backend -- audit
+ *   npm run db:rotate -w @pravasi/backend -- audit-unit-admins
  *   npm run db:rotate -w @pravasi/backend -- superuser admin1
  *   npm run db:rotate -w @pravasi/backend -- agent 8888999955
  *   npm run db:rotate -w @pravasi/backend -- gate GATE1
+ *   npm run db:rotate -w @pravasi/backend -- unit-admin BAT01
  */
 
 /* The values in seed.ts. Kept here so `audit` can prove whether a given row
@@ -139,16 +142,65 @@ async function audit(): Promise<void> {
   process.exitCode = 1;
 }
 
+/**
+ * Separate from `audit` because unit_admins has no SINGLE seeded value to
+ * check every row against — provision-unit-admins.ts gave each of the 33
+ * accounts its own distinct password. Each row is checked against the
+ * specific password IT was provisioned with, imported directly from that
+ * script rather than duplicated here — one definition of "what was
+ * provisioned", so the two files cannot silently disagree.
+ */
+async function auditUnitAdmins(): Promise<void> {
+  console.log(
+    '\nChecking every unit-admin account against its own provisioned password.\n',
+  );
+
+  const { rows } = await query<{
+    username: string;
+    password_hash: string;
+    unit_id: string | null;
+  }>(`SELECT username, password_hash, unit_id FROM unit_admins WHERE is_active`);
+
+  let exposed = 0;
+  let unscoped = 0;
+
+  for (const row of rows) {
+    const known = UNIT_ADMIN_INITIAL_PASSWORDS[row.username];
+    if (known && (await verifySecret(known, row.password_hash))) {
+      console.log(`  EXPOSED  unit-admin ${row.username}`);
+      exposed += 1;
+    }
+    if (!row.unit_id) unscoped += 1;
+  }
+
+  if (exposed === 0) {
+    console.log('  No unit-admin account is still on its provisioned password.\n');
+  } else {
+    console.log(
+      `\n  ${exposed} of ${rows.length} unit-admin accounts are public.` +
+        '\n  Rotate each one, then re-run to confirm:' +
+        '\n      npm run db:rotate -w @pravasi/backend -- unit-admin <username>\n',
+    );
+    process.exitCode = 1;
+  }
+
+  if (unscoped > 0) {
+    console.log(
+      `  Note: ${unscoped} account(s) have no unit assigned yet (unit_id IS NULL).` +
+        ' They can sign in but approve nothing until scoped.\n',
+    );
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Rotation                                                            */
 /* ------------------------------------------------------------------ */
 
+type RotatableKind = keyof typeof SEEDED_SECRETS | 'unit-admin';
+
 /** Every rotation is one UPDATE returning the row, so a typo'd identifier
  *  reports "no such row" instead of silently changing nothing. */
-async function rotate(
-  kind: keyof typeof SEEDED_SECRETS,
-  identifier: string,
-): Promise<void> {
+async function rotate(kind: RotatableKind, identifier: string): Promise<void> {
   const statements = {
     superuser: {
       sql: `UPDATE superusers SET password_hash = $2 WHERE username = $1
@@ -165,6 +217,11 @@ async function rotate(
              WHERE gate_code = $1
             RETURNING gate_code AS label`,
       what: 'gate PIN',
+    },
+    'unit-admin': {
+      sql: `UPDATE unit_admins SET password_hash = $2 WHERE username = $1
+            RETURNING username AS label`,
+      what: 'unit-admin password',
     },
   }[kind];
 
@@ -188,9 +245,11 @@ async function rotate(
 const USAGE = `
 Usage:
   db:rotate audit
-  db:rotate superuser <username>
-  db:rotate agent     <mobile_number>
-  db:rotate gate      <gate_code>
+  db:rotate audit-unit-admins
+  db:rotate superuser  <username>
+  db:rotate agent      <mobile_number>
+  db:rotate gate       <gate_code>
+  db:rotate unit-admin <username>
 `;
 
 async function main(): Promise<void> {
@@ -201,7 +260,17 @@ async function main(): Promise<void> {
     return;
   }
 
-  if (command === 'superuser' || command === 'agent' || command === 'gate') {
+  if (command === 'audit-unit-admins') {
+    await auditUnitAdmins();
+    return;
+  }
+
+  if (
+    command === 'superuser' ||
+    command === 'agent' ||
+    command === 'gate' ||
+    command === 'unit-admin'
+  ) {
     if (!identifier) throw new Error(`${command} needs an identifier.${USAGE}`);
     await rotate(command, identifier);
     return;

@@ -13,6 +13,8 @@ import type {
   SessionResponse,
   SuperuserClaims,
   SuperuserLoginInput,
+  UnitAdminClaims,
+  UnitAdminLoginInput,
 } from '@pravasi/shared';
 import { env } from '../../config/env.js';
 import {
@@ -222,6 +224,86 @@ export async function superuserLogin(
     ttlMinutes,
     session: {
       role: 'SUPERUSER',
+      expiresAt: expiresAt.toISOString(),
+    },
+  };
+}
+
+/* =================================================================== */
+/* Unit admin — decentralised approvals (migration 005)                */
+/* =================================================================== */
+
+/**
+ * Same shape as superuserLogin: username + password, no unit-session table,
+ * no bound/unbound phase. The account's scope comes from `unit_admins.unit_id`
+ * (possibly null — see UnitAdminClaims) and is signed into the token exactly
+ * like an agent's unit is, never re-derived from anything the client sends.
+ */
+export async function unitAdminLogin(
+  input: UnitAdminLoginInput,
+  ctx: RequestContext,
+): Promise<LoginResult> {
+  const admin = await repo.findUnitAdminByUsername(input.username);
+
+  if (!admin) {
+    await verifyAgainstDummy(input.password);
+    throw unauthorized('Invalid Unit ID or password');
+  }
+
+  if (!admin.is_active) {
+    await verifyAgainstDummy(input.password);
+    throw forbidden('This account is not active');
+  }
+
+  const ok = await verifySecret(input.password, admin.password_hash);
+  if (!ok) {
+    await repo.writeAudit({
+      actorRole: 'UNIT_ADMIN',
+      actorId: admin.id,
+      action: 'UNIT_ADMIN_LOGIN_FAILED',
+      ip: ctx.ip,
+    });
+    throw unauthorized('Invalid Unit ID or password');
+  }
+
+  const ttlMinutes = env.UNIT_ADMIN_TOKEN_TTL_MINUTES;
+  const expiresAt = minutesFromNow(ttlMinutes);
+
+  const claims: UnitAdminClaims = {
+    role: 'UNIT_ADMIN',
+    unitAdminId: admin.id,
+    unitId: admin.unit_id,
+  };
+  const token = signSession(claims, ttlMinutes);
+
+  await repo.touchUnitAdminLogin(admin.id);
+  await repo.writeAudit({
+    actorRole: 'UNIT_ADMIN',
+    actorId: admin.id,
+    action: 'UNIT_ADMIN_LOGIN',
+    metadata: { unit_id: admin.unit_id },
+    ip: ctx.ip,
+  });
+
+  const unit = admin.unit_id ? await repo.loadUnitAdminUnit(admin.unit_id) : null;
+
+  return {
+    token,
+    ttlMinutes,
+    session: {
+      role: 'UNIT_ADMIN',
+      unitAdmin: { id: admin.id, name: admin.name, username: admin.username },
+      unit: unit
+        ? {
+            id: unit.unit_id,
+            unitCode: unit.unit_code,
+            name: unit.unit_name,
+            sector: unit.unit_sector,
+          }
+        : undefined,
+      division: unit
+        ? { id: unit.division_id, name: unit.division_name, code: unit.division_code }
+        : undefined,
       expiresAt: expiresAt.toISOString(),
     },
   };
@@ -500,6 +582,39 @@ export async function describeSession(
         gateCode: claims.gateCode,
         name: claims.gateName,
       },
+      expiresAt: '',
+    };
+  }
+
+  if (claims.role === 'UNIT_ADMIN') {
+    // Re-read rather than trust the token: a deactivated account or a unit
+    // reassigned since login must take effect on the next request, not wait
+    // for the token to expire — same reasoning as the gate branch above.
+    const admin = await repo.findActiveUnitAdminById(claims.unitAdminId);
+    if (!admin) {
+      throw unauthorized('Unit admin session is no longer valid');
+    }
+
+    // The token's unitId may be stale if a superuser reassigned this account
+    // after it signed in — read the current value, not the signed one.
+    const unit = admin.unit_id
+      ? await repo.loadUnitAdminUnit(admin.unit_id)
+      : null;
+
+    return {
+      role: 'UNIT_ADMIN',
+      unitAdmin: { id: admin.id, name: admin.name, username: admin.username },
+      unit: unit
+        ? {
+            id: unit.unit_id,
+            unitCode: unit.unit_code,
+            name: unit.unit_name,
+            sector: unit.unit_sector,
+          }
+        : undefined,
+      division: unit
+        ? { id: unit.division_id, name: unit.division_name, code: unit.division_code }
+        : undefined,
       expiresAt: '',
     };
   }

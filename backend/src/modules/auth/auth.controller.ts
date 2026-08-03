@@ -7,6 +7,7 @@ import {
   ResetPasswordSchema,
   SESSION_COOKIE_NAME,
   SuperuserLoginSchema,
+  UnitAdminLoginSchema,
 } from '@pravasi/shared';
 import { clearSessionCookie, setSessionCookie, verifySession } from '../../lib/jwt.js';
 import { sendPasswordResetEmail } from './auth.email.js';
@@ -47,6 +48,18 @@ export const agentLogin = handle(async (req, res) => {
 export const superuserLogin = handle(async (req, res) => {
   const input = SuperuserLoginSchema.parse(req.body);
   const result = await service.superuserLogin(input, contextOf(req));
+
+  setSessionCookie(res, result.token, result.ttlMinutes);
+  res.status(200).json(result.session);
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /api/auth/unit-admin-login — decentralised approvals (§2)      */
+/* ------------------------------------------------------------------ */
+
+export const unitAdminLogin = handle(async (req, res) => {
+  const input = UnitAdminLoginSchema.parse(req.body);
+  const result = await service.unitAdminLogin(input, contextOf(req));
 
   setSessionCookie(res, result.token, result.ttlMinutes);
   res.status(200).json(result.session);
