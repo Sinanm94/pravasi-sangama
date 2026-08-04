@@ -13,3 +13,4 @@ unitAdminRoutes.use(requireUnitAdmin);
 
 unitAdminRoutes.get('/agents', controller.listAgents);
 unitAdminRoutes.post('/agents/:id/decision', controller.decideAgent);
+unitAdminRoutes.get('/tickets', controller.listTickets);

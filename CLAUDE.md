@@ -160,10 +160,22 @@ returns empty (nothing to union), and the dashboard renders an explicit
 everything.
 
 **The dashboard (`/unit/dashboard`) is deliberately not `AdminShell`.** No nav
-rail, no analytics, no ticket ledger — one screen, one job, for a volunteer who
-may never have used the rest of the system. Pending agents get two buttons
-sized to be unmissable on a phone in daylight; approved agents are a plain
+rail, no analytics, no CRUD — one screen, one job, for a volunteer who may
+never have used the rest of the system. Pending agents get two buttons sized
+to be unmissable on a phone in daylight; approved agents are a plain
 read-only list underneath. There is nothing else on the screen to navigate to.
+
+Below that is a **read-only Ticket Sales table** — `GET /api/unit-admin/tickets`
+— every ticket sold by an agent within this admin's own scope, with a search
+box (buyer name, mobile, ticket/request number) and an Agent filter. It adds
+visibility, not navigation: no CRUD, no revoke action, nowhere else to click
+through to. Same OR-scope as the agent queries, and just as load-bearing —
+`unit-admin.repository.ts`'s `unitAdminTicketWhere()` is the *only* predicate
+that decides which rows exist for this caller, baked into the query rather
+than filtered after the fact, mirroring `decideAgent`'s `restrictToAdminId`.
+The row shape (`AdminTicketRow`) is shared with the superuser ledger
+(`/admin/tickets`) — a ticket's data doesn't change depending on who's
+allowed to see it, only which rows come back.
 
 **Superuser retains unrestricted approval**, unchanged — `admin.repository
 .decideAgent` called from `/admin/approvals` passes no `restrictToAdminId`,
@@ -579,11 +591,13 @@ pravasi-sangama/
   not a sum of the returned rows — the row list is capped and would
   under-report. Both queries share one parameterised WHERE builder so the
   summary cards can never describe a different set than the table.
-- `backend/src/modules/unit-admin/` — a unit admin's own approvals queue
-  (§3.3). Reuses `admin.repository.decideAgent`/`writeAudit` rather than a
-  parallel implementation of the race-safe UPDATE (§10.2's "the row is the
-  lock" applies here too), passing its own admin id as `restrictToAdminId`
-  and letting the SQL resolve direct unit + zone-assignment scope as a union.
+- `backend/src/modules/unit-admin/` — a unit admin's own approvals queue and
+  ticket ledger (§3.3). `decideAgent` reuses `admin.repository.decideAgent`
+  /`writeAudit` rather than a parallel implementation of the race-safe UPDATE
+  (§10.2's "the row is the lock" applies here too), passing its own admin id
+  as `restrictToAdminId`; `listTickets` (`GET /api/unit-admin/tickets`) runs
+  its own OR-scope query over `tickets` via `unitAdminTicketWhere()`, same
+  union, row shape borrowed from `admin.repository.ts`'s `AdminTicketLedgerRow`.
 - `backend/src/db/provision-unit-admins.ts` — one-time provisioning for the
   Unit Admin tier (30 units, 33 accounts, plus a placeholder 10/10/10 zone
   split into `supervisor_unit_assignments`). Not `db:seed`: real production

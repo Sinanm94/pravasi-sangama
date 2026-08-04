@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -8,13 +8,22 @@ import {
   AlertCircle,
   Building2,
   Check,
+  ChevronDown,
   Loader2,
   LogOut,
   RefreshCw,
+  Search,
+  Ticket,
   UserCheck,
   X,
 } from 'lucide-react';
-import type { PendingAgent, UnitAdminAgentListResponse } from '@pravasi/shared';
+import {
+  TICKET_TYPE_LABELS,
+  type AdminTicketRow,
+  type PendingAgent,
+  type UnitAdminAgentListResponse,
+  type UnitAdminTicketListResponse,
+} from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Logo } from '@/components/ui/Logo';
 import BrandBackdrop from '@/components/ui/BrandBackdrop';
@@ -30,10 +39,11 @@ type Decision = 'APPROVED' | 'REJECTED';
 /**
  * The Unit Admin screen — deliberately NOT AdminShell.
  *
- * A unit head is a non-technical volunteer with exactly one job: approve or
- * reject the agents posted to their own unit. No nav rail, no analytics, no
- * ticket ledger, no filters — every one of those is a way to get lost. One
- * screen, one purpose, buttons too big to miss.
+ * A unit head's primary job is approving or rejecting the agents posted to
+ * their own scope — buttons too big to miss, no nav rail, no analytics, no
+ * CRUD. The Ticket Sales table below it is read-only and scoped the same
+ * way (§3.3's OR-scope), so it adds visibility without adding navigation:
+ * still one page, still nothing else to get lost in.
  */
 export default function UnitAdminDashboardPage() {
   return (
@@ -137,6 +147,60 @@ function UnitAdminScreen() {
   };
 
   const pendingCount = data?.pending.length ?? 0;
+
+  /* --- Ticket Sales — read-only ledger, scoped server-side (§3.3) ---- */
+
+  const [tickets, setTickets] = useState<UnitAdminTicketListResponse | null>(null);
+  const [ticketLoadError, setTicketLoadError] = useState<string | null>(null);
+  const [ticketRefreshing, setTicketRefreshing] = useState(false);
+  const [ticketSearch, setTicketSearch] = useState('');
+  const [committedTicketSearch, setCommittedTicketSearch] = useState('');
+  const [ticketAgentId, setTicketAgentId] = useState('');
+
+  /* One request per pause in typing, not per keystroke — same reasoning as
+   * the superuser ledger (/admin/tickets): the search hits an ILIKE scan. */
+  useEffect(() => {
+    const id = setTimeout(() => setCommittedTicketSearch(ticketSearch.trim()), 300);
+    return () => clearTimeout(id);
+  }, [ticketSearch]);
+
+  const loadTickets = useCallback(
+    async (isRefresh = false) => {
+      if (!hasUnit) return;
+      if (isRefresh) setTicketRefreshing(true);
+
+      const params = new URLSearchParams();
+      if (ticketAgentId) params.set('agent_id', ticketAgentId);
+      if (committedTicketSearch) params.set('search', committedTicketSearch);
+
+      try {
+        const qs = params.toString();
+        setTickets(
+          await apiGet<UnitAdminTicketListResponse>(
+            `/unit-admin/tickets${qs ? `?${qs}` : ''}`,
+          ),
+        );
+        setTicketLoadError(null);
+      } catch (err) {
+        setTicketLoadError(errorMessage(err));
+      } finally {
+        setTicketRefreshing(false);
+      }
+    },
+    [hasUnit, ticketAgentId, committedTicketSearch],
+  );
+
+  useEffect(() => {
+    void loadTickets();
+  }, [loadTickets]);
+
+  /* Filter options come from the agent list already loaded above — every
+   * agent who could have sold a ticket is, by definition, approved and in
+   * this admin's own scope, so there is no second endpoint to fetch. */
+  const agentOptions = useMemo(() => data?.approved ?? [], [data]);
+
+  const ticketFiltered = Boolean(ticketAgentId) || committedTicketSearch.length > 0;
+  const ticketTotals = tickets?.totals;
 
   return (
     <div className="relative min-h-dvh bg-gray-50 font-sans antialiased">
@@ -282,6 +346,24 @@ function UnitAdminScreen() {
                 </div>
               </div>
             )}
+
+            <TicketSalesSection
+              tickets={tickets}
+              totals={ticketTotals}
+              loadError={ticketLoadError}
+              refreshing={ticketRefreshing}
+              onRefresh={() => void loadTickets(true)}
+              search={ticketSearch}
+              onSearchChange={setTicketSearch}
+              filtered={ticketFiltered}
+              agentId={ticketAgentId}
+              onAgentChange={setTicketAgentId}
+              agentOptions={agentOptions}
+              onClearFilters={() => {
+                setTicketSearch('');
+                setTicketAgentId('');
+              }}
+            />
           </>
         )}
       </main>
@@ -460,4 +542,302 @@ function formatWhen(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/* ================================================================== */
+/* Ticket Sales — read-only, scoped to this admin's own unit(s)         */
+/* ================================================================== */
+
+function TicketSalesSection({
+  tickets,
+  totals,
+  loadError,
+  refreshing,
+  onRefresh,
+  search,
+  onSearchChange,
+  filtered,
+  agentId,
+  onAgentChange,
+  agentOptions,
+  onClearFilters,
+}: {
+  tickets: UnitAdminTicketListResponse | null;
+  totals: { tickets: number; seats: number; children: number } | undefined;
+  loadError: string | null;
+  refreshing: boolean;
+  onRefresh: () => void;
+  search: string;
+  onSearchChange: (v: string) => void;
+  filtered: boolean;
+  agentId: string;
+  onAgentChange: (v: string) => void;
+  agentOptions: PendingAgent[];
+  onClearFilters: () => void;
+}) {
+  return (
+    <div className="mt-10">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-[20px] font-semibold leading-tight tracking-[-0.02em] text-gray-900">
+            Ticket Sales
+          </h2>
+          <p className="mt-1 text-[13px] text-gray-500">
+            {tickets === null
+              ? 'Loading…'
+              : filtered
+                ? `${(totals?.tickets ?? 0).toLocaleString()} matching ticket${totals?.tickets === 1 ? '' : 's'}`
+                : `${(totals?.tickets ?? 0).toLocaleString()} ticket${totals?.tickets === 1 ? '' : 's'} sold in your unit`}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={refreshing}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-gray-100 px-4 py-2.5 text-[13px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97] disabled:opacity-60"
+        >
+          <RefreshCw
+            className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`}
+            strokeWidth={2.25}
+          />
+          Refresh
+        </button>
+      </div>
+
+      {loadError && (
+        <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50 p-4">
+          <AlertCircle
+            className="mt-0.5 h-[18px] w-[18px] shrink-0 text-amber-600"
+            strokeWidth={2.25}
+          />
+          <p className="text-[13px] leading-snug text-amber-800">
+            Could not load ticket sales — {loadError}
+          </p>
+        </div>
+      )}
+
+      {/* Filters — deliberately just the two the volunteer actually needs.
+          No division/unit selects here: the scope IS the unit(s) this
+          account covers, not something to narrow further (§3.3). */}
+      <div className="mt-4 rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label
+              htmlFor="ticket-search"
+              className="mb-2 block text-[13px] font-medium text-gray-700"
+            >
+              Search
+            </label>
+            <div className="relative">
+              <Search
+                className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+                strokeWidth={2.25}
+              />
+              <input
+                id="ticket-search"
+                type="search"
+                value={search}
+                onChange={(e) => onSearchChange(e.target.value)}
+                placeholder="Buyer name, mobile or ticket no."
+                className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-[15px] text-gray-900 placeholder:text-gray-400 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
+              />
+            </div>
+          </div>
+
+          <label className="block">
+            <span className="mb-2 block text-[13px] font-medium text-gray-700">
+              Agent
+            </span>
+            <div className="relative">
+              <select
+                value={agentId}
+                onChange={(e) => onAgentChange(e.target.value)}
+                className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
+              >
+                <option value="">All agents</option>
+                {agentOptions.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} · {a.mobileNumber}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400"
+                strokeWidth={2.25}
+              />
+            </div>
+          </label>
+        </div>
+
+        {filtered && (
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
+            <p className="text-[12px] text-gray-400">
+              The count above reflects these filters.
+            </p>
+            <button
+              type="button"
+              onClick={onClearFilters}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+              Clear filters
+            </button>
+          </div>
+        )}
+      </div>
+
+      {tickets?.truncated && (
+        <p className="mt-3 px-1 text-[12px] leading-relaxed text-amber-700">
+          Showing the {tickets.limit.toLocaleString()} most recent of{' '}
+          {tickets.totals.tickets.toLocaleString()} matching tickets. The count
+          above includes all of them — narrow the filters to see the rest.
+        </p>
+      )}
+
+      <div className="mt-4 overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
+        {tickets === null ? (
+          <TicketSkeleton />
+        ) : tickets.tickets.length === 0 ? (
+          <div className="flex flex-col items-center px-6 py-16 text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-gray-100">
+              <Ticket className="h-7 w-7 text-gray-400" strokeWidth={2} />
+            </span>
+            <p className="mt-5 text-[17px] font-semibold text-gray-900">
+              {filtered ? 'No matching tickets' : 'No tickets sold yet'}
+            </p>
+            <p className="mt-1.5 max-w-xs text-[14px] leading-relaxed text-gray-500">
+              {filtered
+                ? 'Nothing matches these filters. Clear them to see every ticket sold in your unit.'
+                : 'Tickets appear here as your agents issue them.'}
+            </p>
+          </div>
+        ) : (
+          // Vertical scroll caps the card's height instead of letting a
+          // busy unit's ledger push the whole page down; horizontal scroll
+          // covers narrow phones. Header stays visible via `sticky`.
+          <div className="max-h-[28rem] overflow-y-auto overflow-x-auto">
+            <table className="w-full min-w-[760px] border-collapse text-left">
+              <thead>
+                <tr className="border-b border-gray-900/[0.06]">
+                  <TicketTh>Ticket</TicketTh>
+                  <TicketTh>Buyer</TicketTh>
+                  <TicketTh>Agent</TicketTh>
+                  <TicketTh>Unit</TicketTh>
+                  <TicketTh>Status</TicketTh>
+                  <TicketTh numeric>Issued</TicketTh>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-900/[0.05]">
+                {tickets.tickets.map((t) => (
+                  <TicketRow key={t.id} ticket={t} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TicketRow({ ticket }: { ticket: AdminTicketRow }) {
+  const revoked = ticket.status === 'REVOKED';
+
+  return (
+    <tr
+      className={`align-middle transition-colors hover:bg-gray-50/70 ${
+        revoked ? 'opacity-55' : ''
+      }`}
+    >
+      <td className="px-5 py-3.5">
+        <div className="flex items-center gap-2">
+          <p className="text-[13px] font-medium tabular-nums text-gray-900">
+            {ticket.ticketNumber}
+          </p>
+          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-gray-500">
+            {TICKET_TYPE_LABELS[ticket.ticketType]}
+          </span>
+        </div>
+      </td>
+
+      <td className="px-5 py-3.5">
+        <p className="truncate text-[14px] font-medium text-gray-900">
+          {ticket.purchaserName}
+        </p>
+        <p className="mt-0.5 text-[12px] tabular-nums text-gray-500">
+          {ticket.purchaserMobile}
+        </p>
+      </td>
+
+      <td className="px-5 py-3.5">
+        <p className="truncate text-[13px] font-medium text-gray-900">
+          {ticket.agentName}
+        </p>
+      </td>
+
+      <td className="px-5 py-3.5">
+        <p className="truncate text-[13px] font-medium text-gray-900">
+          {ticket.unitName}
+        </p>
+        <p className="mt-0.5 text-[11px] uppercase tracking-[0.08em] text-gray-400">
+          {ticket.unitCode}
+        </p>
+      </td>
+
+      <td className="px-5 py-3.5">
+        <span
+          className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.04em] ${
+            revoked
+              ? 'bg-red-50 text-red-600'
+              : 'bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {revoked ? 'Revoked' : 'Active'}
+        </span>
+      </td>
+
+      <td className="px-5 py-3.5 text-right text-[13px] tabular-nums text-gray-500">
+        {formatWhen(ticket.createdAt)}
+      </td>
+    </tr>
+  );
+}
+
+function TicketTh({
+  children,
+  numeric,
+}: {
+  children: React.ReactNode;
+  numeric?: boolean;
+}) {
+  return (
+    <th
+      scope="col"
+      className={`sticky top-0 z-10 bg-white px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 ${
+        numeric ? 'text-right' : 'text-left'
+      }`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function TicketSkeleton() {
+  return (
+    <div className="divide-y divide-gray-900/[0.05]">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="flex items-center gap-6 px-5 py-3.5">
+          <div className="w-28 space-y-2">
+            <div className="h-3.5 w-20 animate-pulse rounded-full bg-gray-100" />
+          </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3.5 w-36 animate-pulse rounded-full bg-gray-100" />
+            <div className="h-3 w-24 animate-pulse rounded-full bg-gray-50" />
+          </div>
+          <div className="h-6 w-16 animate-pulse rounded-full bg-gray-100" />
+        </div>
+      ))}
+    </div>
+  );
 }

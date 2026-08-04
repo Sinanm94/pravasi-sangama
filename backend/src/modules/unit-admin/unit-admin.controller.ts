@@ -1,8 +1,11 @@
 import type { Request, RequestHandler, Response } from 'express';
 import {
   AgentDecisionSchema,
+  UnitAdminTicketQuerySchema,
+  type AdminTicketRow,
   type PendingAgent,
   type UnitAdminAgentListResponse,
+  type UnitAdminTicketListResponse,
 } from '@pravasi/shared';
 import { unitAdminScope } from '../../middleware/auth.js';
 import { conflict, forbidden } from '../../lib/errors.js';
@@ -11,6 +14,7 @@ import { conflict, forbidden } from '../../lib/errors.js';
 // applies here too) and the audit_logs insert. Both already accept an actor
 // role and an optional unit restriction — see admin.repository.ts.
 import * as adminRepo from '../admin/admin.repository.js';
+import type { AdminTicketLedgerRow } from '../admin/admin.repository.js';
 import * as repo from './unit-admin.repository.js';
 
 const handle =
@@ -113,4 +117,55 @@ export const decideAgent = handle(async (req, res) => {
   });
 
   res.status(200).json({ id: decided.id, status: input.decision });
+});
+
+/* ------------------------------------------------------------------ */
+/* GET /api/unit-admin/tickets                                         */
+/* ------------------------------------------------------------------ */
+
+const toAdminTicketRow = (r: AdminTicketLedgerRow): AdminTicketRow => ({
+  id: r.id,
+  requestNumber: r.request_number,
+  ticketNumber: r.ticket_number,
+  ticketType: r.ticket_type,
+  purchaserName: r.purchaser_name,
+  purchaserMobile: r.purchaser_mobile,
+  purchaserEmail: r.purchaser_email,
+  countedPersons: r.counted_persons,
+  childrenBelow12: r.children_below_12,
+  status: r.status,
+  createdAt: r.created_at.toISOString(),
+  agentId: r.agent_id,
+  agentName: r.agent_name,
+  unitId: r.unit_id,
+  unitName: r.unit_name,
+  unitCode: r.unit_code,
+  divisionId: r.division_id,
+  divisionName: r.division_name,
+});
+
+export const listTickets = handle(async (req, res) => {
+  const claims = unitAdminScope(req);
+  const q = UnitAdminTicketQuerySchema.parse(req.query);
+
+  const filters = { agentId: q.agent_id, search: q.search };
+
+  // No unscoped short-circuit needed, same reasoning as listAgents above:
+  // the OR-scope predicate in unitAdminTicketWhere() naturally returns
+  // nothing for an admin with neither a direct unit nor a zone assignment.
+  const [rows, totals] = await Promise.all([
+    repo.listTicketsForAdmin(claims.unitAdminId, filters, q.limit),
+    repo.summariseTicketsForAdmin(claims.unitAdminId, filters),
+  ]);
+
+  const tickets: AdminTicketRow[] = rows.map(toAdminTicketRow);
+
+  const body: UnitAdminTicketListResponse = {
+    tickets,
+    totals,
+    truncated: totals.tickets > tickets.length,
+    limit: q.limit,
+  };
+
+  res.status(200).json(body);
 });

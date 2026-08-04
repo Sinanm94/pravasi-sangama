@@ -399,3 +399,20 @@ export const AdminTicketQuerySchema = z.object({
 });
 
 export type AdminTicketQuery = z.infer<typeof AdminTicketQuerySchema>;
+
+/**
+ * Query for GET /api/unit-admin/tickets.
+ *
+ * Deliberately no unit_id/division_id filter here, unlike AdminTicketQuerySchema
+ * — the caller's scope IS the boundary (§3.3's OR-scope, resolved server-side
+ * from the admin's own id), not something the client narrows further. `limit`
+ * is capped lower than the superuser ledger's: a unit or zone scope is a much
+ * smaller slice of the event than the whole thing.
+ */
+export const UnitAdminTicketQuerySchema = z.object({
+  agent_id: z.string().uuid('agent_id must be a UUID').optional(),
+  search: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().positive().max(500).default(200),
+});
+
+export type UnitAdminTicketQuery = z.infer<typeof UnitAdminTicketQuerySchema>;

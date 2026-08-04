@@ -1,12 +1,16 @@
 import { query } from '../../db/index.js';
+// Row shape only — a ticket carries the same columns regardless of who is
+// allowed to see it. Reusing the type does not fold this module into
+// modules/admin/; the query below is entirely separate and scoped.
+import type { AdminTicketLedgerRow } from '../admin/admin.repository.js';
 
 /**
- * A unit admin's own approvals queue.
+ * A unit admin's own approvals queue, and its own ticket ledger.
  *
  * Deliberately its own module, not folded into modules/admin/ — the backend
  * is feature-sliced (CLAUDE.md §6.4), and "a unit head's approval screen"
  * and "the superuser's global approval screen" are different features that
- * happen to share a table, not one feature with two callers.
+ * happen to share tables, not one feature with two callers.
  */
 
 export interface UnitScopedAgentRow {
@@ -93,4 +97,113 @@ export async function adminHasScope(adminId: string): Promise<boolean> {
     [adminId],
   );
   return rows[0]?.has_scope ?? false;
+}
+
+/* ------------------------------------------------------------------ */
+/* Ticket ledger — scoped to the admin's own units                     */
+/* ------------------------------------------------------------------ */
+
+export interface UnitAdminTicketFilters {
+  agentId?: string | undefined;
+  search?: string | undefined;
+}
+
+/**
+ * The scope predicate — identical shape to `decideAgent`'s in
+ * admin.repository.ts, and it MUST stay that way: this is the same
+ * "direct unit_id OR a supervisor_unit_assignments row" union, just applied
+ * to `tickets.unit_id` instead of `agents.unit_id`. It is always clause[0]
+ * and it is never optional — unlike `agentId`/`search` below, there is no
+ * code path that calls this without it. A caller cannot broaden the query
+ * by omitting a filter, because the one filter that matters is not a filter
+ * at all, it's baked into every row this function can ever return.
+ */
+function unitAdminTicketWhere(
+  adminId: string,
+  filters: UnitAdminTicketFilters,
+): { sql: string; params: unknown[] } {
+  const params: unknown[] = [adminId];
+  const clauses: string[] = [
+    `(t.unit_id = (SELECT unit_id FROM unit_admins WHERE id = $1)
+       OR t.unit_id IN (
+            SELECT unit_id FROM supervisor_unit_assignments WHERE admin_id = $1
+          ))`,
+  ];
+
+  const add = (fragment: (i: number) => string, value: unknown) => {
+    params.push(value);
+    clauses.push(fragment(params.length));
+  };
+
+  if (filters.agentId) add((i) => `t.agent_id = $${i}`, filters.agentId);
+
+  if (filters.search) {
+    // Same ILIKE-escaping as admin.repository.ts's ticketLedgerWhere — % and
+    // _ are wildcards to Postgres and must not be taken from user input raw.
+    const escaped = filters.search.replace(/([\\%_])/g, '\\$1');
+    add(
+      (i) =>
+        `(t.purchaser_name ILIKE $${i} OR t.purchaser_mobile ILIKE $${i}
+          OR t.ticket_number ILIKE $${i} OR t.request_number ILIKE $${i})`,
+      `%${escaped}%`,
+    );
+  }
+
+  return { sql: `WHERE ${clauses.join(' AND ')}`, params };
+}
+
+export async function listTicketsForAdmin(
+  adminId: string,
+  filters: UnitAdminTicketFilters,
+  limit: number,
+): Promise<AdminTicketLedgerRow[]> {
+  const { sql, params } = unitAdminTicketWhere(adminId, filters);
+
+  const { rows } = await query<AdminTicketLedgerRow>(
+    `SELECT t.id, t.request_number, t.ticket_number, t.ticket_type,
+            t.purchaser_name, t.purchaser_mobile, t.purchaser_email,
+            t.counted_persons, t.children_below_12, t.status, t.created_at,
+            t.agent_id, a.name AS agent_name,
+            t.unit_id, u.name AS unit_name, u.unit_code,
+            t.division_id, d.name AS division_name
+       FROM tickets t
+       JOIN agents a    ON a.id = t.agent_id
+       JOIN units u     ON u.id = t.unit_id
+       JOIN divisions d ON d.id = t.division_id
+       ${sql}
+      ORDER BY t.created_at DESC
+      LIMIT $${params.length + 1}`,
+    [...params, limit],
+  );
+  return rows;
+}
+
+/**
+ * Totals over the entire scoped+filtered set, independent of the row cap —
+ * same reasoning as admin.repository.ts's summariseTicketsForAdmin: the row
+ * list is capped and would under-report the moment scope + filters match
+ * more than `limit`.
+ */
+export async function summariseTicketsForAdmin(
+  adminId: string,
+  filters: UnitAdminTicketFilters,
+): Promise<{ tickets: number; seats: number; children: number }> {
+  const { sql, params } = unitAdminTicketWhere(adminId, filters);
+
+  const { rows } = await query<{
+    tickets: number;
+    seats: number;
+    children: number;
+  }>(
+    `SELECT COUNT(*)::INT AS tickets,
+            COALESCE(SUM(t.counted_persons)
+              FILTER (WHERE t.status = 'ACTIVE'), 0)::INT AS seats,
+            COALESCE(SUM(t.children_below_12)
+              FILTER (WHERE t.status = 'ACTIVE'), 0)::INT AS children
+       FROM tickets t
+       ${sql}`,
+    params,
+  );
+
+  return rows[0] ?? { tickets: 0, seats: 0, children: 0 };
 }

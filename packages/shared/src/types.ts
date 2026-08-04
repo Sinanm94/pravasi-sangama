@@ -501,6 +501,26 @@ export interface AdminTicketLedgerResponse {
   limit: number;
 }
 
+/**
+ * GET /api/unit-admin/tickets — a unit admin's own ticket ledger.
+ *
+ * Same row shape as the superuser's `AdminTicketRow` — the data a ticket
+ * carries doesn't change depending on who's allowed to see it, only the
+ * scope of which rows are returned (§3.3's OR-scope: direct unit posting
+ * union zone assignments, resolved in SQL, never a client-supplied filter).
+ */
+export interface UnitAdminTicketListResponse {
+  tickets: AdminTicketRow[];
+  /** Aggregated server-side over the whole scoped+filtered set, not `tickets` — same reasoning as AdminTicketLedgerResponse.totals. */
+  totals: {
+    tickets: number;
+    seats: number;
+    children: number;
+  };
+  truncated: boolean;
+  limit: number;
+}
+
 /** Option lists for the ledger's dependent dropdowns. */
 export interface AdminFilterOptions {
   divisions: Array<{ id: string; name: string; code: string }>;
