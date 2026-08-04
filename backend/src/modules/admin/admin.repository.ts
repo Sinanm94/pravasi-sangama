@@ -321,6 +321,7 @@ export interface TicketLedgerFilters {
   unitId?: string | undefined;
   divisionId?: string | undefined;
   search?: string | undefined;
+  status?: TicketStatus | undefined;
 }
 
 export interface AdminTicketLedgerRow {
@@ -370,6 +371,7 @@ function ticketLedgerWhere(f: TicketLedgerFilters): {
   if (f.agentId) add((i) => `t.agent_id = $${i}`, f.agentId);
   if (f.unitId) add((i) => `t.unit_id = $${i}`, f.unitId);
   if (f.divisionId) add((i) => `t.division_id = $${i}`, f.divisionId);
+  if (f.status) add((i) => `t.status = $${i}::ticket_status`, f.status);
 
   if (f.search) {
     /* % and _ are ILIKE wildcards. Left unescaped, a search for "%" matches

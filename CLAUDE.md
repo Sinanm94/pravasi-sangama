@@ -591,6 +591,16 @@ pravasi-sangama/
   not a sum of the returned rows — the row list is capped and would
   under-report. Both queries share one parameterised WHERE builder so the
   summary cards can never describe a different set than the table.
+  `GET /api/admin/tickets/export` shares the same WHERE builder and filters
+  (plus `status`, ACTIVE/REVOKED — the one filter the JSON ledger didn't
+  already have, added alongside this) but with its own fixed row cap
+  (`EXPORT_ROW_LIMIT`, 100,000 — a backstop, not a page size) instead of the
+  client-suppliable `limit`, and returns `text/csv` with a
+  `Content-Disposition: attachment` header instead of JSON. The frontend
+  can't reuse `apiGet` for it — that always calls `res.json()`, which throws
+  on a CSV body — so `apiClient.ts` has a parallel `apiDownload()` that reads
+  the browser-download filename from the response header and triggers it via
+  an off-DOM anchor click.
 - `backend/src/modules/unit-admin/` — a unit admin's own approvals queue and
   ticket ledger (§3.3). `decideAgent` reuses `admin.repository.decideAgent`
   /`writeAudit` rather than a parallel implementation of the race-safe UPDATE

@@ -76,6 +76,57 @@ export const apiGet = <T>(path: string) => request<T>(path, { method: 'GET' });
 export const apiPost = <T = unknown>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body });
 
+/**
+ * For an endpoint that returns a file (CSV, ...) rather than JSON —
+ * `request()`/`apiGet` always call `res.json()`, which would throw on a CSV
+ * body and swallow it via the `.catch(() => null)` fallback, silently
+ * discarding the whole download.
+ *
+ * Reads the filename from `Content-Disposition` rather than hardcoding it a
+ * second time on the client — the server is the one place that decides what
+ * the file is called. `fallbackFilename` only covers a response that is
+ * missing the header entirely, which should not happen against this API.
+ */
+export async function apiDownload(
+  path: string,
+  fallbackFilename: string,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
+  } catch {
+    throw new ApiError('No connection to the server.', 0, 'NETWORK_ERROR');
+  }
+
+  if (!res.ok) {
+    // A failed export still returns the same { error: {...} } JSON shape as
+    // every other endpoint — only a 200 here is actually a CSV body.
+    const data = (await res.json().catch(() => null)) as ApiErrorBody | null;
+    throw new ApiError(
+      data?.error?.message ?? `Request failed (${res.status})`,
+      res.status,
+      data?.error?.code,
+      data?.error?.details,
+    );
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') ?? '';
+  const filename = /filename="?([^"; ]+)"?/i.exec(disposition)?.[1] ?? fallbackFilename;
+
+  // The standard trick for a JS-triggered download: an off-DOM anchor with
+  // `download` set, clicked programmatically, then torn down immediately.
+  // No React state involved — this element never renders.
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(objectUrl);
+}
+
 /** Message for a toast. Never assume the caller checked the type. */
 export const errorMessage = (err: unknown): string =>
   err instanceof Error ? err.message : 'Something went wrong.';

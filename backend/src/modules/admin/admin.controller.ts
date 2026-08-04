@@ -1,5 +1,6 @@
 import type { Request, RequestHandler, Response } from 'express';
 import {
+  AdminTicketExportQuerySchema,
   AdminTicketQuerySchema,
   AgentDecisionSchema,
   CreateGateSchema,
@@ -239,27 +240,8 @@ export const setGateActive = handle(async (req, res) => {
 /* GET /api/admin/tickets — master ledger                              */
 /* ------------------------------------------------------------------ */
 
-export const listTicketLedger = handle(async (req, res) => {
-  // Zod validates the ids as UUIDs, so a malformed filter is a 400 rather
-  // than a Postgres 22P02 surfacing as an opaque 500.
-  const q = AdminTicketQuerySchema.parse(req.query);
-
-  const filters = {
-    agentId: q.agent_id,
-    unitId: q.unit_id,
-    divisionId: q.division_id,
-    search: q.search,
-  };
-
-  /* Rows and totals in parallel, from the same filter object. The totals are
-   * a SQL aggregate over the whole matching set — NOT a sum of `rows`, which
-   * is capped and would under-report the moment a filter matches more. */
-  const [rows, totals] = await Promise.all([
-    repo.listTicketsForAdmin(filters, q.limit),
-    repo.summariseTicketsForAdmin(filters),
-  ]);
-
-  const tickets: AdminTicketRow[] = rows.map((r) => ({
+function toAdminTicketRow(r: repo.AdminTicketLedgerRow): AdminTicketRow {
+  return {
     id: r.id,
     requestNumber: r.request_number,
     ticketNumber: r.ticket_number,
@@ -278,7 +260,31 @@ export const listTicketLedger = handle(async (req, res) => {
     unitCode: r.unit_code,
     divisionId: r.division_id,
     divisionName: r.division_name,
-  }));
+  };
+}
+
+export const listTicketLedger = handle(async (req, res) => {
+  // Zod validates the ids as UUIDs, so a malformed filter is a 400 rather
+  // than a Postgres 22P02 surfacing as an opaque 500.
+  const q = AdminTicketQuerySchema.parse(req.query);
+
+  const filters = {
+    agentId: q.agent_id,
+    unitId: q.unit_id,
+    divisionId: q.division_id,
+    search: q.search,
+    status: q.status,
+  };
+
+  /* Rows and totals in parallel, from the same filter object. The totals are
+   * a SQL aggregate over the whole matching set — NOT a sum of `rows`, which
+   * is capped and would under-report the moment a filter matches more. */
+  const [rows, totals] = await Promise.all([
+    repo.listTicketsForAdmin(filters, q.limit),
+    repo.summariseTicketsForAdmin(filters),
+  ]);
+
+  const tickets: AdminTicketRow[] = rows.map(toAdminTicketRow);
 
   const body: AdminTicketLedgerResponse = {
     tickets,
@@ -289,6 +295,85 @@ export const listTicketLedger = handle(async (req, res) => {
   };
 
   res.status(200).json(body);
+});
+
+/* ------------------------------------------------------------------ */
+/* GET /api/admin/tickets/export — full CSV of the filtered set        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Not a page size — a backstop against a runaway query. This event will
+ * never plausibly produce anywhere near this many tickets; the cap exists so
+ * an empty filter set can't turn "download everything" into an unbounded
+ * scan, not to leave real data out of the file.
+ */
+const EXPORT_ROW_LIMIT = 100_000;
+
+const CSV_COLUMNS: Array<{
+  header: string;
+  value: (t: AdminTicketRow) => string | number;
+}> = [
+  { header: 'Ticket ID', value: (t) => t.ticketNumber },
+  { header: 'Request Number', value: (t) => t.requestNumber },
+  { header: 'Ticket Type', value: (t) => t.ticketType },
+  { header: 'Buyer Name', value: (t) => t.purchaserName },
+  { header: 'Buyer Mobile', value: (t) => t.purchaserMobile },
+  { header: 'Buyer Email', value: (t) => t.purchaserEmail ?? '' },
+  { header: 'Seats (Adults)', value: (t) => t.countedPersons },
+  { header: 'Children Below 12', value: (t) => t.childrenBelow12 },
+  { header: 'Status', value: (t) => t.status },
+  { header: 'Agent', value: (t) => t.agentName },
+  { header: 'Unit', value: (t) => t.unitName },
+  { header: 'Unit Code', value: (t) => t.unitCode },
+  { header: 'Division', value: (t) => t.divisionName },
+  { header: 'Issued At (UTC)', value: (t) => t.createdAt },
+];
+
+/** RFC 4180: a field touching a comma, quote or newline is quoted, and an
+ *  internal quote is escaped by doubling it — not backslash-escaped, which
+ *  is a CSV myth that corrupts the file for spreadsheet readers expecting
+ *  the RFC form. */
+function csvEscape(value: string | number): string {
+  const s = String(value);
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function toCsv(tickets: AdminTicketRow[]): string {
+  const header = CSV_COLUMNS.map((c) => csvEscape(c.header)).join(',');
+  const rows = tickets.map((t) =>
+    CSV_COLUMNS.map((c) => csvEscape(c.value(t))).join(','),
+  );
+  // CRLF is RFC 4180's line ending and what Excel expects; a bare \n opens
+  // fine in most tools but is technically non-conformant.
+  return [header, ...rows].join('\r\n');
+}
+
+export const exportTicketLedger = handle(async (req, res) => {
+  // Same filters as the ledger, minus `limit` — the export has its own fixed
+  // cap (EXPORT_ROW_LIMIT), not a client-suppliable page size.
+  const q = AdminTicketExportQuerySchema.parse(req.query);
+
+  const filters = {
+    agentId: q.agent_id,
+    unitId: q.unit_id,
+    divisionId: q.division_id,
+    search: q.search,
+    status: q.status,
+  };
+
+  const rows = await repo.listTicketsForAdmin(filters, EXPORT_ROW_LIMIT);
+  const csv = toCsv(rows.map(toAdminTicketRow));
+
+  res.set({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="pravasi-tickets-report.csv"',
+  });
+  // A UTF-8 BOM: Excel on Windows otherwise guesses ANSI and mangles any
+  // purchaser name outside the Latin-1 range. Three bytes, no downside for
+  // any other CSV reader — they all treat a leading BOM as a no-op. Built via
+  // fromCharCode rather than a literal character in source, so it can't get
+  // silently stripped or mangled by an editor/diff tool.
+  res.status(200).send(String.fromCharCode(0xfeff) + csv);
 });
 
 /** Option lists for the ledger's dependent dropdowns. */

@@ -4,6 +4,7 @@ import {
   GATE_PIN_MAX_LENGTH,
   GATE_PIN_MIN_LENGTH,
   MOBILE_NUMBER_REGEX,
+  TICKET_STATUSES,
   TICKET_TYPES,
 } from './constants.js';
 
@@ -395,10 +396,25 @@ export const AdminTicketQuerySchema = z.object({
   unit_id: z.string().uuid('unit_id must be a UUID').optional(),
   division_id: z.string().uuid('division_id must be a UUID').optional(),
   search: z.string().trim().max(120).optional(),
+  status: z.enum(TICKET_STATUSES).optional(),
   limit: z.coerce.number().int().positive().max(1000).default(300),
 });
 
 export type AdminTicketQuery = z.infer<typeof AdminTicketQuerySchema>;
+
+/**
+ * Query for GET /api/admin/tickets/export — the same filters as the ledger
+ * above, minus `limit`. The export has its own fixed row cap
+ * (EXPORT_ROW_LIMIT in admin.controller.ts) precisely so the client cannot
+ * ask for a small page OR override the cap to something unbounded — a CSV
+ * export is either "everything matching the filters" or nothing, there is
+ * no in-between page size to request.
+ */
+export const AdminTicketExportQuerySchema = AdminTicketQuerySchema.omit({
+  limit: true,
+});
+
+export type AdminTicketExportQuery = z.infer<typeof AdminTicketExportQuerySchema>;
 
 /**
  * Query for GET /api/unit-admin/tickets.

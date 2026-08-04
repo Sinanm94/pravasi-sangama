@@ -21,6 +21,7 @@ adminRoutes.get('/agent-directory', controller.listAgentDirectory);
 
 /* --- Master ticket ledger ---------------------------------------- */
 adminRoutes.get('/tickets', controller.listTicketLedger);
+adminRoutes.get('/tickets/export', controller.exportTicketLedger);
 adminRoutes.get('/filter-options', controller.listFilterOptions);
 
 /* --- Gate channels (spec §2, Option A) --------------------------- */

@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 import {
   AlertCircle,
   Baby,
   ChevronDown,
+  Download,
+  Loader2,
   RefreshCw,
   Search,
   Ticket,
@@ -13,25 +16,50 @@ import {
   X,
 } from 'lucide-react';
 import {
+  TICKET_STATUSES,
   TICKET_TYPE_LABELS,
   type AdminFilterOptions,
   type AdminTicketLedgerResponse,
   type AdminTicketRow,
+  type TicketStatus,
 } from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
-import { apiGet, errorMessage } from '@/lib/apiClient';
+import { apiDownload, apiGet, errorMessage } from '@/lib/apiClient';
 import { springSurface } from '@/lib/motion';
 
 const VIOLET = '#5E17EB';
+
+const STATUS_LABELS: Record<TicketStatus, string> = {
+  ACTIVE: 'Active',
+  REVOKED: 'Revoked',
+};
 
 interface Filters {
   divisionId: string;
   unitId: string;
   agentId: string;
+  status: TicketStatus | '';
 }
 
-const NO_FILTERS: Filters = { divisionId: '', unitId: '', agentId: '' };
+const NO_FILTERS: Filters = { divisionId: '', unitId: '', agentId: '', status: '' };
+
+/**
+ * Shared by the JSON list request and the CSV export — both accept the same
+ * filters (§ backend AdminTicketQuerySchema / AdminTicketExportQuerySchema),
+ * so there is exactly one place that turns UI filter state into a query
+ * string for either of them to disagree about.
+ */
+function buildQueryString(f: Filters, searchTerm: string): string {
+  const params = new URLSearchParams();
+  if (f.divisionId) params.set('division_id', f.divisionId);
+  if (f.unitId) params.set('unit_id', f.unitId);
+  if (f.agentId) params.set('agent_id', f.agentId);
+  if (f.status) params.set('status', f.status);
+  if (searchTerm) params.set('search', searchTerm);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
 
 export default function TicketLedgerPage() {
   return (
@@ -73,17 +101,10 @@ function LedgerScreen() {
     async (f: Filters, searchTerm: string, isRefresh = false) => {
       if (isRefresh) setRefreshing(true);
 
-      const params = new URLSearchParams();
-      if (f.divisionId) params.set('division_id', f.divisionId);
-      if (f.unitId) params.set('unit_id', f.unitId);
-      if (f.agentId) params.set('agent_id', f.agentId);
-      if (searchTerm) params.set('search', searchTerm);
-
       try {
-        const qs = params.toString();
         setData(
           await apiGet<AdminTicketLedgerResponse>(
-            `/admin/tickets${qs ? `?${qs}` : ''}`,
+            `/admin/tickets${buildQueryString(f, searchTerm)}`,
           ),
         );
         setLoadError(null);
@@ -99,6 +120,24 @@ function LedgerScreen() {
   useEffect(() => {
     void load(filters, committedSearch);
   }, [load, filters, committedSearch]);
+
+  const [exporting, setExporting] = useState(false);
+
+  const downloadReport = async () => {
+    setExporting(true);
+    try {
+      await apiDownload(
+        `/admin/tickets/export${buildQueryString(filters, committedSearch)}`,
+        'pravasi-tickets-report.csv',
+      );
+    } catch (err) {
+      toast.error('Could not download the report', {
+        description: errorMessage(err),
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   /* Dependent option lists, derived — never a second copy in state (§6.1). */
   const unitOptions = useMemo(() => {
@@ -120,9 +159,10 @@ function LedgerScreen() {
 
   /* Narrowing the parent invalidates the children, so clear them in the same
    * update. Leaving a stale unit selected under a new division would send a
-   * filter pair that matches nothing and read as "no tickets". */
+   * filter pair that matches nothing and read as "no tickets". Status isn't
+   * part of that hierarchy, so it survives every one of these unchanged. */
   const setDivision = (divisionId: string) =>
-    setFilters({ divisionId, unitId: '', agentId: '' });
+    setFilters((p) => ({ ...p, divisionId, unitId: '', agentId: '' }));
 
   const setUnit = (unitId: string) =>
     setFilters((p) => ({ ...p, unitId, agentId: '' }));
@@ -130,8 +170,11 @@ function LedgerScreen() {
   const setAgent = (agentId: string) =>
     setFilters((p) => ({ ...p, agentId }));
 
+  const setStatus = (status: string) =>
+    setFilters((p) => ({ ...p, status: status as TicketStatus | '' }));
+
   const filtered =
-    Boolean(filters.divisionId || filters.unitId || filters.agentId) ||
+    Boolean(filters.divisionId || filters.unitId || filters.agentId || filters.status) ||
     committedSearch.length > 0;
 
   const clearAll = () => {
@@ -202,7 +245,7 @@ function LedgerScreen() {
 
       {/* Filters */}
       <div className="mt-6 rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <SelectFilter
             label="Division"
             value={filters.divisionId}
@@ -233,6 +276,16 @@ function LedgerScreen() {
               label: `${a.name} · ${a.mobileNumber}`,
             }))}
           />
+          <SelectFilter
+            label="Status"
+            value={filters.status}
+            onChange={setStatus}
+            placeholder="All statuses"
+            options={TICKET_STATUSES.map((s) => ({
+              value: s,
+              label: STATUS_LABELS[s],
+            }))}
+          />
 
           <div>
             <label
@@ -258,21 +311,42 @@ function LedgerScreen() {
           </div>
         </div>
 
-        {filtered && (
-          <div className="mt-4 flex items-center justify-between gap-3 border-t border-gray-100 pt-4">
-            <p className="text-[12px] text-gray-400">
-              Summary cards above reflect these filters.
-            </p>
+        {/* Always visible, not just when filtered — the download button lives
+            here because it acts on whatever this row currently expresses:
+            "everything" with no filters set, or the filtered subset. */}
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4">
+          <p className="text-[12px] text-gray-400">
+            {filtered
+              ? 'Summary cards above reflect these filters. The download matches them too.'
+              : 'No filters applied — the download will contain every ticket.'}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            {filtered && (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                Clear filters
+              </button>
+            )}
             <button
               type="button"
-              onClick={clearAll}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
+              onClick={() => void downloadReport()}
+              disabled={exporting}
+              className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-[12px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ backgroundColor: VIOLET }}
             >
-              <X className="h-3.5 w-3.5" strokeWidth={2.5} />
-              Clear filters
+              {exporting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2.5} />
+              ) : (
+                <Download className="h-3.5 w-3.5" strokeWidth={2.5} />
+              )}
+              {exporting ? 'Preparing…' : 'Download Report'}
             </button>
           </div>
-        )}
+        </div>
       </div>
 
       {data?.truncated && (
