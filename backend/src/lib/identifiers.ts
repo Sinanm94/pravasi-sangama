@@ -1,30 +1,51 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 import {
-  REQUEST_NUMBER_HEX_LENGTH,
+  ID_CHARSET,
+  REQUEST_NUMBER_LENGTH,
   REQUEST_NUMBER_PREFIX,
-  TICKET_NUMBER_HEX_LENGTH,
+  TICKET_NUMBER_LENGTH,
   TICKET_NUMBER_PREFIX,
 } from '@pravasi/shared';
 
-const hex = (chars: number) =>
-  randomBytes(chars / 2)
-    .toString('hex')
-    .toUpperCase();
-
-/** REQ-2026-A3F19C0B7E42 */
-export function generateRequestNumber(): string {
-  return `${REQUEST_NUMBER_PREFIX}${hex(REQUEST_NUMBER_HEX_LENGTH)}`;
+/**
+ * One crypto.randomInt(0, 32) draw per character — ID_CHARSET is exactly 32
+ * characters (5 bits), so this is unbiased with no modulo/rejection-sampling
+ * needed, unlike pulling bytes and reducing mod an alphabet size that
+ * doesn't evenly divide 256.
+ */
+function randomId(length: number): string {
+  let out = '';
+  for (let i = 0; i < length; i += 1) {
+    out += ID_CHARSET[randomInt(0, ID_CHARSET.length)];
+  }
+  return out;
 }
 
 /**
- * TKT-9C4E1A7B02
+ * REQ-2026-K4H8QR
  *
- * 2^40 of space. At 50k tickets the birthday bound puts the chance of *any*
- * collision near 0.1%, which the unique constraint plus the retry loop in
- * tickets.service absorbs. Do not shorten this without redoing that maths.
+ * 6 chars * 5 bits = 2^30 of space (~1.07 billion). At 100,000 tickets — well
+ * above what this event will plausibly sell — the chance any single insert
+ * collides with an existing row is ~0.01%, and a collision is not a failure:
+ * tickets.service's NUMBER_COLLISION_RETRIES loop regenerates and retries
+ * the whole transaction silently. See constants.ts for why this is shorter
+ * than the previous 12-hex-character format.
+ */
+export function generateRequestNumber(): string {
+  return `${REQUEST_NUMBER_PREFIX}${randomId(REQUEST_NUMBER_LENGTH)}`;
+}
+
+/**
+ * TKT-Q7X4M2
+ *
+ * Same alphabet, length, and collision math as generateRequestNumber() above.
+ * The two previously carried different bit budgets (12 vs 10 hex chars) for
+ * no reason tied to how they're actually used — every registration produces
+ * exactly one of each (CLAUDE.md §4.4), so their collision domains grow at
+ * the same rate. Nothing here justifies them differing.
  */
 export function generateTicketNumber(): string {
-  return `${TICKET_NUMBER_PREFIX}${hex(TICKET_NUMBER_HEX_LENGTH)}`;
+  return `${TICKET_NUMBER_PREFIX}${randomId(TICKET_NUMBER_LENGTH)}`;
 }
 
 /**

@@ -215,20 +215,37 @@ export const VENUE_INFO_URL =
  * Generation is server-side only (`backend/src/lib/identifiers.ts`); these are
  * the shared format contracts for validation and display.
  *
- *   REQ-2026-A3F19C0B7E42   (12 hex — 2^48 space)
- *   TKT-9C4E1A7B02          (10 hex — 2^40 space)
+ *   REQ-2026-K4H8QR   (6 chars from ID_CHARSET — 2^30 space)
+ *   TKT-Q7X4M2        (6 chars from ID_CHARSET — 2^30 space)
+ *
+ * Previously 12/10 hex characters (2^48 / 2^40) — shortened because staff
+ * search for and re-type these by hand off a printed stub, and hex mixed
+ * with a "REQ-2026-" prefix reads as noise at that length. See
+ * identifiers.ts for the collision-probability math at the new length: it
+ * is deliberately generous relative to this event's realistic ticket
+ * volume, and any collision that does occur is a silent, self-healing retry
+ * (`NUMBER_COLLISION_RETRIES` in tickets.service.ts), never a failure.
+ *
+ * ID_CHARSET drops 0/O and 1/I — the same ambiguous-character exclusion as
+ * the unit-admin password generator (db/bulk-rotate-passwords.ts) — and
+ * stays single-case (uppercase) so nobody has to guess the case of a letter
+ * read off paper. 32 characters is exactly 5 bits, so every character of a
+ * generated id carries identical entropy with one crypto.randomInt(0, 32)
+ * draw — see identifiers.ts.
  */
+export const ID_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
 export const REQUEST_NUMBER_PREFIX = `REQ-${EVENT_YEAR}-`;
 export const TICKET_NUMBER_PREFIX = 'TKT-';
 
-export const REQUEST_NUMBER_HEX_LENGTH = 12;
-export const TICKET_NUMBER_HEX_LENGTH = 10;
+export const REQUEST_NUMBER_LENGTH = 6;
+export const TICKET_NUMBER_LENGTH = 6;
 
 export const REQUEST_NUMBER_REGEX = new RegExp(
-  `^REQ-${EVENT_YEAR}-[0-9A-F]{${REQUEST_NUMBER_HEX_LENGTH}}$`,
+  `^REQ-${EVENT_YEAR}-[${ID_CHARSET}]{${REQUEST_NUMBER_LENGTH}}$`,
 );
 export const TICKET_NUMBER_REGEX = new RegExp(
-  `^TKT-[0-9A-F]{${TICKET_NUMBER_HEX_LENGTH}}$`,
+  `^TKT-[${ID_CHARSET}]{${TICKET_NUMBER_LENGTH}}$`,
 );
 
 export function isRequestNumber(value: string): boolean {

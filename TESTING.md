@@ -267,7 +267,7 @@ Signed in as an agent at `/ticketing`.
       SELECT COUNT(*) FROM qr_codes q JOIN tickets t ON t.id = q.ticket_id
        WHERE t.ticket_type = 'NORMAL';   -- 1 per Normal ticket
       ```
-- [ ] Ticket number matches `TKT-[0-9A-F]{10}` (random, **not** sequential)
+- [ ] Ticket number matches `TKT-[A-Z2-9]{6}` (random, **not** sequential, no `0/O/1/I`)
 
 ### 3.2 SVIP — 5 QR
 
@@ -309,6 +309,11 @@ SELECT qr_hash, code_kind, guest_index FROM qr_codes LIMIT 5;
 - [ ] Glassmorphic backdrop; Escape closes; background does not scroll
 - [ ] **Save as PDF** downloads a PDF whose page is cropped to the ticket
       (no A4 white margin)
+- [ ] On a phone held **portrait**, Save as PDF / Print does not clip the
+      right edge of the pass — some mobile browsers ignore the CSS landscape
+      hint and print portrait regardless of device rotation; the pass must
+      scale down to fit rather than overflow (`globals.css`'s
+      `@media print and (orientation: portrait)` rule)
 - [ ] **Save as Image** downloads `PRAVASI-SANGAMA-2026-TKT-….png`
 - [ ] **Send Email** expands inline; sending shows a spinner then green **Sent!**
 - [ ] API log shows the simulated send:

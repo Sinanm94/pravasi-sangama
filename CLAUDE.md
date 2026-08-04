@@ -294,11 +294,25 @@ agent ledger at `/agent/dashboard`. Printed even when zero — a gate reading
 
 ### 4.4 Numbering and QR secrecy
 
-Request and ticket numbers are **crypto-random hex, not sequential** —
-`REQ-2026-A3F19C0B7E42`, `TKT-9C4E1A7B02`. A sequential number leaks total sales
+Request and ticket numbers are **crypto-random, not sequential** —
+`REQ-2026-K4H8QR`, `TKT-Q7X4M2`. A sequential number leaks total sales
 volume to anyone holding one ticket and lets an attacker enumerate the range.
 Collisions are absorbed by the unique constraint plus a bounded retry of the
 whole transaction; never SELECT-then-INSERT, which races.
+
+Both are 6 characters drawn from `ID_CHARSET` (`packages/shared/src/constants.ts`)
+— uppercase A–Z and 2–9, with `0/O` and `1/I` dropped for the same
+ambiguous-character reason as the unit-admin passwords (§3.3). That's 5 bits
+per character, 2^30 of space — sized against this event's realistic ticket
+volume with room to spare (see `identifiers.ts` for the exact math), not
+against an arbitrary "sounds safe" length. Originally 12/10 hex characters;
+shortened because staff read these off a printed stub and re-type them by
+hand, and a longer, denser hex string is exactly what makes that error-prone.
+
+**Not an admission credential.** Neither number gates entry — the QR payload
+does that, is a full UUID, and is never shortened. Being short and
+human-typable is fine here specifically because the worst a stolen/guessed
+request or ticket number gets you is a searchable label, not a scan.
 
 **The database never stores a QR payload.** Issuance generates a UUID per code,
 stores `sha256(payload)` in `qr_codes.qr_hash`, and returns the raw payloads
