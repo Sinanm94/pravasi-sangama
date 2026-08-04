@@ -65,8 +65,13 @@ function LoginFlow() {
   const login = useAuthStore((s) => s.login);
 
   const [tab, setTab] = useState<Tab>('login');
-  const [adminMode, setAdminMode] = useState(false);
-  const [unitAdminMode, setUnitAdminMode] = useState(false);
+  // `?mode=admin` / `?mode=unit-admin` — a direct link into either form
+  // without clicking through the card, e.g. while a deployment issue is
+  // hiding the buttons themselves, or for a bookmark on a shared device.
+  const [adminMode, setAdminMode] = useState(() => params.get('mode') === 'admin');
+  const [unitAdminMode, setUnitAdminMode] = useState(
+    () => params.get('mode') === 'unit-admin',
+  );
 
   const next = params.get('next');
 
