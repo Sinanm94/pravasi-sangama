@@ -92,3 +92,42 @@
     box-shadow: none !important;
   }
 }
+
+/**
+ * Mobile portrait fallback.
+ *
+ * `@page { size: A4 landscape }` above is a hint, not a guarantee — several
+ * mobile browsers (iOS Safari's Print/Save-to-PDF sheet in particular) print
+ * in whatever orientation the OS dialog is set to and ignore it outright.
+ * The 1000px-wide pass (TicketReceipt.tsx) then no longer fits the usable
+ * width and the right edge clips — the exact bug this fixes. Rotating the
+ * phone to landscape "worked" only because it happened to make the OS
+ * dialog's own default orientation match what the CSS wanted.
+ *
+ * `orientation` in a print media query reports the PAGE's actual box, not
+ * the device — so this only fires when a landscape request was actually
+ * overridden to portrait, and is a no-op everywhere the hint IS honoured
+ * (desktop, well-behaved mobile browsers). Those keep printing at 100%,
+ * which is what keeps the QR modules on exact pixel boundaries (see the
+ * width comment on TicketReceipt.tsx's data-print-ticket element) — this
+ * rule intentionally does not touch that path.
+ *
+ * The scale factor is arithmetic, not a guess: A4 portrait is 210mm wide
+ * (793.7px at the CSS-standard 96dpi) — narrower than US Letter, so it's the
+ * binding constraint for "A4/Letter" — minus the existing 8mm-per-side
+ * margin (60.5px) leaves ~733px of usable width for a 1000px-wide pass:
+ * 733 / 1000 ≈ 0.733. Rounded down to 0.72 for headroom against rounding
+ * and the stub's dashed border, not tuned by trial and error.
+ *
+ * A CSS transform is safe to use here specifically because this pipeline is
+ * vector end to end (§6.2's whole reason for moving off html2canvas): the
+ * pass's text and the QR's SVG modules re-rasterise cleanly at the print
+ * engine's own resolution under a non-integer scale, unlike a PNG, which
+ * would visibly soften.
+ */
+@media print and (orientation: portrait) {
+  html[data-printing='ticket'] [data-print-ticket] {
+    transform: scale(0.72);
+    transform-origin: top left;
+  }
+}
