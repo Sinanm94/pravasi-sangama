@@ -88,6 +88,15 @@ export async function healthcheck(): Promise<boolean> {
   }
 }
 
+/**
+ * Idempotent teardown. `pg.Pool#end()` throws "Called end on pool more than
+ * once" on a second call — it does not tolerate being asked twice, it just
+ * rejects. `ending` flips true synchronously the instant `.end()` is first
+ * called (before the connections actually close), so checking it here is
+ * what makes a second `closePool()` call in the same process a safe no-op
+ * instead of an unhandled rejection on the CLI scripts' way out.
+ */
 export async function closePool(): Promise<void> {
+  if (pool.ending || pool.ended) return;
   await pool.end();
 }
