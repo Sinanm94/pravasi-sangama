@@ -1,5 +1,5 @@
-import { randomInt } from 'node:crypto';
 import { hashSecret } from '../lib/crypto.js';
+import { PASSWORD_ALPHABET, randomChar } from '../lib/passwordGen.js';
 import { closePool, withTransaction } from './index.js';
 
 /**
@@ -27,39 +27,36 @@ import { closePool, withTransaction } from './index.js';
 /* Password generation                                                 */
 /* ------------------------------------------------------------------ */
 
-const PASSWORD_LENGTH = 6;
+const SUFFIX_LENGTH = 3;
 
-// 0/O, 1/l/I stripped — a volunteer misreading one of these at a gate is
-// the exact failure this script exists to reduce, not just the guessable
-// default password.
-const UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-const LOWER = 'abcdefghijkmnopqrstuvwxyz';
-const DIGITS = '23456789';
-const ALL = UPPER + LOWER + DIGITS;
-
-function randomChar(pool: string): string {
-  return pool[randomInt(0, pool.length)]!;
+/** BAT01 -> Bat01. Every unit_admins.username is already exactly this
+ *  shape — 3-letter sector + 2 digits for the 30 unit-scoped accounts,
+ *  ZON0N for the 3 zone accounts — so no separate unit-code lookup is
+ *  needed, the username IS the code (provision-unit-admins.ts's own
+ *  design). */
+function titleCase(code: string): string {
+  return code.charAt(0).toUpperCase() + code.slice(1).toLowerCase();
 }
 
 /**
- * 6 characters, guaranteed at least one upper/lower/digit rather than left
- * to chance — "a mix" is the requirement, not merely a large enough pool
- * that a mix is likely. The three guaranteed picks are placed at random
- * positions among the six, via a Fisher–Yates shuffle using randomInt
- * (crypto-secure), not Math.random.
+ * TitleCasedUnitCode-XXX, e.g. `Bat01-7kX`. The previous fully-random 6
+ * characters were unpredictable but hard for a volunteer to remember or
+ * recover from a typo. Prefixing with the account's own username — already
+ * public, already printed on the unit roster and every dashboard — buys
+ * memorability for free without weakening the password: the entire security
+ * budget is carried by the 3-character suffix.
+ *
+ * The suffix is 3 independent picks from the full alphabet, not a
+ * guaranteed one-of-each-class triple like generateSecurePassword() uses —
+ * at only 3 characters, forcing a fixed class per position would narrow the
+ * search space and telegraph the pattern more than it would help anyone
+ * remember it.
  */
-function generatePassword(): string {
-  const chars = [randomChar(UPPER), randomChar(LOWER), randomChar(DIGITS)];
-  while (chars.length < PASSWORD_LENGTH) {
-    chars.push(randomChar(ALL));
-  }
-
-  for (let i = chars.length - 1; i > 0; i--) {
-    const j = randomInt(0, i + 1);
-    [chars[i], chars[j]] = [chars[j]!, chars[i]!];
-  }
-
-  return chars.join('');
+function generateMemorablePassword(code: string): string {
+  const suffix = Array.from({ length: SUFFIX_LENGTH }, () =>
+    randomChar(PASSWORD_ALPHABET),
+  ).join('');
+  return `${titleCase(code)}-${suffix}`;
 }
 
 /* ------------------------------------------------------------------ */
@@ -84,7 +81,7 @@ async function bulkRotate(): Promise<RotatedAccount[]> {
     const results: RotatedAccount[] = [];
 
     for (const row of rows) {
-      const password = generatePassword();
+      const password = generateMemorablePassword(row.username);
       // Same hashing path as everywhere else in the system — hashSecret()
       // is bcrypt at 12 rounds (lib/crypto.ts), the one place that decision
       // is made.
