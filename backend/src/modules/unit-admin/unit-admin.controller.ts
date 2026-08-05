@@ -5,6 +5,7 @@ import {
   type AdminTicketRow,
   type PendingAgent,
   type UnitAdminAgentListResponse,
+  type UnitAdminInvitePinResponse,
   type UnitAdminTicketListResponse,
 } from '@pravasi/shared';
 import { unitAdminScope } from '../../middleware/auth.js';
@@ -140,6 +141,7 @@ const toAdminTicketRow = (r: AdminTicketLedgerRow): AdminTicketRow => ({
   unitId: r.unit_id,
   unitName: r.unit_name,
   unitCode: r.unit_code,
+  unitSector: r.unit_sector,
   divisionId: r.division_id,
   divisionName: r.division_name,
 });
@@ -165,6 +167,35 @@ export const listTickets = handle(async (req, res) => {
     totals,
     truncated: totals.tickets > tickets.length,
     limit: q.limit,
+  };
+
+  res.status(200).json(body);
+});
+
+/* ------------------------------------------------------------------ */
+/* GET /api/unit-admin/invite-pin                                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The unit head's own agent invite PIN, so they can read it out to a new
+ * agent without chasing an administrator (§3.2).
+ *
+ * Scoped by the same OR-predicate as everything else here, keyed on the
+ * caller's own admin id — this returns PINs only for units this account
+ * actually covers, resolved in SQL.
+ */
+export const listInvitePins = handle(async (req, res) => {
+  const claims = unitAdminScope(req);
+  const rows = await repo.listInvitePinsForAdmin(claims.unitAdminId);
+
+  const body: UnitAdminInvitePinResponse = {
+    units: rows.map((r) => ({
+      unitCode: r.unit_code,
+      unitName: r.unit_name,
+      sector: r.sector,
+      invitePin: r.agent_invite_pin,
+      hasPin: r.has_pin,
+    })),
   };
 
   res.status(200).json(body);

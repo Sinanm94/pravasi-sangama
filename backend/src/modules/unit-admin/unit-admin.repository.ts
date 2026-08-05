@@ -100,6 +100,59 @@ export async function adminHasScope(adminId: string): Promise<boolean> {
 }
 
 /* ------------------------------------------------------------------ */
+/* Agent invite PINs — the admin's own units only                      */
+/* ------------------------------------------------------------------ */
+
+export interface UnitInvitePinRow {
+  unit_code: string;
+  unit_name: string;
+  sector: string | null;
+  /** NULL when no readable copy was ever recorded — see migration 011. */
+  agent_invite_pin: string | null;
+  /** Whether a working PIN exists at all, independent of readability. */
+  has_pin: boolean;
+}
+
+/**
+ * Every unit in this admin's scope, with the invite PIN they hand to their
+ * agents (§3.2). A zone supervisor covers many units, so this is a list, not
+ * a single value.
+ *
+ * Same OR-scope predicate as every other query in this module — an admin
+ * cannot read a PIN for a unit outside their own direct posting or zone
+ * assignments, enforced in SQL rather than filtered afterwards.
+ *
+ * `has_pin` is derived from the HASH, not from the readable copy, because
+ * the hash is what actually verifies at the gateway. That separation is what
+ * lets the dashboard distinguish "no PIN configured for this unit at all"
+ * from "there is a working PIN but nobody recorded a readable copy" — two
+ * different problems with two different fixes.
+ */
+export async function listInvitePinsForAdmin(
+  adminId: string,
+): Promise<UnitInvitePinRow[]> {
+  const { rows } = await query<UnitInvitePinRow>(
+    `SELECT u.unit_code,
+            u.name AS unit_name,
+            u.sector,
+            u.agent_invite_pin,
+            (u.agent_invite_pin_hash IS NOT NULL) AS has_pin
+       FROM units u
+      WHERE u.is_active
+        AND (
+          u.id = (SELECT unit_id FROM unit_admins WHERE id = $1)
+          OR u.id IN (
+               SELECT unit_id FROM supervisor_unit_assignments
+                WHERE admin_id = $1
+             )
+        )
+      ORDER BY u.sector NULLS LAST, u.name`,
+    [adminId],
+  );
+  return rows;
+}
+
+/* ------------------------------------------------------------------ */
 /* Ticket ledger — scoped to the admin's own units                     */
 /* ------------------------------------------------------------------ */
 
@@ -164,7 +217,7 @@ export async function listTicketsForAdmin(
             t.purchaser_name, t.purchaser_mobile, t.purchaser_email,
             t.counted_persons, t.children_below_12, t.status, t.created_at,
             t.agent_id, a.name AS agent_name,
-            t.unit_id, u.name AS unit_name, u.unit_code,
+            t.unit_id, u.name AS unit_name, u.unit_code, u.sector AS unit_sector,
             t.division_id, d.name AS division_name
        FROM tickets t
        JOIN agents a    ON a.id = t.agent_id

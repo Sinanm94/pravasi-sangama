@@ -44,6 +44,15 @@ tier; no delegated admin yet.
 **Division (District)** — A geographical grouping. Owns many units. Read access to
 its own subtree's analytics and ticket ledger. Cannot see other divisions.
 
+**Sector** — The parent grouping of units, held as `units.sector`
+(migration 010). Twelve of them: `BATHA`, `BADIYA`, `SHIFA`, `MALAZ`,
+`MUROOJ`, `GHURNATHA`, `OLAYA`, `RABVA`, `SUDAIR`, `MUZAMIYYAH`,
+`SANAYIYYAH`, `KHARJ`. Deliberately a normalised text column rather than a
+`sectors` table — a sector is a name and nothing else today, so a table
+would buy referential integrity at the price of a join on every ledger and
+analytics query. Migration 010's header records what would have to change
+to promote it, if a sector ever grows attributes of its own.
+
 **Unit** — A specific physical location within a division (e.g. `5 BUILDING`,
 sector `BATHA`). A unit is the *scope* every agent token carries, and every
 ticket is written against it. It is not an authentication factor for an
@@ -707,11 +716,11 @@ pravasi-sangama/
 **Not yet built:** divisions/units/agents CRUD, ticket revocation, real QR
 encoding, `gate:offline` heartbeat, a superuser UI for editing zone coverage
 (direct SQL against `supervisor_unit_assignments` only — see §3.3), replacing
-the placeholder 10/10/10 zone split with the real geographic assignment, a
-self-service way for a unit admin to view or rotate their own unit's
-`agent_invite_pin` (currently: re-run `provision-unit-admins.ts`, which
-reissues all 30, or a direct `UPDATE units SET agent_invite_pin_hash = ...`
-— see §3.2).
+the placeholder 10/10/10 zone split with the real geographic assignment, a way for a
+unit admin to **rotate** their own `agent_invite_pin` (they can now *view*
+it — `GET /api/unit-admin/invite-pin`, shown on `/unit/dashboard` — but
+changing it is still `db:provision-units` or direct SQL, and remember to
+write both columns; see Known debt 8).
 
 ---
 
@@ -755,6 +764,35 @@ let the web tier mint tokens, which is a worse trade than an empty shell.
 5. The seed creates no tickets, so there is nothing to scan yet.
 6. Premium `LOCATION` rows in `qr_codes` are issued but never printed (§4.1),
    so `LOCATION_INFO` is unreachable at the gate. Inert, not harmful.
+7. `units.sector` is free text with no FK or CHECK. Migration 010 normalises
+   and re-asserts the canonical mapping, and `provision-unit-admins.ts`
+   writes the same pairs, but a hand-written `UPDATE units SET sector =
+   'Batha'` would still create a phantom sector. The filter list is derived
+   from `DISTINCT sector`, so a typo shows up as an extra dropdown entry
+   rather than silently swallowing rows.
+8. `units.agent_invite_pin` (migration 011) is a readable copy of a value
+   whose *verification* path is still the bcrypt `agent_invite_pin_hash`.
+   Both are written together by `db:provision-units`, `db:seed` and
+   migration 011, but a manual UPDATE to one alone drifts them — and the
+   failure mode is a unit head reading out a PIN that does not work. If you
+   ever change a PIN by hand, change both columns.
+
+> **Postmortem — every gate scan failed (fixed).** `insertScanLog` used
+> `ON CONFLICT (client_scan_id) DO NOTHING`, but migration 001 creates that
+> arbiter as a **partial** unique index (`WHERE client_scan_id IS NOT NULL`,
+> because online scans that never queued carry NULL). Postgres can only
+> infer a partial index as an arbiter when the conflict target repeats its
+> predicate; a bare target matches no usable index and raises 42P10. That
+> aborted the transaction in `resolveScan()`, rolling back the
+> `admitGuestCode()` UPDATE with it — so the QR never flipped to `SCANNED`,
+> no `scan_logs` row was written, and `/api/scan/verify` 500'd on **every**
+> scan, not an edge case. The scanner then did exactly what §10.3 tells it
+> to do with a 5xx: treat it as retryable, queue the scan, and show a green
+> **Admitted — pending sync**. So the gate looked like it was working while
+> nothing reached the database. Two changes: the conflict target now carries
+> the predicate, and a 5xx is no longer reported to staff as if it were bad
+> wifi (`ScanFailureKind` in `lib/scanApi.ts` — a red **Server error**
+> badge, distinct from amber **Offline**).
 
 ## Setup
 

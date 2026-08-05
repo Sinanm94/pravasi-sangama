@@ -500,6 +500,8 @@ export interface AdminTicketRow {
   unitId: string;
   unitName: string;
   unitCode: string;
+  /** The unit's parent sector (migration 010). Null outside the real roster. */
+  unitSector: string | null;
   divisionId: string;
   divisionName: string;
 }
@@ -519,6 +521,25 @@ export interface AdminTicketLedgerResponse {
   /** True when more rows matched than were returned — narrow the filters. */
   truncated: boolean;
   limit: number;
+}
+
+/**
+ * GET /api/unit-admin/invite-pin — the agent invite PIN(s) for the units
+ * this admin covers (§3.2). A list, not one value: a zone supervisor covers
+ * many units and needs each one's PIN.
+ */
+export interface UnitInvitePin {
+  unitCode: string;
+  unitName: string;
+  sector: string | null;
+  /** Null when a working PIN exists but no readable copy was recorded. */
+  invitePin: string | null;
+  /** False when this unit has no invite PIN configured at all. */
+  hasPin: boolean;
+}
+
+export interface UnitAdminInvitePinResponse {
+  units: UnitInvitePin[];
 }
 
 /**
@@ -544,8 +565,17 @@ export interface UnitAdminTicketListResponse {
 /** Option lists for the ledger's dependent dropdowns. */
 export interface AdminFilterOptions {
   divisions: Array<{ id: string; name: string; code: string }>;
-  units: Array<{ id: string; name: string; unitCode: string; divisionId: string }>;
+  units: Array<{
+    id: string;
+    name: string;
+    unitCode: string;
+    divisionId: string;
+    /** The unit's parent sector (migration 010). Null for units outside the real roster. */
+    sector: string | null;
+  }>;
   agents: Array<{ id: string; name: string; mobileNumber: string; unitId: string }>;
+  /** Distinct sectors present on active units, derived — see listFilterOptions. */
+  sectors: string[];
 }
 
 export interface AgentDirectoryResponse {

@@ -155,16 +155,32 @@ async function provision(): Promise<void> {
     for (const u of UNITS) {
       const invitePinHash = await hashSecret(u.agentInvitePin);
 
+      /* Both invite-PIN columns are written together, always. The hash is
+       * what verifies at the gateway; the plaintext is what the unit head
+       * reads off their own dashboard (migration 011). Writing one without
+       * the other is the drift that makes a dashboard show a PIN which does
+       * not work — so they are set from the same literal, here, in one
+       * statement. */
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO units (division_id, unit_code, name, sector, agent_invite_pin_hash)
-              VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO units
+              (division_id, unit_code, name, sector,
+               agent_invite_pin_hash, agent_invite_pin)
+              VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (division_id, unit_code) DO UPDATE
               SET name                   = EXCLUDED.name,
                   sector                 = EXCLUDED.sector,
                   agent_invite_pin_hash  = EXCLUDED.agent_invite_pin_hash,
+                  agent_invite_pin       = EXCLUDED.agent_invite_pin,
                   is_active              = TRUE
            RETURNING id`,
-        [divisionId, u.unit_code, u.name, u.sector, invitePinHash],
+        [
+          divisionId,
+          u.unit_code,
+          u.name,
+          u.sector,
+          invitePinHash,
+          u.agentInvitePin,
+        ],
       );
       unitIds.set(u.unit_code, rows[0]!.id);
     }

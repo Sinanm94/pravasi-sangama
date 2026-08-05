@@ -154,15 +154,25 @@ async function seed() {
       // Natural key is (division_id, unit_code) — unit codes are unique
       // within a division, not globally.
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO units (division_id, unit_code, name, sector, agent_invite_pin_hash)
-              VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO units
+              (division_id, unit_code, name, sector,
+               agent_invite_pin_hash, agent_invite_pin)
+              VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT (division_id, unit_code) DO UPDATE
               SET name                   = EXCLUDED.name,
                   sector                 = EXCLUDED.sector,
                   agent_invite_pin_hash  = EXCLUDED.agent_invite_pin_hash,
+                  agent_invite_pin       = EXCLUDED.agent_invite_pin,
                   is_active              = TRUE
            RETURNING id`,
-        [divisionId, unit.unit_code, unit.name, unit.sector, devInvitePinHash],
+        [
+          divisionId,
+          unit.unit_code,
+          unit.name,
+          unit.sector,
+          devInvitePinHash,
+          DEV_AGENT_INVITE_PIN,
+        ],
       );
 
       unitIds.set(unit.unit_code, rows[0]!.id);

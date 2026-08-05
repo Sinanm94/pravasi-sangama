@@ -9,6 +9,9 @@ import {
   Building2,
   Check,
   ChevronDown,
+  Eye,
+  EyeOff,
+  KeyRound,
   Loader2,
   LogOut,
   RefreshCw,
@@ -22,6 +25,7 @@ import {
   type AdminTicketRow,
   type PendingAgent,
   type UnitAdminAgentListResponse,
+  type UnitAdminInvitePinResponse,
   type UnitAdminTicketListResponse,
 } from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -60,9 +64,23 @@ function UnitAdminScreen() {
   const user = useAuthStore((s) => s.userData);
   const logout = useAuthStore((s) => s.logout);
 
-  // Absent, not merely empty — see SessionUser: a "zone" account's session
-  // carries no unit at all until a superuser assigns one.
-  const hasUnit = Boolean(user?.unitId);
+  /* Scope is NOT `user.unitId`.
+   *
+   * A Zone Supervisor covers its units through supervisor_unit_assignments
+   * and carries `unitId: null` (§3.3) — gating on the direct posting alone
+   * made all three zone accounts render "No unit assigned yet" while the
+   * backend was happily resolving ten units each for them.
+   *
+   * The authority is the server: /unit-admin/invite-pin returns exactly the
+   * units in scope, resolved by the same OR-predicate as every other query
+   * in that module. Zero rows from THAT is what "unscoped" means. Until it
+   * answers we do not know, so we render the dashboard rather than
+   * flashing an empty-state that may be wrong. */
+  const [invitePins, setInvitePins] =
+    useState<UnitAdminInvitePinResponse | null>(null);
+  const [scopeResolved, setScopeResolved] = useState(false);
+
+  const hasUnit = !scopeResolved || (invitePins?.units.length ?? 0) > 0;
 
   const [data, setData] = useState<UnitAdminAgentListResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -72,7 +90,6 @@ function UnitAdminScreen() {
 
   const load = useCallback(
     async (isRefresh = false) => {
-      if (!hasUnit) return;
       if (isRefresh) setRefreshing(true);
       try {
         setData(await apiGet<UnitAdminAgentListResponse>('/unit-admin/agents'));
@@ -83,7 +100,7 @@ function UnitAdminScreen() {
         setRefreshing(false);
       }
     },
-    [hasUnit],
+    [],
   );
 
   useEffect(() => {
@@ -148,6 +165,23 @@ function UnitAdminScreen() {
 
   const pendingCount = data?.pending.length ?? 0;
 
+  /* --- Agent invite PIN — the number this unit head reads out (§3.2) -- */
+
+  /* Hidden by default. This screen is open on a phone at a registration
+   * desk all day; the PIN should be shown when it is being handed over, not
+   * left facing the queue. */
+  const [pinRevealed, setPinRevealed] = useState(false);
+
+  useEffect(() => {
+    void apiGet<UnitAdminInvitePinResponse>('/unit-admin/invite-pin')
+      .then(setInvitePins)
+      // Non-fatal for the PIN card itself, but it must still resolve scope —
+      // otherwise a failed call would leave the dashboard permanently
+      // assuming scope it may not have.
+      .catch(() => setInvitePins(null))
+      .finally(() => setScopeResolved(true));
+  }, []);
+
   /* --- Ticket Sales — read-only ledger, scoped server-side (§3.3) ---- */
 
   const [tickets, setTickets] = useState<UnitAdminTicketListResponse | null>(null);
@@ -166,7 +200,6 @@ function UnitAdminScreen() {
 
   const loadTickets = useCallback(
     async (isRefresh = false) => {
-      if (!hasUnit) return;
       if (isRefresh) setTicketRefreshing(true);
 
       const params = new URLSearchParams();
@@ -187,7 +220,7 @@ function UnitAdminScreen() {
         setTicketRefreshing(false);
       }
     },
-    [hasUnit, ticketAgentId, committedTicketSearch],
+    [ticketAgentId, committedTicketSearch],
   );
 
   useEffect(() => {
@@ -244,6 +277,12 @@ function UnitAdminScreen() {
           <NoUnitAssigned />
         ) : (
           <>
+            <InvitePinCard
+              data={invitePins}
+              revealed={pinRevealed}
+              onToggle={() => setPinRevealed((v) => !v)}
+            />
+
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <h1 className="text-[24px] font-semibold leading-tight tracking-[-0.02em] text-gray-900">
@@ -542,6 +581,122 @@ function formatWhen(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/* ================================================================== */
+/* Agent invite PIN (§3.2)                                              */
+/* ================================================================== */
+
+/**
+ * The number a unit head reads out to every agent they recruit, on their own
+ * screen instead of in an administrator's spreadsheet.
+ *
+ * Concealed until tapped: this dashboard sits open on a phone at a
+ * registration desk, and a 4-digit code facing a queue all afternoon is how
+ * it ends up somewhere it was not meant to go. Revealing is one tap, and the
+ * value is large and monospaced once shown — it is going to be read aloud
+ * across a noisy hall.
+ *
+ * A zone supervisor covers several units, so this renders a list. Each row
+ * distinguishes three states, because they need three different fixes:
+ * a PIN to read, a unit whose PIN exists but was never recorded readably
+ * (re-run db:provision-units), and a unit with no PIN configured at all.
+ */
+function InvitePinCard({
+  data,
+  revealed,
+  onToggle,
+}: {
+  data: UnitAdminInvitePinResponse | null;
+  revealed: boolean;
+  onToggle: () => void;
+}) {
+  if (!data || data.units.length === 0) return null;
+
+  return (
+    <div className="mb-6 overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <KeyRound className="h-4 w-4 shrink-0" style={{ color: VIOLET }} strokeWidth={2.25} />
+          <div className="min-w-0">
+            <p
+              className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+              style={{ color: VIOLET }}
+            >
+              Agent invite PIN
+            </p>
+            <p className="mt-0.5 text-[12px] leading-snug text-gray-500">
+              Give this to agents registering at your unit
+            </p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onToggle}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
+        >
+          {revealed ? (
+            <>
+              <EyeOff className="h-3.5 w-3.5" strokeWidth={2.25} />
+              Hide
+            </>
+          ) : (
+            <>
+              <Eye className="h-3.5 w-3.5" strokeWidth={2.25} />
+              Show
+            </>
+          )}
+        </button>
+      </div>
+
+      <ul className="mt-4 divide-y divide-gray-900/[0.05] border-t border-gray-900/[0.05]">
+        {data.units.map((u) => (
+          <li
+            key={u.unitCode}
+            className="flex items-center justify-between gap-4 px-6 py-3.5"
+          >
+            <div className="min-w-0">
+              <p className="truncate text-[14px] font-medium text-gray-900">
+                {u.unitName}
+              </p>
+              <p className="text-[11px] uppercase tracking-[0.08em] text-gray-400">
+                {u.sector ? `${u.sector} · ` : ''}
+                {u.unitCode}
+              </p>
+            </div>
+
+            {!u.hasPin ? (
+              <span className="shrink-0 text-[12px] font-medium text-amber-700">
+                No PIN set
+              </span>
+            ) : u.invitePin === null ? (
+              /* A working PIN exists, but nothing readable was stored for
+                 it — migration 011 explains when that happens. Saying so is
+                 better than a blank space that reads as "broken". */
+              <span className="shrink-0 text-[12px] font-medium text-gray-400">
+                Not recorded
+              </span>
+            ) : revealed ? (
+              <span
+                className="shrink-0 font-mono text-[22px] font-bold tabular-nums tracking-[0.18em]"
+                style={{ color: VIOLET_DEEP }}
+              >
+                {u.invitePin}
+              </span>
+            ) : (
+              <span
+                className="shrink-0 font-mono text-[22px] font-bold tracking-[0.18em] text-gray-300"
+                aria-label="PIN hidden"
+              >
+                ••••
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /* ================================================================== */
