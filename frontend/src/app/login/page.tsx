@@ -246,7 +246,7 @@ function AgentLoginForm({
         value={identifier}
         onChange={(v) => setIdentifier(v.replace(/\D/g, '').slice(0, 10))}
         inputMode="numeric"
-        placeholder="8888999955"
+        placeholder="9876543210"
         autoComplete="username"
         required
       />
@@ -380,7 +380,7 @@ function SignupForm({ onBack }: { onBack: () => void }) {
           clearError('mobile');
         }}
         inputMode="numeric"
-        placeholder="8888999955"
+        placeholder="9876543210"
         error={errors.mobile}
         required
       />
