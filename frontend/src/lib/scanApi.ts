@@ -9,11 +9,30 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? '/api';
 /** Budget for the whole gate interaction is ~300ms; this is the hard ceiling. */
 export const SCAN_TIMEOUT_MS = 1500;
 
-/** Thrown when the network failed to produce a verdict. Never for a rejection. */
+/**
+ * Thrown when no verdict was reached. Never for a rejection — a DUPLICATE or
+ * an INVALID ticket is a settled 200 answer, not this.
+ *
+ * `kind` separates two cases that are both retryable but mean very different
+ * things to whoever is standing at the gate:
+ *
+ *   OFFLINE       the request never landed — venue wifi, captive portal, a
+ *                 dead uplink. Expected on event day; the queue handles it.
+ *   SERVER_ERROR  the server WAS reached and answered 5xx. The network is
+ *                 fine, something is broken server-side. Still queued (it may
+ *                 recover), but staff must not be told "you're offline" when
+ *                 they are not — that sends someone to check the router while
+ *                 the real fault is elsewhere.
+ */
+export type ScanFailureKind = 'OFFLINE' | 'SERVER_ERROR';
+
 export class ScanNetworkError extends Error {
-  constructor(message: string) {
+  readonly kind: ScanFailureKind;
+
+  constructor(message: string, kind: ScanFailureKind) {
     super(message);
     this.name = 'ScanNetworkError';
+    this.kind = kind;
   }
 }
 
@@ -35,14 +54,15 @@ async function post<T>(
       signal: controller.signal,
     });
   } catch {
-    throw new ScanNetworkError('Request did not complete');
+    throw new ScanNetworkError('Request did not complete', 'OFFLINE');
   } finally {
     clearTimeout(timer);
   }
 
-  // 5xx is a server problem — retryable, same as a timeout.
+  // 5xx is a server problem — retryable like a timeout, but NOT the same
+  // thing as being offline, and the gate is told so. See ScanFailureKind.
   if (res.status >= 500) {
-    throw new ScanNetworkError(`Server error ${res.status}`);
+    throw new ScanNetworkError(`Server error ${res.status}`, 'SERVER_ERROR');
   }
 
   // 4xx is a settled answer (auth expired, malformed). Not retryable.

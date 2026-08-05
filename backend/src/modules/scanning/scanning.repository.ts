@@ -201,11 +201,28 @@ export async function insertScanLog(
   },
 ): Promise<boolean> {
   const { rowCount } = await client.query(
+    /*
+     * The `WHERE client_scan_id IS NOT NULL` on the conflict target is NOT
+     * decorative — omitting it breaks every scan in the system.
+     *
+     * Migration 001 creates the arbiter as a PARTIAL unique index (the same
+     * predicate), because online scans that never queued locally carry NULL
+     * and there can be many of those. Postgres infers the arbiter index from
+     * the conflict target, and a partial index is only inferable when the
+     * target repeats its predicate. A bare `ON CONFLICT (client_scan_id)`
+     * matches no usable index and raises 42P10, "there is no unique or
+     * exclusion constraint matching the ON CONFLICT specification".
+     *
+     * That error aborts the surrounding transaction in resolveScan(), which
+     * rolls back the admitGuestCode() UPDATE with it — so the scan neither
+     * admits nor logs, and the endpoint 500s. Every scan, not an edge case.
+     */
     `INSERT INTO scan_logs
        (client_scan_id, qr_code_id, ticket_id, scanned_hash,
         result, scanned_by, gate_id, unit_id, gate_label, ip_address, created_at)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, COALESCE($11::TIMESTAMPTZ, NOW()))
-     ON CONFLICT (client_scan_id) DO NOTHING`,
+     ON CONFLICT (client_scan_id) WHERE client_scan_id IS NOT NULL
+       DO NOTHING`,
     [
       params.clientScanId,
       params.qrCodeId,

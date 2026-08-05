@@ -5,6 +5,7 @@ import {
   CloudUpload,
   Loader2,
   RefreshCw,
+  ServerCrash,
   Wifi,
   WifiOff,
   X,
@@ -32,7 +33,14 @@ const SYNC_INTERVAL_MS = 5_000;
 /** Ignore the same code re-read by the camera within this window. */
 const REPEAT_SUPPRESS_MS = 4_000;
 
-type NetworkState = 'online' | 'offline' | 'syncing';
+/**
+ * `server-error` is deliberately its own state rather than folded into
+ * `offline`. Both mean "scans are queueing", but only one of them is fixed by
+ * looking at the wifi — see ScanFailureKind in lib/scanApi.ts. This is
+ * inline, persistent state, not a toast (§5.1): a gate needs to be able to
+ * read it at any moment, not catch it as it disappears.
+ */
+type NetworkState = 'online' | 'offline' | 'syncing' | 'server-error';
 
 interface GateScannerProps {
   unitName: string;
@@ -117,7 +125,8 @@ export default function GateScanner({
         /* Offline fallback. The gate ADMITS on a pending scan — holding a
          * queue at the door to wait for wifi is worse than the failure it
          * prevents (§10.3). */
-        setNetwork('offline');
+        const serverFault = err.kind === 'SERVER_ERROR';
+        setNetwork(serverFault ? 'server-error' : 'offline');
 
         const seenAt = await localAdmitAt(payload);
         if (seenAt) {
@@ -140,10 +149,16 @@ export default function GateScanner({
         await recordLocalAdmit(payload);
         await refreshQueueCount();
 
+        /* Still green and still admitted — the guest walks either way. But the
+         * detail line names which failure this was, so nobody goes hunting for
+         * a wifi problem that isn't there when the server is the thing that
+         * is broken. */
         show({
           status: 'SUCCESS',
           headline: 'Admitted',
-          detail: 'Saved locally — will verify when the network returns',
+          detail: serverFault
+            ? 'Saved locally — server problem, will retry'
+            : 'Saved locally — will verify when the network returns',
           pending: true,
         });
       } finally {
@@ -238,9 +253,15 @@ export default function GateScanner({
       );
       await refreshQueueCount();
       setNetwork('online');
-    } catch {
+    } catch (err) {
       await markAttempted(batch.map((b) => b.client_scan_id));
-      setNetwork('offline');
+      // Same distinction as a live scan: a draining queue that keeps failing
+      // against a reachable server is a fault to escalate, not weak wifi.
+      setNetwork(
+        err instanceof ScanNetworkError && err.kind === 'SERVER_ERROR'
+          ? 'server-error'
+          : 'offline',
+      );
     }
   }, [refreshQueueCount]);
 
@@ -379,6 +400,13 @@ function NetworkBadge({ state }: { state: NetworkState }) {
     online: { icon: Wifi, label: 'Online', tone: 'text-emerald-400' },
     offline: { icon: WifiOff, label: 'Offline', tone: 'text-amber-400' },
     syncing: { icon: Loader2, label: 'Syncing', tone: 'text-sky-400' },
+    /* Red, not amber: offline is an expected event-day condition, a server
+     * fault is not, and someone should escalate rather than wait it out. */
+    'server-error': {
+      icon: ServerCrash,
+      label: 'Server error',
+      tone: 'text-red-400',
+    },
   }[state];
 
   const Icon = config.icon;
