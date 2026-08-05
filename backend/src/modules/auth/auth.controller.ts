@@ -8,6 +8,7 @@ import {
   SESSION_COOKIE_NAME,
   SuperuserLoginSchema,
   UnitAdminLoginSchema,
+  UnitGatewaySchema,
 } from '@pravasi/shared';
 import { clearSessionCookie, setSessionCookie, verifySession } from '../../lib/jwt.js';
 import { sendPasswordResetEmail } from './auth.email.js';
@@ -81,6 +82,19 @@ export const agentSignup = handle(async (req, res) => {
 /** Public unit picker for the signup form. Codes are not secrets; PINs are. */
 export const publicUnits = handle(async (_req, res) => {
   res.status(200).json({ units: await service.listUnitsForSignup() });
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /api/auth/unit-gateway — the Unit Gateway (§3.2)               */
+/* ------------------------------------------------------------------ */
+
+export const unitGateway = handle(async (req, res) => {
+  const input = UnitGatewaySchema.parse(req.body);
+  const result = await service.verifyUnitGateway(input);
+
+  // No cookie: this isn't a session, just a one-time reveal of which unit
+  // to hardcode into the forms behind it.
+  res.status(200).json(result);
 });
 
 /* ------------------------------------------------------------------ */

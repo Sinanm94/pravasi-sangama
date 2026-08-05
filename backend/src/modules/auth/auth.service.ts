@@ -15,6 +15,8 @@ import type {
   SuperuserLoginInput,
   UnitAdminClaims,
   UnitAdminLoginInput,
+  UnitGatewayInput,
+  UnitGatewayResponse,
 } from '@pravasi/shared';
 import { env } from '../../config/env.js';
 import {
@@ -315,14 +317,45 @@ export async function unitAdminLogin(
 
 const UNIQUE_VIOLATION = '23505';
 
+/**
+ * Shared by the Unit Gateway check and signup's own re-verification — one
+ * place decides what "the invite PIN matched" means, including the
+ * not-yet-configured case, so the two can never quietly disagree.
+ */
+async function requireInvitePin(
+  unit: repo.UnitInviteRow,
+  pin: string,
+): Promise<void> {
+  if (!unit.agent_invite_pin_hash) {
+    // Burn the same time a real comparison would take (lib/crypto.ts's
+    // verifyAgainstDummy), same reasoning as agentLogin's not-found path.
+    await verifyAgainstDummy(pin);
+    throw unauthorized(
+      'This unit has not set up an invite PIN yet. Contact your unit head.',
+    );
+  }
+
+  const ok = await verifySecret(pin, unit.agent_invite_pin_hash);
+  if (!ok) {
+    throw unauthorized('Incorrect invite PIN. Check with your unit head.');
+  }
+}
+
 export async function agentSignup(
   input: AgentSignupInput,
   ctx: RequestContext,
 ): Promise<AgentSignupResponse> {
-  const unit = await repo.findUnitIdByCode(input.unit_code);
+  const unit = await repo.findUnitForGateway(input.unit_code);
   if (!unit) {
     throw badRequest('That unit code does not exist. Check with your unit head.');
   }
+
+  /* The Unit Gateway screen is a UX gate, not the security boundary — this
+   * re-check is what actually stops someone from bypassing that screen and
+   * POSTing an arbitrary unit_code straight to this endpoint (§3.2). The
+   * frontend hardcodes unit_code from the gateway step already passed, but
+   * nothing server-side trusts that on its own. */
+  await requireInvitePin(unit, input.agent_invite_pin);
 
   const passwordHash = await hashSecret(input.password);
 
@@ -386,6 +419,33 @@ export async function listUnitsForSignup(): Promise<PublicUnit[]> {
     sector: r.sector,
     divisionName: r.division_name,
   }));
+}
+
+/* =================================================================== */
+/* Unit Gateway — agent invite PIN (§3.2)                               */
+/* =================================================================== */
+
+/**
+ * Checked fresh on every attempt. No session, cookie, or token is issued —
+ * this only confirms the PIN is right and hands back the unit for the
+ * frontend to hardcode into the rest of this visit's login/signup forms.
+ */
+export async function verifyUnitGateway(
+  input: UnitGatewayInput,
+): Promise<UnitGatewayResponse> {
+  const unit = await repo.findUnitForGateway(input.unit_code);
+  if (!unit) {
+    throw badRequest('That unit code does not exist. Check with your unit head.');
+  }
+
+  await requireInvitePin(unit, input.agent_invite_pin);
+
+  return {
+    unitId: unit.id,
+    unitCode: unit.unit_code,
+    unitName: unit.name,
+    divisionName: unit.division_name,
+  };
 }
 
 /* =================================================================== */

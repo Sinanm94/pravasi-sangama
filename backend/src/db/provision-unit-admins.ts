@@ -40,53 +40,61 @@ const DIVISION = { code: 'RIYADH', name: 'Riyadh' };
  * unit_code doubles as the unit_admin's login username — the "User_ID" in
  * the source roster IS the unit code, by design: one account per location,
  * named after the location it approves for.
+ *
+ * `agentInvitePin` is a SEPARATE credential (migration 009, CLAUDE.md §3.2)
+ * — the Unit Gateway PIN a unit head hands to their own agents so they land
+ * in the right unit's registration form, deliberately NOT the same value as
+ * `password` above. Unlike the unit_code (public, printed everywhere), this
+ * one has to actually be unguessable from the code, so it is independently
+ * generated per unit rather than following the `<code>PW` pattern.
  */
 interface UnitEntry {
   unit_code: string;
   sector: string;
   name: string;
   password: string;
+  agentInvitePin: string;
 }
 
 const UNITS: readonly UnitEntry[] = [
-  { unit_code: 'BAT01', sector: 'BATHA', name: '5 Building', password: 'BAT01PW' },
-  { unit_code: 'BAT02', sector: 'BATHA', name: 'Shara Rail', password: 'BAT02PW' },
-  { unit_code: 'BAT03', sector: 'BATHA', name: 'Old Saptco', password: 'BAT03PW' },
-  { unit_code: 'BAT04', sector: 'BATHA', name: 'Deera', password: 'BAT04PW' },
-  { unit_code: 'BAT05', sector: 'BATHA', name: 'Gurabi', password: 'BAT05PW' },
+  { unit_code: 'BAT01', sector: 'BATHA', name: '5 Building', password: 'BAT01PW', agentInvitePin: '4170' },
+  { unit_code: 'BAT02', sector: 'BATHA', name: 'Shara Rail', password: 'BAT02PW', agentInvitePin: '0268' },
+  { unit_code: 'BAT03', sector: 'BATHA', name: 'Old Saptco', password: 'BAT03PW', agentInvitePin: '9205' },
+  { unit_code: 'BAT04', sector: 'BATHA', name: 'Deera', password: 'BAT04PW', agentInvitePin: '5102' },
+  { unit_code: 'BAT05', sector: 'BATHA', name: 'Gurabi', password: 'BAT05PW', agentInvitePin: '9541' },
 
-  { unit_code: 'BAD01', sector: 'BADIYA', name: 'Shara Madeena', password: 'BAD01PW' },
-  { unit_code: 'BAD02', sector: 'BADIYA', name: 'Shara Abraz', password: 'BAD02PW' },
-  { unit_code: 'BAD03', sector: 'BADIYA', name: 'Wadi Laban', password: 'BAD03PW' },
+  { unit_code: 'BAD01', sector: 'BADIYA', name: 'Shara Madeena', password: 'BAD01PW', agentInvitePin: '0287' },
+  { unit_code: 'BAD02', sector: 'BADIYA', name: 'Shara Abraz', password: 'BAD02PW', agentInvitePin: '3340' },
+  { unit_code: 'BAD03', sector: 'BADIYA', name: 'Wadi Laban', password: 'BAD03PW', agentInvitePin: '8542' },
 
-  { unit_code: 'SHI01', sector: 'SHIFA', name: 'Atheeka', password: 'SHI01PW' },
-  { unit_code: 'SHI02', sector: 'SHIFA', name: 'Al Badr', password: 'SHI02PW' },
-  { unit_code: 'SHI03', sector: 'SHIFA', name: 'Aziziyyah', password: 'SHI03PW' },
+  { unit_code: 'SHI01', sector: 'SHIFA', name: 'Atheeka', password: 'SHI01PW', agentInvitePin: '9579' },
+  { unit_code: 'SHI02', sector: 'SHIFA', name: 'Al Badr', password: 'SHI02PW', agentInvitePin: '0394' },
+  { unit_code: 'SHI03', sector: 'SHIFA', name: 'Aziziyyah', password: 'SHI03PW', agentInvitePin: '3095' },
 
-  { unit_code: 'MAL01', sector: 'MALAZ', name: 'Jarir', password: 'MAL01PW' },
-  { unit_code: 'MAL02', sector: 'MALAZ', name: 'Sulay', password: 'MAL02PW' },
-  { unit_code: 'MAL03', sector: 'MALAZ', name: 'Shara Arbaeen', password: 'MAL03PW' },
+  { unit_code: 'MAL01', sector: 'MALAZ', name: 'Jarir', password: 'MAL01PW', agentInvitePin: '6825' },
+  { unit_code: 'MAL02', sector: 'MALAZ', name: 'Sulay', password: 'MAL02PW', agentInvitePin: '2710' },
+  { unit_code: 'MAL03', sector: 'MALAZ', name: 'Shara Arbaeen', password: 'MAL03PW', agentInvitePin: '1026' },
 
-  { unit_code: 'MUR01', sector: 'MUROOJ', name: 'Darayiyyah', password: 'MUR01PW' },
-  { unit_code: 'MUR02', sector: 'MUROOJ', name: 'Mursalath', password: 'MUR02PW' },
-  { unit_code: 'MUR03', sector: 'MUROOJ', name: 'Dallah', password: 'MUR03PW' },
+  { unit_code: 'MUR01', sector: 'MUROOJ', name: 'Darayiyyah', password: 'MUR01PW', agentInvitePin: '4290' },
+  { unit_code: 'MUR02', sector: 'MUROOJ', name: 'Mursalath', password: 'MUR02PW', agentInvitePin: '5845' },
+  { unit_code: 'MUR03', sector: 'MUROOJ', name: 'Dallah', password: 'MUR03PW', agentInvitePin: '6679' },
 
-  { unit_code: 'GHU01', sector: 'GHURNATHA', name: 'Sahafa', password: 'GHU01PW' },
-  { unit_code: 'GHU02', sector: 'GHURNATHA', name: 'Nakheel', password: 'GHU02PW' },
-  { unit_code: 'GHU03', sector: 'GHURNATHA', name: 'Malga', password: 'GHU03PW' },
+  { unit_code: 'GHU01', sector: 'GHURNATHA', name: 'Sahafa', password: 'GHU01PW', agentInvitePin: '0660' },
+  { unit_code: 'GHU02', sector: 'GHURNATHA', name: 'Nakheel', password: 'GHU02PW', agentInvitePin: '2103' },
+  { unit_code: 'GHU03', sector: 'GHURNATHA', name: 'Malga', password: 'GHU03PW', agentInvitePin: '7505' },
 
-  { unit_code: 'OLA01', sector: 'OLAYA', name: 'Sulaimaniyyah', password: 'OLA01PW' },
-  { unit_code: 'OLA02', sector: 'OLAYA', name: 'Hara', password: 'OLA02PW' },
-  { unit_code: 'OLA03', sector: 'OLAYA', name: 'Thakassusi', password: 'OLA03PW' },
+  { unit_code: 'OLA01', sector: 'OLAYA', name: 'Sulaimaniyyah', password: 'OLA01PW', agentInvitePin: '5006' },
+  { unit_code: 'OLA02', sector: 'OLAYA', name: 'Hara', password: 'OLA02PW', agentInvitePin: '3512' },
+  { unit_code: 'OLA03', sector: 'OLAYA', name: 'Thakassusi', password: 'OLA03PW', agentInvitePin: '7447' },
 
-  { unit_code: 'RAB01', sector: 'RABVA', name: 'Rawdah', password: 'RAB01PW' },
-  { unit_code: 'RAB02', sector: 'RABVA', name: 'Rayyan', password: 'RAB02PW' },
-  { unit_code: 'RAB03', sector: 'RABVA', name: 'Rawabi', password: 'RAB03PW' },
+  { unit_code: 'RAB01', sector: 'RABVA', name: 'Rawdah', password: 'RAB01PW', agentInvitePin: '0752' },
+  { unit_code: 'RAB02', sector: 'RABVA', name: 'Rayyan', password: 'RAB02PW', agentInvitePin: '0358' },
+  { unit_code: 'RAB03', sector: 'RABVA', name: 'Rawabi', password: 'RAB03PW', agentInvitePin: '1207' },
 
-  { unit_code: 'SUD01', sector: 'SUDAIR', name: 'Sudair', password: 'SUD01PW' },
-  { unit_code: 'MUZ01', sector: 'MUZAMIYYAH', name: 'Muzamiyyah', password: 'MUZ01PW' },
-  { unit_code: 'SAN01', sector: 'SANAYIYYAH', name: 'Sanayiyyah', password: 'SAN01PW' },
-  { unit_code: 'KHA01', sector: 'KHARJ', name: 'Kharj', password: 'KHA01PW' },
+  { unit_code: 'SUD01', sector: 'SUDAIR', name: 'Sudair', password: 'SUD01PW', agentInvitePin: '9265' },
+  { unit_code: 'MUZ01', sector: 'MUZAMIYYAH', name: 'Muzamiyyah', password: 'MUZ01PW', agentInvitePin: '6865' },
+  { unit_code: 'SAN01', sector: 'SANAYIYYAH', name: 'Sanayiyyah', password: 'SAN01PW', agentInvitePin: '1449' },
+  { unit_code: 'KHA01', sector: 'KHARJ', name: 'Kharj', password: 'KHA01PW', agentInvitePin: '4060' },
 ] as const;
 
 /**
@@ -145,15 +153,18 @@ async function provision(): Promise<void> {
     const unitIds = new Map<string, string>();
 
     for (const u of UNITS) {
+      const invitePinHash = await hashSecret(u.agentInvitePin);
+
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO units (division_id, unit_code, name, sector)
-              VALUES ($1, $2, $3, $4)
+        `INSERT INTO units (division_id, unit_code, name, sector, agent_invite_pin_hash)
+              VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (division_id, unit_code) DO UPDATE
-              SET name      = EXCLUDED.name,
-                  sector    = EXCLUDED.sector,
-                  is_active = TRUE
+              SET name                   = EXCLUDED.name,
+                  sector                 = EXCLUDED.sector,
+                  agent_invite_pin_hash  = EXCLUDED.agent_invite_pin_hash,
+                  is_active              = TRUE
            RETURNING id`,
-        [divisionId, u.unit_code, u.name, u.sector],
+        [divisionId, u.unit_code, u.name, u.sector, invitePinHash],
       );
       unitIds.set(u.unit_code, rows[0]!.id);
     }
@@ -287,6 +298,16 @@ function report(): void {
       `\n      npm run db:rotate -w @pravasi/backend -- audit-unit-admins` +
       `\n      npm run db:rotate -w @pravasi/backend -- unit-admin BAT01`,
   );
+
+  console.log(
+    `\n  AGENT INVITE PINS (§3.2) — hand each unit head their own, only.` +
+      '\n  Unlike the login passwords above, these ARE printed here: a unit' +
+      "\n  head recites this to every agent they recruit, so it can't be a" +
+      '\n  one-person secret the way a login password is.',
+  );
+  for (const u of UNITS) {
+    console.log(`      ${u.unit_code.padEnd(6)} ${u.agentInvitePin}`);
+  }
 
   console.log(`\n${line}\n`);
 }

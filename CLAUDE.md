@@ -46,8 +46,11 @@ its own subtree's analytics and ticket ledger. Cannot see other divisions.
 
 **Unit** — A specific physical location within a division (e.g. `5 BUILDING`,
 sector `BATHA`). A unit is the *scope* every agent token carries, and every
-ticket is written against it. It is no longer an authentication factor: units
-stopped being a login step in §3.2.
+ticket is written against it. It is not an authentication factor for an
+*agent's own* login — `agent-login` is still mobile + password only, unit
+derived server-side from the agent's row — but a unit-scoped invite PIN
+now gates the agent portal itself before that form is even reachable (the
+Unit Gateway, §3.2).
 
 **Unit Admin** (migration 005) — Decentralises agent approval. A named person's
 account, scoped to exactly one unit, whose only capability is approving or
@@ -77,20 +80,61 @@ Two distinct login surfaces.
 
 Standard credential login → JWT with `role: 'SUPERUSER'`. No unit scoping.
 
-### 3.2 Agent login (SINGLE STEP — was two, changed deliberately)
+### 3.2 Agent login and the Unit Gateway
 
-> **This section previously specified a mandatory two-step flow and called it
-> non-negotiable. It was overridden by an explicit operational decision by the
-> project owner. Do not "restore" the old behaviour as a bug fix.**
->
-> The event is run by unpaid volunteers. There was no manpower to distribute
-> unit codes and PINs on the day, so location authentication was not a
-> security control in practice — it was a barrier that would have stopped
-> agents issuing tickets at all.
+> **History, in order, because it matters for anyone reading this cold:**
+> a mandatory two-step unit-then-agent flow → removed and called
+> non-negotiable-not-to-restore (volunteers, no manpower to distribute
+> per-agent unit codes and PINs on event day) → **reinstated as a narrower
+> "Unit Gateway"** (migration 009) on a later, explicit, informed decision by
+> the project owner, made after being shown this exact history and choosing
+> to reopen the tradeoff anyway. If you are reading this wondering whether to
+> "fix" the gateway away again: don't, without asking first — the removal
+> already happened once, the context for putting it back is right here, and
+> silently redoing the removal would erase a deliberate decision for the
+> second time.
 
-Route: `/login`. The agent enters **mobile number (or email) + password**.
-On success the server issues the full **agent JWT** carrying
-`{ agentId, unitId, divisionId, sessionId, role: 'AGENT' }`.
+**`POST /api/auth/agent-login` itself is still exactly single step** —
+mobile number (or email) + password, nothing else. That part of the removal
+stands: the server still derives `unitId`/`divisionId` from the agent's own
+row after the password verifies, the client still never names a unit on
+this call, and there is still no partially-authenticated session state.
+
+**What's different is what a browser has to clear before it can even reach
+that form.** `/login`'s landing screen is now the **Unit Gateway**: a unit
+code plus a 4-digit `agent_invite_pin` (migration 009,
+`units.agent_invite_pin_hash`). Clearing it unlocks the Agent Portal — both
+the Agent Login tab above and First-Time Setup — for the rest of that
+browser visit. It is deliberately narrower than the old flow it echoes:
+
+- **One PIN per unit, not per agent.** A unit head hands their own
+  `agent_invite_pin` to every agent they recruit; nobody distributes a
+  separate credential per person. This is what makes the manpower objection
+  above not apply the same way the second time.
+- **No session, no binding, nothing persisted.** `POST /api/auth/unit-gateway`
+  checks the PIN and returns the unit's public info — no cookie, no JWT, no
+  `unit_sessions` row. The old `UNIT_PENDING` role, `unit_sessions.agent_id`
+  binding, and every partially-authenticated branch **stay deleted** exactly
+  as this section used to say; none of that machinery came back. React state
+  in `frontend/src/app/login/page.tsx` is the entire "session" — a page
+  refresh clears it and the gateway runs again.
+- **Not the security boundary.** The gateway is a UX gate against
+  *misassignment* (an agent registering under the wrong unit from a free-text
+  or dropdown pick), not a hardened control — hence a 4-digit PIN, not the
+  unit admin's own dashboard password. `POST /api/auth/signup` re-verifies
+  `agent_invite_pin` against `units.agent_invite_pin_hash` itself before
+  creating the row, so bypassing the gateway UI and POSTing a fabricated
+  `unit_code` straight to signup still fails — the real boundary is server-
+  side re-verification, same as every other credential in this codebase.
+- **Rate-limited like a gate PIN, for the same reason.** 4 digits is a small
+  space (10,000). `unit-gateway` shares `loginLimiter` rather than a bespoke
+  ceiling — the same brute-force profile this codebase already accepts for
+  gate PINs (§2, Option A), mitigated by rate limiting, not solved by it.
+
+Route: `/login`. The agent enters **mobile number (or email) + password**
+*after* clearing the gateway. On success the server issues the full
+**agent JWT** carrying `{ agentId, unitId, divisionId, sessionId, role:
+'AGENT' }`.
 
 `unitId` and `divisionId` are read from the agent's own row
 (`agents.unit_id` joined to `units.division_id`) *after* the password
@@ -128,9 +172,13 @@ backend (route, controller, service, `findUnitsByCode`, `createUnitSession`,
 (`middleware.ts`, `ProtectedRoute`, `useAuthStore.setUnitPending`).
 
 `units.access_code_hash` is still on the table and still seeded, but nothing
-reads it. Reinstating location authentication means writing the endpoint
-again, not flipping a flag — which is the honest state of affairs, not an
-oversight.
+reads it — the Unit Gateway above deliberately did **not** revive it.
+`agent_invite_pin_hash` (migration 009) is a new, separate column: the old
+one was `NOT NULL` and wired into the `unit_sessions`/`UNIT_PENDING`
+machinery this section documents as deleted, and reusing it would have
+dragged those assumptions back in for a gate that no longer works that way.
+If `access_code_hash` ever gets a real reader, that is a third, distinct
+decision — not a continuation of either the old flow or the gateway above.
 
 ### 3.3 Unit Admin login — decentralised approvals (migrations 005, 007)
 
@@ -588,8 +636,9 @@ pravasi-sangama/
 
 - `packages/shared` — capacity constants, Zod wire schemas, JWT claim types.
   Imported by both tiers; npm workspaces at the repo root.
-- `backend/src/modules/auth/` — single-step agent login (§3.2), gate and
-  superuser login.
+- `backend/src/modules/auth/` — single-step agent login, the Unit Gateway
+  (`POST /api/auth/unit-gateway`, re-verified again inside `agentSignup` —
+  §3.2), gate and superuser login.
 - `backend/src/modules/tickets/` — issuance, crypto-random numbering, QR fan-out.
 - `backend/src/modules/scanning/` — `/verify` and `/bulk-sync`, one shared
   `resolveScan()` core.
@@ -632,9 +681,13 @@ pravasi-sangama/
   union, row shape borrowed from `admin.repository.ts`'s `AdminTicketLedgerRow`.
 - `backend/src/db/provision-unit-admins.ts` — one-time provisioning for the
   Unit Admin tier (30 units, 33 accounts, plus a placeholder 10/10/10 zone
-  split into `supervisor_unit_assignments`). Not `db:seed`: real production
-  data, no `NODE_ENV` guard, but idempotent. Run once, then rotate every
-  password — see §3.3.
+  split into `supervisor_unit_assignments`), and now also each of the 30
+  units' `agent_invite_pin_hash` (§3.2) — a distinct, independently-generated
+  4-digit PIN per unit, hardcoded in the same `UNITS` array as the unit-admin
+  passwords and printed in the report (unlike those passwords, since a unit
+  head has to keep reciting this one to agents, not just use it once
+  themselves). Not `db:seed`: real production data, no `NODE_ENV` guard, but
+  idempotent. Run once, then rotate every password — see §3.3.
 - `backend/src/db/provision-scanners.ts` — provisions 20 Gate Scanner rows
   (`SCAN01`–`SCAN20`) into the existing `gates` table — a gate is a place,
   not a person (§2, Option A), so this is the same shared-PIN model every
@@ -654,7 +707,11 @@ pravasi-sangama/
 **Not yet built:** divisions/units/agents CRUD, ticket revocation, real QR
 encoding, `gate:offline` heartbeat, a superuser UI for editing zone coverage
 (direct SQL against `supervisor_unit_assignments` only — see §3.3), replacing
-the placeholder 10/10/10 zone split with the real geographic assignment.
+the placeholder 10/10/10 zone split with the real geographic assignment, a
+self-service way for a unit admin to view or rotate their own unit's
+`agent_invite_pin` (currently: re-run `provision-unit-admins.ts`, which
+reissues all 30, or a direct `UPDATE units SET agent_invite_pin_hash = ...`
+— see §3.2).
 
 ---
 
@@ -716,11 +773,12 @@ npm run dev:web                 # :3000
 > `npm run build:shared`. This is the #1 cause of "I changed the constant but
 > nothing happened."
 
-Seeded fixtures: division `RIYADH`; units `DEV5BUILDING` and `DEVDEERA` (no
-PIN — units stopped being a login factor in §3.2); agents `8888999955` /
-`8888999956` on `DEV5BUILDING` and `8888999957` on `DEVDEERA` (password
-`agent1234`); superusers `admin1` / `admin2` / `admin3` (or their
-`@pravasisangama.com` emails) / `SuperAdmin@2026`. No gates — `db:seed`
+Seeded fixtures: division `RIYADH`; units `DEV5BUILDING` and `DEVDEERA`,
+both behind Unit Gateway PIN `1234` (§3.2 — a unit still has no *login* PIN
+of its own, this is the separate agent-invite gate in front of the portal);
+agents `8888999955` / `8888999956` on `DEV5BUILDING` and `8888999957` on
+`DEVDEERA` (password `agent1234`); superusers `admin1` / `admin2` / `admin3`
+(or their `@pravasisangama.com` emails) / `SuperAdmin@2026`. No gates — `db:seed`
 stopped creating any once migration 008 retired the `GATE1`/`GATE2`
 fixtures; provision `SCAN01`–`SCAN20` with `db:provision-scanners` instead
 (§8). The seed is idempotent and refuses to run in production without

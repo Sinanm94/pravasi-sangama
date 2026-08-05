@@ -16,27 +16,32 @@ import {
 } from 'lucide-react';
 import {
   AGENT_PASSWORD_MIN_LENGTH,
-  type PublicUnit,
   type SessionResponse,
+  type UnitGatewayResponse,
 } from '@pravasi/shared';
 import { useAuthStore } from '@/store/useAuthStore';
 import { screenVariants, springSurface } from '@/lib/motion';
-import {
-  apiGet,
-  apiPost,
-  errorCode,
-  errorMessage,
-} from '@/lib/apiClient';
+import { apiPost, errorMessage, errorCode } from '@/lib/apiClient';
 import {
   AuthHeader,
   AuthOutcome,
   AuthShell,
   Field,
   VIOLET,
-  SelectField,
+  VIOLET_DEEP,
   SubtleButton,
   Submit,
 } from '@/components/ui/AuthShell';
+
+/**
+ * The unit a visit has cleared the Unit Gateway for (§3.2), plus the PIN
+ * they typed — kept only in memory so SignupForm can replay it into the
+ * signup request without asking the agent to type the same PIN twice. Never
+ * persisted, never sent anywhere except that one follow-up request.
+ */
+interface GatewayUnit extends UnitGatewayResponse {
+  invitePin: string;
+}
 
 type Tab = 'login' | 'signup' | 'forgot';
 
@@ -73,13 +78,24 @@ function LoginFlow() {
     () => params.get('mode') === 'unit-admin',
   );
 
+  /**
+   * The Unit Gateway (§3.2) — reinstated, on explicit instruction, in front
+   * of the whole agent portal (both tabs below), not just First-Time Setup.
+   * Purely client-side: no cookie, no session, just "has this visit cleared
+   * the gateway". Administrator / Unit admin / Gate scanner sign-in are not
+   * agent concepts and were never behind this gate either before or after —
+   * their links live on the gateway screen itself so nobody needs an agent
+   * invite PIN to reach their own login.
+   */
+  const [gatewayUnit, setGatewayUnit] = useState<GatewayUnit | null>(null);
+
   const next = params.get('next');
 
   useEffect(() => {
     if (status === 'idle') void hydrate();
   }, [status, hydrate]);
 
-  const showTabs = !adminMode && !unitAdminMode;
+  const showTabs = !adminMode && !unitAdminMode && gatewayUnit !== null;
 
   return (
     <AuthShell>
@@ -99,10 +115,25 @@ function LoginFlow() {
           }}
           onBack={() => setUnitAdminMode(false)}
         />
+      ) : gatewayUnit === null ? (
+        <UnitGatewayScreen
+          onUnlock={setGatewayUnit}
+          onAdmin={() => setAdminMode(true)}
+          onUnitAdmin={() => setUnitAdminMode(true)}
+          onScanner={() => router.push('/scanner/login')}
+        />
       ) : (
         <>
+          <div className="-mt-1 mb-4 flex items-center gap-2 rounded-2xl bg-gray-50 px-4 py-2.5">
+            <Building2 className="h-4 w-4 shrink-0 text-gray-400" strokeWidth={2.25} />
+            <p className="min-w-0 truncate text-[13px] font-medium text-gray-600">
+              {gatewayUnit.unitName}
+              <span className="text-gray-400"> · {gatewayUnit.unitCode}</span>
+            </p>
+          </div>
+
           {showTabs && (
-            <div className="-mt-1 flex rounded-full bg-gray-100 p-1">
+            <div className="flex rounded-full bg-gray-100 p-1">
               {TABS.map((t) => (
                 <button
                   key={t.id}
@@ -148,13 +179,18 @@ function LoginFlow() {
                 />
               )}
 
-              {tab === 'signup' && <SignupForm onBack={() => setTab('login')} />}
+              {tab === 'signup' && (
+                <SignupForm unit={gatewayUnit} onBack={() => setTab('login')} />
+              )}
               {tab === 'forgot' && <ForgotForm onBack={() => setTab('login')} />}
             </motion.div>
           </AnimatePresence>
 
           {showTabs && (
             <div className="mt-6 space-y-2.5 border-t border-gray-100 pt-5">
+              <SubtleButton icon={ArrowLeft} onClick={() => setGatewayUnit(null)}>
+                Switch unit
+              </SubtleButton>
               <SubtleButton icon={ShieldCheck} onClick={() => setAdminMode(true)}>
                 Administrator sign in
               </SubtleButton>
@@ -179,7 +215,118 @@ function LoginFlow() {
 }
 
 /* ================================================================== */
-/* Tab 1 — Agent login (two-step, §3.2)                                */
+/* The Unit Gateway — reinstated unit-first gate (§3.2)                 */
+/* ================================================================== */
+
+/**
+ * Step 1 of the agent flow. Unit code + a 4-digit invite PIN a unit head
+ * hands to their own agents (migration 009) — NOT the unit admin's own
+ * dashboard password, a deliberately separate, weaker credential whose only
+ * job is routing a volunteer to the right unit's forms, not authenticating
+ * them. No session is created here; a successful check just unlocks the
+ * tabs below for the rest of this visit.
+ */
+function UnitGatewayScreen({
+  onUnlock,
+  onAdmin,
+  onUnitAdmin,
+  onScanner,
+}: {
+  onUnlock: (unit: GatewayUnit) => void;
+  onAdmin: () => void;
+  onUnitAdmin: () => void;
+  onScanner: () => void;
+}) {
+  const [unitCode, setUnitCode] = useState('');
+  const [pin, setPin] = useState('');
+  const [errors, setErrors] = useState<{ unitCode?: string; pin?: string }>({});
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (ev: React.FormEvent) => {
+    ev.preventDefault();
+
+    const next: { unitCode?: string; pin?: string } = {};
+    if (!unitCode.trim()) next.unitCode = 'Enter your unit code.';
+    if (!/^[0-9]{4}$/.test(pin)) next.pin = 'Enter the 4-digit invite PIN.';
+
+    setErrors(next);
+    if (Object.keys(next).length) return;
+
+    setBusy(true);
+    try {
+      const result = await apiPost<UnitGatewayResponse>('/auth/unit-gateway', {
+        unit_code: unitCode.trim(),
+        agent_invite_pin: pin,
+      });
+      onUnlock({ ...result, invitePin: pin });
+    } catch (err) {
+      toast.error('Could not verify', { description: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <form onSubmit={submit} noValidate className="space-y-4">
+        <AuthHeader
+          icon={Building2}
+          title="Welcome"
+          subtitle="Enter your unit code and invite PIN to continue"
+        />
+
+        <Field
+          label="Unit Code"
+          hint="e.g. BAT01"
+          value={unitCode}
+          onChange={(v) => {
+            setUnitCode(v.toUpperCase());
+            setErrors((e) => ({ ...e, unitCode: undefined }));
+          }}
+          placeholder="BAT01"
+          autoComplete="off"
+          error={errors.unitCode}
+          required
+        />
+
+        <Field
+          label="Invite PIN"
+          hint="Ask your unit head"
+          type="password"
+          inputMode="numeric"
+          value={pin}
+          onChange={(v) => {
+            setPin(v.replace(/\D/g, '').slice(0, 4));
+            setErrors((e) => ({ ...e, pin: undefined }));
+          }}
+          placeholder="••••"
+          autoComplete="off"
+          error={errors.pin}
+          required
+        />
+
+        <Submit busy={busy} busyLabel="Checking…">
+          Continue
+        </Submit>
+      </form>
+
+      <div className="mt-6 space-y-2.5 border-t border-gray-100 pt-5">
+        <SubtleButton icon={ShieldCheck} onClick={onAdmin}>
+          Administrator sign in
+        </SubtleButton>
+        <SubtleButton icon={Building2} onClick={onUnitAdmin}>
+          Unit admin sign in
+        </SubtleButton>
+        <SubtleButton icon={ScanLine} onClick={onScanner}>
+          Gate scanner sign in
+        </SubtleButton>
+      </div>
+    </>
+  );
+}
+
+/* ================================================================== */
+/* Tab 1 — Agent login, single step (§3.2)                             */
 /* ================================================================== */
 
 function AgentLoginForm({
@@ -269,25 +416,22 @@ function AgentLoginForm({
 /* Tab 2 — First-time setup                                            */
 /* ================================================================== */
 
-function SignupForm({ onBack }: { onBack: () => void }) {
+function SignupForm({
+  unit,
+  onBack,
+}: {
+  unit: GatewayUnit;
+  onBack: () => void;
+}) {
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
   const [email, setEmail] = useState('');
-  const [unitCode, setUnitCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
 
-  const [units, setUnits] = useState<PublicUnit[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-
-  useEffect(() => {
-    void apiGet<{ units: PublicUnit[] }>('/auth/units')
-      .then((d) => setUnits(d.units))
-      // Non-fatal — SelectField degrades to a free-text code input.
-      .catch(() => setUnits([]));
-  }, []);
 
   const clearError = (key: string) =>
     setErrors((prev) => {
@@ -306,7 +450,6 @@ function SignupForm({ onBack }: { onBack: () => void }) {
       next.mobile = 'Enter a valid 10-digit mobile number.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()))
       next.email = 'Enter a valid email address.';
-    if (!unitCode.trim()) next.unitCode = 'Select your unit.';
     if (password.length < AGENT_PASSWORD_MIN_LENGTH)
       next.password = `At least ${AGENT_PASSWORD_MIN_LENGTH} characters.`;
     if (confirm !== password) next.confirm = 'Passwords do not match.';
@@ -320,7 +463,12 @@ function SignupForm({ onBack }: { onBack: () => void }) {
         name: name.trim(),
         mobile_number: mobile,
         email: email.trim(),
-        unit_code: unitCode,
+        // Hardcoded from the Unit Gateway step already passed — never a
+        // free-text or dropdown choice here. The invite PIN rides along too
+        // so the backend can re-verify it (§3.2); the agent never re-types
+        // it, since they already proved they know it to get this far.
+        unit_code: unit.unitCode,
+        agent_invite_pin: unit.invitePin,
         password,
         confirm_password: confirm,
       });
@@ -401,25 +549,23 @@ function SignupForm({ onBack }: { onBack: () => void }) {
         required
       />
 
-      {/* Units survive self-registration: every ticket carries unit_id and
-          division_id, and step 1 checks the agent against the authenticated
-          location. Unit codes are not secrets — the unit PIN is. */}
-      <SelectField
-        label="Unit"
-        hint="Ask your unit head"
-        value={unitCode}
-        onChange={(v) => {
-          setUnitCode(v);
-          clearError('unitCode');
-        }}
-        error={errors.unitCode}
-        placeholder="Select your unit…"
-        fallbackPlaceholder="5BUILDING"
-        options={units.map((u) => ({
-          value: u.unitCode,
-          label: `${u.divisionName} · ${u.sector ? `${u.sector} — ` : ''}${u.name}`,
-        }))}
-      />
+      {/* Not a form field — nothing here is editable or submitted from this
+          control. The unit is already decided by the Unit Gateway step;
+          this is a confirmation, not a choice, which is the whole point of
+          removing the old dropdown (agents were picking the wrong unit). */}
+      <div>
+        <p className="mb-2 block text-[13px] font-medium text-gray-700">Unit</p>
+        <div
+          className="flex items-center gap-2.5 rounded-xl px-4 py-3"
+          style={{ backgroundColor: `${VIOLET}0d` }}
+        >
+          <Building2 className="h-4 w-4 shrink-0" style={{ color: VIOLET_DEEP }} strokeWidth={2.25} />
+          <p className="min-w-0 truncate text-[15px] font-medium text-gray-900">
+            {unit.unitName}
+            <span className="text-gray-500"> · {unit.unitCode}</span>
+          </p>
+        </div>
+      </div>
 
       <Field
         label="New Password"

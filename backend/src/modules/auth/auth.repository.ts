@@ -240,21 +240,31 @@ export async function revokeSession(sessionId: string): Promise<void> {
 /* Agent self-registration (spec §3)                                   */
 /* ================================================================== */
 
-export interface UnitLookupRow {
+/**
+ * A unit plus its invite PIN hash — the one lookup both the Unit Gateway
+ * check and signup's server-side re-verification need (§3.2). `is_active`
+ * on both the unit and its division is enforced here, in SQL, the same way
+ * `findUnitIdByCode` (this function's predecessor) always did — retired
+ * units and divisions have never been reachable through this path.
+ */
+export interface UnitInviteRow {
   id: string;
   division_id: string;
   unit_code: string;
   name: string;
+  division_name: string;
+  agent_invite_pin_hash: string | null;
 }
 
-export async function findUnitIdByCode(
+export async function findUnitForGateway(
   unitCode: string,
-): Promise<UnitLookupRow | null> {
-  const { rows } = await query<UnitLookupRow>(
-    `SELECT id, division_id, unit_code, name
-       FROM units
-      WHERE unit_code = $1 AND is_active
-      ORDER BY created_at
+): Promise<UnitInviteRow | null> {
+  const { rows } = await query<UnitInviteRow>(
+    `SELECT u.id, u.division_id, u.unit_code, u.name, d.name AS division_name,
+            u.agent_invite_pin_hash
+       FROM units u
+       JOIN divisions d ON d.id = u.division_id
+      WHERE u.unit_code = $1 AND u.is_active AND d.is_active
       LIMIT 1`,
     [unitCode],
   );

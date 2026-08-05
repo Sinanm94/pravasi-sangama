@@ -50,8 +50,13 @@ const DIVISION = { code: 'RIYADH', name: 'Riyadh' };
  * migration existed to remove; there is no local-dev need for a seeded gate
  * that db:provision-scanners doesn't already cover for a real database. */
 
-/* No PIN: units stopped being an authentication factor in §3.2, and
- * migration 004 dropped access_code_hash. A unit is a posting, not a login.
+/* Units carry no login PIN of their own — migration 004 dropped
+ * access_code_hash, and a unit is a posting, not an account. `agentInvitePin`
+ * below is a DIFFERENT thing (migration 009, §3.2): the Unit Gateway a
+ * volunteer clears before reaching the agent portal at all, not a unit
+ * "logging in". Both dev units share the same memorable dev PIN — there is
+ * no need for two different ones locally the way the 30 real units each get
+ * their own (provision-unit-admins.ts).
  *
  * Codes are DEV-prefixed on purpose. The originals (5BUILDING, DEERA) shared
  * a namespace with the real production roster provisioned by
@@ -61,6 +66,8 @@ const DIVISION = { code: 'RIYADH', name: 'Riyadh' };
  * until migration 006 retired them. A dev fixture and a real unit must never
  * be able to collide on unit_code again; the prefix is what guarantees that,
  * not discipline about when db:seed gets run. */
+const DEV_AGENT_INVITE_PIN = '1234';
+
 const UNITS = [
   { unit_code: 'DEV5BUILDING', name: '5 Building (Dev)', sector: 'BATHA' },
   { unit_code: 'DEVDEERA', name: 'Deera (Dev)', sector: 'BATHA' },
@@ -141,19 +148,21 @@ async function seed() {
 
     /* --- units ---------------------------------------------------- */
     const unitIds = new Map<string, string>();
+    const devInvitePinHash = await hashSecret(DEV_AGENT_INVITE_PIN);
 
     for (const unit of UNITS) {
       // Natural key is (division_id, unit_code) — unit codes are unique
       // within a division, not globally.
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO units (division_id, unit_code, name, sector)
-              VALUES ($1, $2, $3, $4)
+        `INSERT INTO units (division_id, unit_code, name, sector, agent_invite_pin_hash)
+              VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (division_id, unit_code) DO UPDATE
-              SET name      = EXCLUDED.name,
-                  sector    = EXCLUDED.sector,
-                  is_active = TRUE
+              SET name                   = EXCLUDED.name,
+                  sector                 = EXCLUDED.sector,
+                  agent_invite_pin_hash  = EXCLUDED.agent_invite_pin_hash,
+                  is_active              = TRUE
            RETURNING id`,
-        [divisionId, unit.unit_code, unit.name, unit.sector],
+        [divisionId, unit.unit_code, unit.name, unit.sector, devInvitePinHash],
       );
 
       unitIds.set(unit.unit_code, rows[0]!.id);
@@ -211,7 +220,9 @@ function report() {
 
   console.log(`\n  DIVISION   ${DIVISION.name} (${DIVISION.code})`);
 
-  console.log('\n  UNITS — agent postings, no credential');
+  console.log(
+    `\n  UNITS — agent postings, Unit Gateway PIN ${DEV_AGENT_INVITE_PIN} (both)`,
+  );
   for (const u of UNITS) {
     console.log(`    ${u.sector} · ${u.name}`);
     console.log(`      unit_code : ${u.unit_code}`);

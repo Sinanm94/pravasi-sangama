@@ -341,11 +341,31 @@ export interface AgentSignupResponse {
   agent: { id: string; name: string; mobileNumber: string; email: string };
 }
 
-/** Public, unauthenticated: the unit picker on the signup form. */
+/**
+ * Public, unauthenticated: the full unit list. No longer consumed by the
+ * signup form as of the Unit Gateway (§3.2) — a signup's unit is hardcoded
+ * from the gateway step instead of picked from this list — but the
+ * endpoint (`GET /api/auth/units`) is left in place; unit codes and names
+ * were never secret, and removing a harmless read endpoint isn't this
+ * change's job.
+ */
 export interface PublicUnit {
   unitCode: string;
   name: string;
   sector: string | null;
+  divisionName: string;
+}
+
+/**
+ * POST /api/auth/unit-gateway's success response — the unit a signup or
+ * login session is now locked to. Not a session or a credential: no cookie
+ * is set here, this only tells the frontend which unit to hardcode into the
+ * signup form for the rest of this visit (§3.2).
+ */
+export interface UnitGatewayResponse {
+  unitId: string;
+  unitCode: string;
+  unitName: string;
   divisionName: string;
 }
 

@@ -39,7 +39,14 @@ const signupLimiter = rateLimit({
 
 export const authRoutes: Router = Router();
 
-/* --- Agent: two-step login (§3.2) -------------------------------- */
+/* --- Unit Gateway — reinstated unit-first gate (§3.2) ------------- */
+// Same rate-limiting posture as gate PINs (loginLimiter): a 4-digit space
+// is small, and this endpoint accepts the exact same brute-force profile
+// this codebase already lives with for gates — mitigated, not solved, by
+// keeping the attempt ceiling tight.
+authRoutes.post('/unit-gateway', loginLimiter, controller.unitGateway);
+
+/* --- Agent: single-step login (§3.2) ------------------------------ */
 authRoutes.post('/agent-login', loginLimiter, controller.agentLogin);
 
 /* --- Agent: first-time setup (spec §3) --------------------------- */

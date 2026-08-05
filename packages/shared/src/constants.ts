@@ -179,6 +179,14 @@ export const AGENT_PASSWORD_MIN_LENGTH = 6;
 export const GATE_PIN_MIN_LENGTH = 4;
 export const GATE_PIN_MAX_LENGTH = 6;
 
+/**
+ * The Unit Gateway's per-unit agent invite PIN (§3.2) — fixed at exactly 4
+ * digits, deliberately simpler than a real credential. A unit head hands
+ * this to their own agents once; it gates entry to the whole agent portal
+ * (login and first-time setup alike), not a specific account.
+ */
+export const AGENT_INVITE_PIN_LENGTH = 4;
+
 export const TICKET_STATUSES = ['ACTIVE', 'REVOKED'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 

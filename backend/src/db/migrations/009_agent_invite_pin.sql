@@ -1,0 +1,25 @@
+-- ---------------------------------------------------------------------
+-- 009 — Agent invite PIN per unit (the "Unit Gateway")
+--
+-- Reinstates a unit-first gate in front of the whole agent portal — both
+-- Agent Login and First-Time Setup — on explicit, informed instruction from
+-- the project owner. CLAUDE.md §3.2 documents the ORIGINAL two-step flow
+-- being removed in unusually strong terms ("non-negotiable... do not
+-- restore as a bug fix") because there was no volunteer manpower to
+-- distribute unit codes and PINs on event day for every login. This
+-- reopens that tradeoff on purpose, scoped narrower than before: a single
+-- PIN per unit, shared once by the unit head with their own agents, not a
+-- server-side session-binding flow (no unit_sessions row, no partial JWT
+-- claims — the old machinery for that stays deleted). See CLAUDE.md §3.2's
+-- updated text for the full reasoning.
+--
+-- Deliberately a NEW column, not a revival of `access_code_hash` (still on
+-- this table, still unread, left over from the deleted flow). The two are
+-- similar in spirit but not the same thing: `access_code_hash` was
+-- NOT NULL and wired into `unit_sessions`/`UNIT_PENDING` machinery that no
+-- longer exists. Reusing it would drag those assumptions back in. This is
+-- a standalone, nullable PIN hash with no session concept at all — every
+-- gateway attempt is checked fresh.
+-- ---------------------------------------------------------------------
+
+ALTER TABLE units ADD COLUMN IF NOT EXISTS agent_invite_pin_hash TEXT;

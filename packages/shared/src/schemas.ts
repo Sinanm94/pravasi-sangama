@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  AGENT_INVITE_PIN_LENGTH,
   AGENT_PASSWORD_MIN_LENGTH,
   GATE_PIN_MAX_LENGTH,
   GATE_PIN_MIN_LENGTH,
@@ -7,6 +8,14 @@ import {
   TICKET_STATUSES,
   TICKET_TYPES,
 } from './constants.js';
+
+const agentInvitePin = z
+  .string()
+  .trim()
+  .regex(
+    new RegExp(`^[0-9]{${AGENT_INVITE_PIN_LENGTH}}$`),
+    `Enter the ${AGENT_INVITE_PIN_LENGTH}-digit invite PIN`,
+  );
 
 /**
  * Wire contracts. Field names are snake_case to match the Postgres columns —
@@ -93,6 +102,12 @@ export const AgentSignupSchema = z
      * ticket carries `unit_id` and `division_id` (§2), and step 1 of login
      * compares the agent's unit against the authenticated location. The unit
      * *code* is not a secret — the unit PIN is.
+     *
+     * The client still supplies this (never trusted blindly — see
+     * agent_invite_pin below), but it is no longer typed or chosen freely:
+     * the frontend hardcodes it from the Unit Gateway step the agent already
+     * passed (§3.2), so this field is really "which gateway did you clear",
+     * re-declared and re-verified server-side rather than taken on faith.
      */
     unit_code: z
       .string()
@@ -100,6 +115,15 @@ export const AgentSignupSchema = z
       .min(1, 'Unit code is required')
       .max(32)
       .transform((v) => v.toUpperCase()),
+
+    /**
+     * Re-verified server-side against `units.agent_invite_pin_hash` before
+     * the account is created — the Unit Gateway screen is a UX gate, not the
+     * security boundary. Without this check, anyone could bypass the
+     * gateway UI entirely and POST any unit_code directly, defeating the
+     * whole point of the gate (§3.2).
+     */
+    agent_invite_pin: agentInvitePin,
 
     password: z
       .string()
@@ -118,6 +142,29 @@ export const AgentSignupSchema = z
   });
 
 export type AgentSignupInput = z.infer<typeof AgentSignupSchema>;
+
+/* ------------------------------------------------------------------ */
+/* Unit Gateway — agent invite PIN (§3.2)                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * POST /api/auth/unit-gateway. Checked fresh on every attempt — no session
+ * or cookie is issued here, this only unlocks the agent portal client-side
+ * and hands back the unit to hardcode into the signup form.
+ */
+export const UnitGatewaySchema = z
+  .object({
+    unit_code: z
+      .string()
+      .trim()
+      .min(1, 'Enter your unit code')
+      .max(32)
+      .transform((v) => v.toUpperCase()),
+    agent_invite_pin: agentInvitePin,
+  })
+  .strict();
+
+export type UnitGatewayInput = z.infer<typeof UnitGatewaySchema>;
 
 /* ------------------------------------------------------------------ */
 /* Password reset (spec §3)                                            */
