@@ -258,6 +258,7 @@ function toAdminTicketRow(r: repo.AdminTicketLedgerRow): AdminTicketRow {
     unitId: r.unit_id,
     unitName: r.unit_name,
     unitCode: r.unit_code,
+    unitSector: r.unit_sector,
     divisionId: r.division_id,
     divisionName: r.division_name,
   };
@@ -272,6 +273,7 @@ export const listTicketLedger = handle(async (req, res) => {
     agentId: q.agent_id,
     unitId: q.unit_id,
     divisionId: q.division_id,
+    sector: q.sector,
     search: q.search,
     status: q.status,
   };
@@ -325,6 +327,7 @@ const CSV_COLUMNS: Array<{
   { header: 'Agent', value: (t) => t.agentName },
   { header: 'Unit', value: (t) => t.unitName },
   { header: 'Unit Code', value: (t) => t.unitCode },
+  { header: 'Sector', value: (t) => t.unitSector ?? '' },
   { header: 'Division', value: (t) => t.divisionName },
   { header: 'Issued At (UTC)', value: (t) => t.createdAt },
 ];
@@ -357,6 +360,7 @@ export const exportTicketLedger = handle(async (req, res) => {
     agentId: q.agent_id,
     unitId: q.unit_id,
     divisionId: q.division_id,
+    sector: q.sector,
     search: q.search,
     status: q.status,
   };
@@ -382,11 +386,13 @@ export const listFilterOptions = handle(async (_req, res) => {
 
   const body: AdminFilterOptions = {
     divisions: rows.divisions,
+    sectors: rows.sectors,
     units: rows.units.map((u) => ({
       id: u.id,
       name: u.name,
       unitCode: u.unit_code,
       divisionId: u.division_id,
+      sector: u.sector,
     })),
     agents: rows.agents.map((a) => ({
       id: a.id,

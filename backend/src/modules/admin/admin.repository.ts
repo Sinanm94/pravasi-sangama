@@ -320,6 +320,7 @@ export interface TicketLedgerFilters {
   agentId?: string | undefined;
   unitId?: string | undefined;
   divisionId?: string | undefined;
+  sector?: string | undefined;
   search?: string | undefined;
   status?: TicketStatus | undefined;
 }
@@ -341,6 +342,8 @@ export interface AdminTicketLedgerRow {
   unit_id: string;
   unit_name: string;
   unit_code: string;
+  /** The unit's parent sector (migration 010). Null outside the real roster. */
+  unit_sector: string | null;
   division_id: string;
   division_name: string;
 }
@@ -373,6 +376,24 @@ function ticketLedgerWhere(f: TicketLedgerFilters): {
   if (f.divisionId) add((i) => `t.division_id = $${i}`, f.divisionId);
   if (f.status) add((i) => `t.status = $${i}::ticket_status`, f.status);
 
+  /* Sector lives on `units`, not on `tickets` — unlike every other filter
+   * here, which reads a column tickets denormalises at issuance.
+   *
+   * A subquery rather than a JOIN on purpose: summariseTicketsForAdmin()
+   * selects `FROM tickets t` with no joins at all, and this builder is
+   * shared by both queries precisely so the summary cards can never describe
+   * a different set than the table. Adding a JOIN here would mean adding one
+   * there too and keeping them in step forever; `unit_id IN (...)` needs
+   * nothing from the outer query and stays correct in both. It is also
+   * index-friendly — idx_units_sector (migration 010) feeds idx on
+   * tickets.unit_id. */
+  if (f.sector) {
+    add(
+      (i) => `t.unit_id IN (SELECT id FROM units WHERE sector = $${i})`,
+      f.sector,
+    );
+  }
+
   if (f.search) {
     /* % and _ are ILIKE wildcards. Left unescaped, a search for "%" matches
      * every ticket and a search for "_" matches on any single character —
@@ -403,7 +424,7 @@ export async function listTicketsForAdmin(
             t.purchaser_name, t.purchaser_mobile, t.purchaser_email,
             t.counted_persons, t.children_below_12, t.status, t.created_at,
             t.agent_id, a.name AS agent_name,
-            t.unit_id, u.name AS unit_name, u.unit_code,
+            t.unit_id, u.name AS unit_name, u.unit_code, u.sector AS unit_sector,
             t.division_id, d.name AS division_name
        FROM tickets t
        JOIN agents a    ON a.id = t.agent_id
@@ -454,6 +475,7 @@ export interface FilterOptionRows {
     name: string;
     unit_code: string;
     division_id: string;
+    sector: string | null;
   }>;
   agents: Array<{
     id: string;
@@ -461,27 +483,45 @@ export interface FilterOptionRows {
     mobile_number: string;
     unit_id: string;
   }>;
+  /**
+   * Distinct sector names actually present on active units — derived, never
+   * a hardcoded list. A sector that loses all its units disappears from the
+   * filter on its own rather than offering a choice that matches nothing.
+   */
+  sectors: string[];
 }
 
-/** One round trip for all three dropdowns, rather than three endpoints. */
+/** One round trip for every dropdown, rather than an endpoint each. */
 export async function listFilterOptions(): Promise<FilterOptionRows> {
-  const [divisions, units, agents] = await Promise.all([
+  const [divisions, units, agents, sectors] = await Promise.all([
     query<{ id: string; name: string; code: string }>(
       `SELECT id, name, code FROM divisions WHERE is_active ORDER BY name`,
     ),
-    query<{ id: string; name: string; unit_code: string; division_id: string }>(
-      `SELECT id, name, unit_code, division_id FROM units
+    query<{
+      id: string;
+      name: string;
+      unit_code: string;
+      division_id: string;
+      sector: string | null;
+    }>(
+      `SELECT id, name, unit_code, division_id, sector FROM units
         WHERE is_active ORDER BY name`,
     ),
     query<{ id: string; name: string; mobile_number: string; unit_id: string }>(
       `SELECT id, name, mobile_number, unit_id FROM agents
         WHERE is_active AND approval_status = 'APPROVED' ORDER BY name`,
     ),
+    query<{ sector: string }>(
+      `SELECT DISTINCT sector FROM units
+        WHERE is_active AND sector IS NOT NULL AND TRIM(sector) <> ''
+        ORDER BY sector`,
+    ),
   ]);
 
   return {
     divisions: divisions.rows,
     units: units.rows,
+    sectors: sectors.rows.map((r) => r.sector),
     agents: agents.rows,
   };
 }

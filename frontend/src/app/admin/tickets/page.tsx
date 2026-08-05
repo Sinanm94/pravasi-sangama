@@ -37,12 +37,20 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
 
 interface Filters {
   divisionId: string;
+  /** Sector is a NAME, not an id — `units.sector` is a column, not a table. */
+  sector: string;
   unitId: string;
   agentId: string;
   status: TicketStatus | '';
 }
 
-const NO_FILTERS: Filters = { divisionId: '', unitId: '', agentId: '', status: '' };
+const NO_FILTERS: Filters = {
+  divisionId: '',
+  sector: '',
+  unitId: '',
+  agentId: '',
+  status: '',
+};
 
 /**
  * Shared by the JSON list request and the CSV export — both accept the same
@@ -53,6 +61,7 @@ const NO_FILTERS: Filters = { divisionId: '', unitId: '', agentId: '', status: '
 function buildQueryString(f: Filters, searchTerm: string): string {
   const params = new URLSearchParams();
   if (f.divisionId) params.set('division_id', f.divisionId);
+  if (f.sector) params.set('sector', f.sector);
   if (f.unitId) params.set('unit_id', f.unitId);
   if (f.agentId) params.set('agent_id', f.agentId);
   if (f.status) params.set('status', f.status);
@@ -94,7 +103,9 @@ function LedgerScreen() {
     apiGet<AdminFilterOptions>('/admin/filter-options')
       .then(setOptions)
       // Non-fatal: the table still works, the dropdowns just stay empty.
-      .catch(() => setOptions({ divisions: [], units: [], agents: [] }));
+      .catch(() =>
+        setOptions({ divisions: [], units: [], agents: [], sectors: [] }),
+      );
   }, []);
 
   const load = useCallback(
@@ -139,30 +150,57 @@ function LedgerScreen() {
     }
   };
 
-  /* Dependent option lists, derived — never a second copy in state (§6.1). */
-  const unitOptions = useMemo(() => {
-    const all = options?.units ?? [];
-    return filters.divisionId
-      ? all.filter((u) => u.divisionId === filters.divisionId)
-      : all;
+  /* Dependent option lists, derived — never a second copy in state (§6.1).
+   *
+   * Sector sits between division and unit in the hierarchy (migration 010),
+   * so it narrows the unit list the same way division does, and is itself
+   * narrowed by division — picking a division shows only that division's
+   * sectors rather than all twelve. */
+  const sectorOptions = useMemo(() => {
+    const units = options?.units ?? [];
+    const scoped = filters.divisionId
+      ? units.filter((u) => u.divisionId === filters.divisionId)
+      : units;
+
+    const present = new Set(
+      scoped.map((u) => u.sector).filter((x): x is string => Boolean(x)),
+    );
+
+    // Intersect with the server's derived list so ordering stays server-side
+    // and a sector with no units in view simply drops out.
+    return (options?.sectors ?? []).filter((s) => present.has(s));
   }, [options, filters.divisionId]);
+
+  const unitOptions = useMemo(() => {
+    let all = options?.units ?? [];
+    if (filters.divisionId) {
+      all = all.filter((u) => u.divisionId === filters.divisionId);
+    }
+    if (filters.sector) {
+      all = all.filter((u) => u.sector === filters.sector);
+    }
+    return all;
+  }, [options, filters.divisionId, filters.sector]);
 
   const agentOptions = useMemo(() => {
     const all = options?.agents ?? [];
     if (filters.unitId) return all.filter((a) => a.unitId === filters.unitId);
-    if (filters.divisionId) {
+    if (filters.divisionId || filters.sector) {
       const ids = new Set(unitOptions.map((u) => u.id));
       return all.filter((a) => ids.has(a.unitId));
     }
     return all;
-  }, [options, filters.unitId, filters.divisionId, unitOptions]);
+  }, [options, filters.unitId, filters.divisionId, filters.sector, unitOptions]);
 
   /* Narrowing the parent invalidates the children, so clear them in the same
    * update. Leaving a stale unit selected under a new division would send a
    * filter pair that matches nothing and read as "no tickets". Status isn't
    * part of that hierarchy, so it survives every one of these unchanged. */
   const setDivision = (divisionId: string) =>
-    setFilters((p) => ({ ...p, divisionId, unitId: '', agentId: '' }));
+    setFilters((p) => ({ ...p, divisionId, sector: '', unitId: '', agentId: '' }));
+
+  const setSector = (sector: string) =>
+    setFilters((p) => ({ ...p, sector, unitId: '', agentId: '' }));
 
   const setUnit = (unitId: string) =>
     setFilters((p) => ({ ...p, unitId, agentId: '' }));
@@ -174,8 +212,13 @@ function LedgerScreen() {
     setFilters((p) => ({ ...p, status: status as TicketStatus | '' }));
 
   const filtered =
-    Boolean(filters.divisionId || filters.unitId || filters.agentId || filters.status) ||
-    committedSearch.length > 0;
+    Boolean(
+      filters.divisionId ||
+        filters.sector ||
+        filters.unitId ||
+        filters.agentId ||
+        filters.status,
+    ) || committedSearch.length > 0;
 
   const clearAll = () => {
     setFilters(NO_FILTERS);
@@ -245,7 +288,7 @@ function LedgerScreen() {
 
       {/* Filters */}
       <div className="mt-6 rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <SelectFilter
             label="Division"
             value={filters.divisionId}
@@ -255,6 +298,13 @@ function LedgerScreen() {
               value: d.id,
               label: `${d.name} · ${d.code}`,
             }))}
+          />
+          <SelectFilter
+            label="Sector"
+            value={filters.sector}
+            onChange={setSector}
+            placeholder="All sectors"
+            options={sectorOptions.map((sec) => ({ value: sec, label: sec }))}
           />
           <SelectFilter
             label="Unit / Location"
@@ -373,7 +423,7 @@ function LedgerScreen() {
             />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] border-collapse text-left">
+              <table className="w-full min-w-[1120px] border-collapse text-left">
                 <thead>
                   <tr className="border-b border-gray-900/[0.06]">
                     <Th>Ticket</Th>
@@ -381,6 +431,7 @@ function LedgerScreen() {
                     <Th>Type</Th>
                     <Th numeric>Seats</Th>
                     <Th>Issued by</Th>
+                    <Th>Sector</Th>
                     <Th>Unit / Location</Th>
                     <Th numeric>Issued</Th>
                   </tr>
@@ -461,6 +512,16 @@ function Row({ ticket }: { ticket: AdminTicketRow }) {
         <p className="truncate text-[13px] font-medium text-gray-900">
           {ticket.agentName}
         </p>
+      </td>
+
+      <td className="px-5 py-4 sm:px-6">
+        {ticket.unitSector ? (
+          <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-gray-600">
+            {ticket.unitSector}
+          </span>
+        ) : (
+          <span className="text-[12px] text-gray-300">—</span>
+        )}
       </td>
 
       <td className="px-5 py-4 sm:px-6">

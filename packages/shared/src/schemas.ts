@@ -442,6 +442,18 @@ export const AdminTicketQuerySchema = z.object({
   agent_id: z.string().uuid('agent_id must be a UUID').optional(),
   unit_id: z.string().uuid('unit_id must be a UUID').optional(),
   division_id: z.string().uuid('division_id must be a UUID').optional(),
+  /**
+   * Sector is a NAME, not a UUID — `units.sector` is a text column, not a
+   * table (migration 010 explains why). Uppercased here so a hand-built
+   * query string like `?sector=batha` still matches; the column itself is
+   * normalised to uppercase by that same migration.
+   */
+  sector: z
+    .string()
+    .trim()
+    .max(64)
+    .transform((v) => v.toUpperCase())
+    .optional(),
   search: z.string().trim().max(120).optional(),
   status: z.enum(TICKET_STATUSES).optional(),
   limit: z.coerce.number().int().positive().max(1000).default(300),
