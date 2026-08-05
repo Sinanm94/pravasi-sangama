@@ -12,6 +12,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
     "db:provision-units": "tsx src/db/provision-unit-admins.ts",
+    "db:provision-scanners": "tsx src/db/provision-scanners.ts",
     "db:rotate": "tsx src/db/rotate-credentials.ts",
     "db:bulk-rotate-passwords": "tsx src/db/bulk-rotate-passwords.ts",
     "db:reset": "npm run db:migrate && npm run db:seed",
