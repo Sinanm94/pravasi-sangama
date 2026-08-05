@@ -199,12 +199,20 @@ idempotent, safe to re-run.
 > ⚠ **The 33 passwords are short, guessable (`<code>PW`), and committed to
 > that file in plaintext.** That trade mirrors gate PINs (§2, Option A) —
 > volunteers, no password manager — and is not a reason to skip rotation.
-> Rotate every one before the event:
+> Rotate every one before the event, either one at a time or all at once:
 >
 > ```bash
 > npm run db:rotate -w @pravasi/backend -- audit-unit-admins   # who's still exposed
 > npm run db:rotate -w @pravasi/backend -- unit-admin BAT01    # one at a time
+> npm run db:bulk-rotate-passwords -w @pravasi/backend         # all 33 at once
 > ```
+>
+> `db:bulk-rotate-passwords` generates `TitleCasedUnitCode-XXX` (e.g.
+> `Bat01-7kX`) rather than a fully random string — the account's own
+> username, already public on the roster, buys memorability for free;
+> the 3-character suffix (`lib/passwordGen.ts`'s unambiguous alphabet)
+> carries the entire security budget. Prints once, to the console, as
+> the distribution list — never written to a file.
 
 **Resolved: Zone Supervisor coverage uses the mapping table (Option B),
 seeded with a placeholder split — replace before the event.** The 3 accounts
@@ -627,6 +635,21 @@ pravasi-sangama/
   split into `supervisor_unit_assignments`). Not `db:seed`: real production
   data, no `NODE_ENV` guard, but idempotent. Run once, then rotate every
   password — see §3.3.
+- `backend/src/db/provision-scanners.ts` — provisions 20 Gate Scanner rows
+  (`SCAN01`–`SCAN20`) into the existing `gates` table — a gate is a place,
+  not a person (§2, Option A), so this is the same shared-PIN model every
+  gate already uses, not a new account type. PINs are 6-digit numeric,
+  deliberately not alphanumeric — `GateLoginSchema` validates gate PINs as
+  digits-only and the scanner login page's numeric keypad strips anything
+  else as it's typed. Idempotent but reissues all 20 PINs on every run, so
+  it is a provisioning tool, not a rotation tool.
+- `backend/src/db/provision-superusers.ts` — provisions 3 real Super User
+  accounts (`ADMIN01`–`ADMIN03`, spec §4's "exactly three"), distinct from
+  `db:seed`'s disposable `admin1`/`admin2`/`admin3` sharing one hardcoded
+  password. 8-character passwords via `lib/passwordGen.ts`'s
+  `generateSecurePassword()` — the same unambiguous alphabet and guaranteed
+  upper/lower/digit mix `db:bulk-rotate-passwords` uses for its suffix.
+  `email` is left `NULL`; nothing fabricates an address nobody supplied.
 
 **Not yet built:** divisions/units/agents CRUD, ticket revocation, real QR
 encoding, `gate:offline` heartbeat, a superuser UI for editing zone coverage
