@@ -716,10 +716,14 @@ npm run dev:web                 # :3000
 > `npm run build:shared`. This is the #1 cause of "I changed the constant but
 > nothing happened."
 
-Seeded fixtures: division `RIYADH`; units `5BUILDING` and `DEERA` (PIN `1234`);
-agents `8888999955` / `8888999956` on 5BUILDING and `8888999957` on DEERA
-(password `agent1234`); superuser `superadmin` / `SuperAdmin@2026`.
-The seed is idempotent and refuses to run in production without
+Seeded fixtures: division `RIYADH`; units `DEV5BUILDING` and `DEVDEERA` (no
+PIN — units stopped being a login factor in §3.2); agents `8888999955` /
+`8888999956` on `DEV5BUILDING` and `8888999957` on `DEVDEERA` (password
+`agent1234`); superusers `admin1` / `admin2` / `admin3` (or their
+`@pravasisangama.com` emails) / `SuperAdmin@2026`. No gates — `db:seed`
+stopped creating any once migration 008 retired the `GATE1`/`GATE2`
+fixtures; provision `SCAN01`–`SCAN20` with `db:provision-scanners` instead
+(§8). The seed is idempotent and refuses to run in production without
 `ALLOW_PROD_SEED=true`.
 
 ### Other commands

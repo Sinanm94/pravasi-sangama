@@ -43,11 +43,12 @@ const SUPERUSER_PASSWORD = 'SuperAdmin@2026';
 
 const DIVISION = { code: 'RIYADH', name: 'Riyadh' };
 
-/** Gate channels for the scanner PIN login (spec §2, Option A). */
-const GATES = [
-  { gate_code: 'GATE1', name: 'Gate 1 — VIP', pin: '4321' },
-  { gate_code: 'GATE2', name: 'Gate 2 — General', pin: '4321' },
-] as const;
+/* db:seed no longer creates any gates. It originally seeded two
+ * (GATE1/GATE2, PIN 4321) — retired by migration 008 once real gate
+ * infrastructure existed via provision-scanners.ts (SCAN01–SCAN20). Adding
+ * dev placeholders back here would just recreate the exact clutter that
+ * migration existed to remove; there is no local-dev need for a seeded gate
+ * that db:provision-scanners doesn't already cover for a real database. */
 
 /* No PIN: units stopped being an authentication factor in §3.2, and
  * migration 004 dropped access_code_hash. A unit is a posting, not a login.
@@ -184,22 +185,6 @@ async function seed() {
       );
     }
 
-    /* --- gates (spec §2, Option A) -------------------------------- */
-    for (const gate of GATES) {
-      const pinHash = await hashSecret(gate.pin);
-
-      await client.query(
-        `INSERT INTO gates (gate_code, name, division_id, pin_hash)
-              VALUES ($1, $2, $3, $4)
-         ON CONFLICT (gate_code) DO UPDATE
-              SET name        = EXCLUDED.name,
-                  division_id = EXCLUDED.division_id,
-                  pin_hash    = EXCLUDED.pin_hash,
-                  is_active   = TRUE`,
-        [gate.gate_code, gate.name, divisionId, pinHash],
-      );
-    }
-
     await client.query(
       `INSERT INTO audit_logs (actor_role, actor_id, action, metadata)
             VALUES ('SUPERUSER', $1, 'DATABASE_SEEDED', $2)`,
@@ -237,13 +222,6 @@ function report() {
     console.log(`    ${a.name}  (unit ${a.unit_code})`);
     console.log(`      mobile_number : ${a.mobile_number}`);
     console.log(`      password      : ${a.password}`);
-  }
-
-  console.log('\n  GATES — scanner PIN login (spec §2)');
-  for (const g of GATES) {
-    console.log(`    ${g.name}`);
-    console.log(`      gate_code : ${g.gate_code}`);
-    console.log(`      pin       : ${g.pin}`);
   }
 
   console.log(`\n${line}`);
