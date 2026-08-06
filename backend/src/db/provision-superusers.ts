@@ -11,8 +11,15 @@ import { closePool, withTransaction } from './index.js';
  * guarded against production. These are real accounts, each with its own
  * generated password, meant to run once against production — no `NODE_ENV`
  * guard, same reasoning as provision-unit-admins.ts and
- * provision-scanners.ts. This script does not touch the dev seed accounts
- * either way; the two coexist under different usernames.
+ * provision-scanners.ts.
+ *
+ * ⚠ This script DEACTIVATES every superuser that is not ADMIN01–ADMIN03,
+ * including those dev fixtures — see the note above that UPDATE below. It
+ * used to leave them alone and let the two sets coexist; that was the hole
+ * that kept `admin1` / `SuperAdmin@2026` (a password committed to this
+ * repository) working against a live deployment. If you need an extra
+ * superuser beyond these three, add it to this file rather than creating it
+ * by hand, or the next run of this script will switch it off.
  *
  * Idempotent (`ON CONFLICT (username) DO UPDATE`) but not a rotation tool:
  * every run reissues all 3 passwords, so a second run invalidates whatever
@@ -40,6 +47,9 @@ interface ProvisionedSuperuser {
   password: string;
 }
 
+/** Filled in by provision(), reported afterwards. */
+let retiredUsernames: string[] = [];
+
 async function provision(): Promise<ProvisionedSuperuser[]> {
   return withTransaction(async (client) => {
     const accounts: ProvisionedSuperuser[] = [];
@@ -65,11 +75,37 @@ async function provision(): Promise<ProvisionedSuperuser[]> {
       accounts.push({ username, password });
     }
 
+    /* Everything that is not one of these three is switched off.
+     *
+     * Migration 012 disables the four known legacy names, but only those —
+     * a migration cannot safely run "disable everything not on the
+     * allowlist", because if it executes before this script has created
+     * ADMIN01–03 it would leave zero active superusers and lock the system.
+     * Here that risk does not exist: the allowlist was inserted moments ago
+     * in this same transaction, so the rule is safe to apply in full and
+     * catches any stray account the migration's name list does not know
+     * about. Re-running this script re-asserts it. */
+    const { rows: retired } = await client.query<{ username: string }>(
+      `UPDATE superusers
+          SET is_active = FALSE
+        WHERE is_active
+          AND username <> ALL($1::text[])
+        RETURNING username`,
+      [accounts.map((a) => a.username)],
+    );
+
     await client.query(
       `INSERT INTO audit_logs (actor_role, action, metadata)
             VALUES ('SUPERUSER', 'SUPERUSERS_PROVISIONED', $1)`,
-      [JSON.stringify({ count: accounts.length })],
+      [
+        JSON.stringify({
+          count: accounts.length,
+          retired: retired.map((r) => r.username),
+        }),
+      ],
     );
+
+    retiredUsernames = retired.map((r) => r.username);
 
     return accounts;
   });
@@ -98,6 +134,14 @@ function printDistributionList(accounts: ProvisionedSuperuser[]): void {
   console.log('  User_ID,Plaintext_Password');
   for (const a of accounts) {
     console.log(`  ${a.username},${a.password}`);
+  }
+
+  if (retiredUsernames.length > 0) {
+    console.log(
+      `\n  Deactivated ${retiredUsernames.length} other superuser account(s), ` +
+        'so only the three above can sign in:',
+    );
+    for (const u of retiredUsernames) console.log(`      ${u}`);
   }
 
   console.log(

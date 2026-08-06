@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { BarChart3, DoorOpen, LogOut, Tickets, UserCheck, Users } from 'lucide-react';
+import { BarChart3, DoorOpen, LogOut, Tickets, Users } from 'lucide-react';
 import { apiPost } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
@@ -27,7 +27,6 @@ const AMBER = '#FFA51F';
 
 const SECTIONS = [
   { href: '/dashboard', label: 'System Overview', icon: BarChart3 },
-  { href: '/admin/approvals', label: 'Agent Approvals', icon: UserCheck },
   { href: '/admin/directory', label: 'Agent Directory', icon: Users },
   { href: '/admin/tickets', label: 'Ticket Ledger', icon: Tickets },
   { href: '/admin/gates', label: 'Gate Management', icon: DoorOpen },
@@ -194,7 +193,7 @@ export function EmptyState({
   title,
   body,
 }: {
-  icon: typeof UserCheck;
+  icon: typeof BarChart3;
   title: string;
   body: string;
 }) {

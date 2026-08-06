@@ -234,11 +234,16 @@ The row shape (`AdminTicketRow`) is shared with the superuser ledger
 (`/admin/tickets`) — a ticket's data doesn't change depending on who's
 allowed to see it, only which rows come back.
 
-**Superuser retains unrestricted approval**, unchanged — `admin.repository
-.decideAgent` called from `/admin/approvals` passes no `restrictToAdminId`,
-which is what §2's "ultimate authority" means concretely. A superuser
-overriding a unit admin's queue needs no special path; it is the same
-endpoint it always was.
+**Superuser retains unrestricted approval, but it is now API-only.** The
+`/admin/approvals` page and its nav tab were removed once approval was fully
+delegated to the Unit Admin tier — a superuser has no approvals screen. The
+endpoints stay (`GET /api/admin/agents`, `POST /api/admin/agents/:id/decision`),
+and `admin.repository.decideAgent` called from them still passes no
+`restrictToAdminId`, which is what §2's "ultimate authority" means
+concretely. Treat it as break-glass: it is the only unrestricted approval
+path in the system, and the only way to clear a queue when a unit admin's
+account is lost or an agent is posted to a unit that has no admin yet. See
+the header comment on `admin.routes.ts` for the exact calls.
 
 **Provisioning is a dedicated script, not `db:seed`:**
 
@@ -683,7 +688,7 @@ pravasi-sangama/
 - `frontend/src/middleware.ts` + `components/auth/ProtectedRoute.tsx` — the two
   routing layers. **Neither is an authorization boundary** — see §11.
 - `frontend/src/app/` — `/login`, `/dashboard`, `/ticketing`, `/scanner`,
-  `/agent/dashboard` (agent ledger), `/admin/approvals`, `/admin/directory`,
+  `/agent/dashboard` (agent ledger), `/admin/directory`,
   `/admin/tickets` (master ledger), `/admin/gates`, `/unit/dashboard` (unit
   admin's own approvals — §3.3).
 - `backend/src/modules/admin/` — approvals, gates, agent directory, and the
@@ -837,7 +842,17 @@ both behind Unit Gateway PIN `1234` (§3.2 — a unit still has no *login* PIN
 of its own, this is the separate agent-invite gate in front of the portal);
 agents `8888999955` / `8888999956` on `DEV5BUILDING` and `8888999957` on
 `DEVDEERA` (password `agent1234`); superusers `admin1` / `admin2` / `admin3`
-(or their `@pravasisangama.com` emails) / `SuperAdmin@2026`. No gates — `db:seed`
+(or their `@pravasisangama.com` emails) / `SuperAdmin@2026` — **development
+only**. Migration 012 deactivates these three, and `db:provision-superusers`
+deactivates everything that is not `ADMIN01`–`ADMIN03`, because
+`SuperAdmin@2026` is committed to this repository and was reachable on a
+live deployment.
+>
+> Note the loop: `db:seed`'s upsert sets `is_active = TRUE`, so running it
+> again **re-enables them**. That is intended for development and is why the
+> seed is the only script with a `NODE_ENV` guard. If you ever run it against
+> production with `ALLOW_PROD_SEED=true`, re-run `db:provision-superusers`
+> afterwards or those public credentials are live again. No gates — `db:seed`
 stopped creating any once migration 008 retired the `GATE1`/`GATE2`
 fixtures; provision `SCAN01`–`SCAN20` with `db:provision-scanners` instead
 (§8). The seed is idempotent and refuses to run in production without
