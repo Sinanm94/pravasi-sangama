@@ -15,3 +15,7 @@ unitAdminRoutes.get('/agents', controller.listAgents);
 unitAdminRoutes.post('/agents/:id/decision', controller.decideAgent);
 unitAdminRoutes.get('/tickets', controller.listTickets);
 unitAdminRoutes.get('/invite-pin', controller.listInvitePins);
+unitAdminRoutes.post(
+  '/agents/:id/reset-password',
+  controller.resetAgentPassword,
+);

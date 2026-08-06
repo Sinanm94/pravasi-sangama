@@ -125,18 +125,27 @@ export const AgentSignupSchema = z
      */
     agent_invite_pin: agentInvitePin,
 
+    /**
+     * OPTIONAL. Many field agents are coming off paper systems and would
+     * rather be handed a password than invent one; leaving these blank makes
+     * the server generate a temporary one and return it once, so an account
+     * is never created without a credential. An agent who does type a
+     * password still gets exactly the old behaviour.
+     */
     password: z
       .string()
       .min(
         AGENT_PASSWORD_MIN_LENGTH,
         `Password must be at least ${AGENT_PASSWORD_MIN_LENGTH} characters`,
       )
-      .max(128),
+      .max(128)
+      .optional(),
 
-    confirm_password: z.string(),
+    confirm_password: z.string().optional(),
   })
   .strict()
-  .refine((data) => data.password === data.confirm_password, {
+  // Only meaningful when one was supplied; both blank is the generate path.
+  .refine((data) => !data.password || data.password === data.confirm_password, {
     message: 'Passwords do not match',
     path: ['confirm_password'],
   });

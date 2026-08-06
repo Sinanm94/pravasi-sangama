@@ -260,3 +260,47 @@ export async function summariseTicketsForAdmin(
 
   return rows[0] ?? { tickets: 0, seats: 0, children: 0 };
 }
+
+/* ------------------------------------------------------------------ */
+/* Agent password rotation — the admin's own agents only               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sets a new password hash for one agent, but ONLY if that agent sits inside
+ * this admin's scope.
+ *
+ * The scope check is the same OR-predicate as `decideAgent` and every other
+ * query in this module, and it lives in the UPDATE's WHERE clause rather
+ * than in a preceding SELECT: an agent outside the caller's units matches
+ * zero rows at the database level, so there is no window between "may I?"
+ * and "do it", and no app-level branch a reviewer could miss.
+ *
+ * Returns null for both "no such agent" and "not yours", which the caller
+ * must not distinguish — a unit head has no business learning that an agent
+ * id outside their scope exists.
+ */
+export async function resetAgentPassword(params: {
+  adminId: string;
+  agentId: string;
+  passwordHash: string;
+}): Promise<{ id: string; name: string; mobile_number: string } | null> {
+  const { rows } = await query<{
+    id: string;
+    name: string;
+    mobile_number: string;
+  }>(
+    `UPDATE agents
+        SET pin_hash = $3
+      WHERE id = $2
+        AND (
+          unit_id = (SELECT unit_id FROM unit_admins WHERE id = $1)
+          OR unit_id IN (
+               SELECT unit_id FROM supervisor_unit_assignments
+                WHERE admin_id = $1
+             )
+        )
+    RETURNING id, name, mobile_number`,
+    [params.adminId, params.agentId, params.passwordHash],
+  );
+  return rows[0] ?? null;
+}

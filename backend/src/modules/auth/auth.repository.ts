@@ -14,31 +14,31 @@ export interface AgentRow {
   approval_status: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
+/**
+ * Login lookup — by MOBILE NUMBER ONLY.
+ *
+ * This used to also match `LOWER(a.email) = LOWER($1)`. Migration 013 drops
+ * the unique index on agent email so that agents without a personal address
+ * can share their unit head's, which makes an email match ambiguous: with
+ * two agents on one address, `LIMIT 1` returns whichever row the planner
+ * feels like, and "sign in with your email" is no longer a well-defined
+ * request. Worse, it would be non-deterministically wrong rather than
+ * cleanly failing.
+ *
+ * mobile_number is still UNIQUE and is the documented Agent ID (§2), so it
+ * is the only identifier that can resolve one agent. The function keeps its
+ * name for its callers; the OR is what left.
+ */
 export async function findAgentByMobile(
-  mobile: string,
-): Promise<AgentRow | null> {
-  const { rows } = await query<AgentRow>(
-    `SELECT id, unit_id, mobile_number, name, pin_hash, is_active,
-            email, approval_status
-       FROM agents
-      WHERE mobile_number = $1`,
-    [mobile],
-  );
-  return rows[0] ?? null;
-}
-
-/** Spec §3: agents may sign in with their mobile OR their email. */
-export async function findAgentByMobileOrEmail(
-  identifier: string,
+  mobileNumber: string,
 ): Promise<AgentRow | null> {
   const { rows } = await query<AgentRow>(
     `SELECT a.id, a.unit_id, u.division_id, a.mobile_number, a.name,
             a.pin_hash, a.is_active, a.email, a.approval_status
        FROM agents a
        JOIN units u ON u.id = a.unit_id
-      WHERE a.mobile_number = $1 OR LOWER(a.email) = LOWER($1)
-      LIMIT 1`,
-    [identifier],
+      WHERE a.mobile_number = $1`,
+    [mobileNumber],
   );
   return rows[0] ?? null;
 }
@@ -323,18 +323,10 @@ export async function createSelfRegisteredAgent(params: {
   return rows[0]!;
 }
 
-export async function findAgentByEmail(
-  email: string,
-): Promise<AgentRow | null> {
-  const { rows } = await query<AgentRow>(
-    `SELECT id, unit_id, mobile_number, name, pin_hash, is_active,
-            email, approval_status
-       FROM agents
-      WHERE LOWER(email) = LOWER($1)`,
-    [email],
-  );
-  return rows[0] ?? null;
-}
+/* findAgentByEmail() was removed with the self-service reset flow it
+ * served (migration 013). Resolving an agent by email alone is unsound now
+ * that addresses are shared — it returns an arbitrary one of them. If you
+ * need agents for an address, return the SET and make the caller decide. */
 
 /* ================================================================== */
 /* Password reset                                                      */

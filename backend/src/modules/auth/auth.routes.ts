@@ -53,9 +53,12 @@ authRoutes.post('/agent-login', loginLimiter, controller.agentLogin);
 authRoutes.post('/signup', signupLimiter, controller.agentSignup);
 authRoutes.get('/units', controller.publicUnits);
 
-/* --- Agent: forgot password (spec §3) ---------------------------- */
-authRoutes.post('/forgot-password', signupLimiter, controller.forgotPassword);
-authRoutes.post('/reset-password', signupLimiter, controller.resetPassword);
+/* --- Agent: password recovery ------------------------------------- *
+ * No routes. Email-based self-service reset is retired — agents share
+ * email addresses (migration 013), which made it an account-takeover
+ * path. Recovery is POST /api/unit-admin/agents/:id/reset-password,
+ * performed by the agent's own unit admin. See auth.service.ts.
+ */
 
 /* --- Scanner: gate PIN (spec §2, Option A) ----------------------- */
 authRoutes.post('/gate-login', loginLimiter, controller.gateLogin);

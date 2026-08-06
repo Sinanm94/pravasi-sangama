@@ -64,3 +64,24 @@ export function generateSecurePassword(length: number): string {
 
   return chars.join('');
 }
+
+/**
+ * An agent's temporary password: `psa<4 digits>-pw`, e.g. `psa4821-pw`.
+ *
+ * Same shape as the unit-admin format (lowercase, one digit run, a fixed
+ * suffix) so staff learn one pattern, but with a constant `psa` stem rather
+ * than a unit prefix — an agent's password must not be derivable from
+ * anything printed on a roster, and unlike a unit admin there is no public
+ * code to build from anyway.
+ *
+ * ⚠ Same 4-digit entropy caveat as the unit-admin passwords: 10,000 per
+ * account, with the rest of the string constant. It is a TEMPORARY
+ * credential — handed over in person, meant to be used and then changed —
+ * and an agent can only issue tickets for their own unit, never approve
+ * anyone. Raise the digit count here if that stops being an acceptable
+ * trade; do not reintroduce mixed case, which is what this format exists to
+ * avoid.
+ */
+export function generateAgentPassword(): string {
+  return `psa${randomDigits(4)}-pw`;
+}

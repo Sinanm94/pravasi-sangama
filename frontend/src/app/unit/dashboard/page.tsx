@@ -13,6 +13,7 @@ import {
   EyeOff,
   KeyRound,
   Loader2,
+  RotateCcw,
   LogOut,
   RefreshCw,
   Search,
@@ -24,6 +25,7 @@ import {
   TICKET_TYPE_LABELS,
   type AdminTicketRow,
   type PendingAgent,
+  type AgentPasswordResetResponse,
   type UnitAdminAgentListResponse,
   type UnitAdminInvitePinResponse,
   type UnitAdminTicketListResponse,
@@ -235,6 +237,31 @@ function UnitAdminScreen() {
   const ticketFiltered = Boolean(ticketAgentId) || committedTicketSearch.length > 0;
   const ticketTotals = tickets?.totals;
 
+  /* --- Agent password reset (§3.3) ---------------------------------- *
+   * Replaces self-service email reset, which had to go once agents began
+   * sharing email addresses. Rotate-and-reveal: the new password is shown
+   * once, here, and only its hash is stored. */
+  const [resetting, setResetting] = useState<string | null>(null);
+  const [resetResult, setResetResult] =
+    useState<AgentPasswordResetResponse | null>(null);
+
+  const resetPassword = async (agent: PendingAgent) => {
+    if (resetting) return;
+    setResetting(agent.id);
+    try {
+      const result = await apiPost<AgentPasswordResetResponse>(
+        `/unit-admin/agents/${agent.id}/reset-password`,
+      );
+      setResetResult(result);
+    } catch (err) {
+      toast.error('Could not reset that password', {
+        description: errorMessage(err),
+      });
+    } finally {
+      setResetting(null);
+    }
+  };
+
   return (
     <div className="relative min-h-dvh bg-gray-50 font-sans antialiased">
       <BrandBackdrop />
@@ -277,6 +304,13 @@ function UnitAdminScreen() {
           <NoUnitAssigned />
         ) : (
           <>
+            {resetResult && (
+              <ResetResultCard
+                result={resetResult}
+                onDismiss={() => setResetResult(null)}
+              />
+            )}
+
             <InvitePinCard
               data={invitePins}
               revealed={pinRevealed}
@@ -376,9 +410,24 @@ function UnitAdminScreen() {
                             {a.mobileNumber}
                           </p>
                         </div>
-                        <span className="shrink-0 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-emerald-700">
-                          Approved
-                        </span>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void resetPassword(a)}
+                            disabled={resetting === a.id}
+                            className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97] disabled:opacity-60"
+                          >
+                            {resetting === a.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.25} />
+                            )}
+                            Reset password
+                          </button>
+                          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.04em] text-emerald-700">
+                            Approved
+                          </span>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -581,6 +630,72 @@ function formatWhen(iso: string): string {
   if (mins < 60) return `${mins}m ago`;
   if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
+/* ================================================================== */
+/* A freshly reset agent password — shown once                          */
+/* ================================================================== */
+
+/**
+ * Deliberately loud, deliberately dismissible, and deliberately the ONLY
+ * time this string is ever displayed: the server stores a bcrypt hash and
+ * cannot show it again. If the unit head closes this before writing it
+ * down, the fix is to reset again — which is safe, since the agent could
+ * not have used it yet.
+ *
+ * Not persisted into the agent list. Leaving a password sitting in a row on
+ * a dashboard that stays open at a registration desk all day is exactly the
+ * exposure this flow is trying to avoid.
+ */
+function ResetResultCard({
+  result,
+  onDismiss,
+}: {
+  result: AgentPasswordResetResponse;
+  onDismiss: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={springSurface}
+      className="mb-6 rounded-3xl bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: VIOLET }}
+          >
+            New password for {result.agentName}
+          </p>
+          <p className="mt-0.5 text-[12px] tabular-nums text-gray-500">
+            {result.mobileNumber}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="shrink-0 rounded-full bg-gray-100 p-2 text-gray-500 transition-colors hover:bg-gray-200/80 hover:text-gray-900 active:scale-95"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+        </button>
+      </div>
+
+      <p
+        className="mt-4 text-center font-mono text-[28px] font-bold tracking-[0.08em]"
+        style={{ color: VIOLET_DEEP }}
+      >
+        {result.temporaryPassword}
+      </p>
+
+      <p className="mt-3 text-center text-[12px] leading-snug text-gray-500">
+        Read this out to {result.agentName} now — it is shown once and cannot
+        be looked up again. Resetting again is safe if you lose it.
+      </p>
+    </motion.div>
+  );
 }
 
 /* ================================================================== */

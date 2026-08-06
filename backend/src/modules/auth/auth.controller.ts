@@ -2,16 +2,13 @@ import type { Request, RequestHandler, Response } from 'express';
 import {
   AgentLoginSchema,
   AgentSignupSchema,
-  ForgotPasswordSchema,
   GateLoginSchema,
-  ResetPasswordSchema,
   SESSION_COOKIE_NAME,
   SuperuserLoginSchema,
   UnitAdminLoginSchema,
   UnitGatewaySchema,
 } from '@pravasi/shared';
 import { clearSessionCookie, setSessionCookie, verifySession } from '../../lib/jwt.js';
-import { sendPasswordResetEmail } from './auth.email.js';
 import * as service from './auth.service.js';
 
 const contextOf = (req: Request) => ({
@@ -98,40 +95,8 @@ export const unitGateway = handle(async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Password reset (spec §3)                                            */
+/* Password reset — retired for agents; see auth.service.ts            */
 /* ------------------------------------------------------------------ */
-
-export const forgotPassword = handle(async (req, res) => {
-  const input = ForgotPasswordSchema.parse(req.body);
-  const result = await service.requestPasswordReset(input, contextOf(req));
-
-  if (result.token && result.agentEmail) {
-    try {
-      await sendPasswordResetEmail({
-        to: result.agentEmail,
-        name: result.agentName ?? 'there',
-        token: result.token,
-      });
-    } catch (err) {
-      // A delivery failure must not change the response shape — see below.
-      console.error('[auth] reset email failed to send', err);
-    }
-  }
-
-  /* Always 200, always the same body. Telling the caller whether an address
-   * exists turns this endpoint into a membership oracle for every email an
-   * attacker cares to try. */
-  res.status(200).json({
-    message:
-      'If that address has an approved account, a reset link is on its way.',
-  });
-});
-
-export const resetPassword = handle(async (req, res) => {
-  const input = ResetPasswordSchema.parse(req.body);
-  await service.resetPassword(input, contextOf(req));
-  res.status(200).json({ message: 'Password updated. You can sign in now.' });
-});
 
 /* ------------------------------------------------------------------ */
 /* POST /api/auth/gate-login — scanner (spec §2, Option A)             */

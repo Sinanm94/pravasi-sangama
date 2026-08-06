@@ -3,11 +3,9 @@ import type {
   AgentLoginInput,
   AgentSignupInput,
   AgentSignupResponse,
-  ForgotPasswordInput,
   GateLoginInput,
   PublicGate,
   PublicUnit,
-  ResetPasswordInput,
   ScannerClaims,
   SessionClaims,
   SessionResponse,
@@ -35,6 +33,7 @@ import {
   forbidden,
   unauthorized,
 } from '../../lib/errors.js';
+import { generateAgentPassword } from '../../lib/passwordGen.js';
 import * as repo from './auth.repository.js';
 
 interface RequestContext {
@@ -76,7 +75,7 @@ export async function agentLogin(
   ctx: RequestContext,
 ): Promise<LoginResult> {
   // Spec §3: agents sign in with mobile OR email.
-  const agent = await repo.findAgentByMobileOrEmail(input.mobile_number);
+  const agent = await repo.findAgentByMobile(input.mobile_number);
 
   if (!agent || !agent.pin_hash) {
     await verifyAgainstDummy(input.password);
@@ -357,7 +356,12 @@ export async function agentSignup(
    * nothing server-side trusts that on its own. */
   await requireInvitePin(unit, input.agent_invite_pin);
 
-  const passwordHash = await hashSecret(input.password);
+  /* A blank password is a supported path, not an error — see
+   * AgentSignupSchema. Generating one here means an account can never be
+   * created without a credential, and the plaintext is returned exactly
+   * once below. */
+  const generated = input.password ? null : generateAgentPassword();
+  const passwordHash = await hashSecret(input.password ?? generated!);
 
   let created: { id: string };
   try {
@@ -373,10 +377,15 @@ export async function agentSignup(
     // on one number cannot both win.
     const e = err as { code?: string; constraint?: string };
     if (e.code === UNIQUE_VIOLATION) {
+      /* Only mobile_number can collide now. Migration 013 dropped the unique
+       * index on email so agents without a personal address can share their
+       * unit head's — a duplicate email is an expected, supported state, not
+       * a conflict. Any other unique violation reaching here is a genuine
+       * surprise, so it says so rather than blaming the email. */
       throw conflict(
         e.constraint === 'agents_mobile_number_key'
           ? 'An account already exists for this mobile number.'
-          : 'An account already exists for this email address.',
+          : 'That registration conflicts with an existing account.',
       );
     }
     throw err;
@@ -408,6 +417,7 @@ export async function agentSignup(
       mobileNumber: input.mobile_number,
       email: input.email,
     },
+    temporaryPassword: generated,
   };
 }
 
@@ -449,77 +459,33 @@ export async function verifyUnitGateway(
 }
 
 /* =================================================================== */
-/* Password reset (spec §3)                                            */
+/* Password reset — RETIRED for agents (§3.3)                          */
 /* =================================================================== */
 
-const RESET_TTL_MINUTES = 60;
-
-/**
- * Always resolves, whether or not the address exists. Returning "no such
- * account" would turn this endpoint into a membership oracle for every email
- * an attacker cares to try.
+/*
+ * `requestPasswordReset` / `resetPassword` and the token table they used are
+ * gone for agents, deliberately.
+ *
+ * They resolved the account with `findAgentByEmail(...)`. Migration 013
+ * lets agents share one address — typically their unit head's, because many
+ * field agents have no personal email — and that turns this flow into an
+ * account-takeover path in two ways at once:
+ *
+ *   - the lookup returns an ARBITRARY one of the agents on that address, so
+ *     the link may be minted for someone other than the person who asked;
+ *   - everyone with access to the shared inbox (the unit head, and every
+ *     other agent on it) can open the link and set that password.
+ *
+ * Neither is fixable while the address is the identifier, so recovery moved
+ * to where the authority actually is: a unit admin rotates the agent's
+ * password from their dashboard and reads the new one out
+ * (`POST /api/unit-admin/agents/:id/reset-password`). That is scoped by the
+ * same OR-predicate as every other unit-admin action, and is attributable in
+ * `audit_logs`, which an emailed link never was.
+ *
+ * `password_reset_tokens` is left on the table — dropping it would discard
+ * history — but nothing writes to it any more.
  */
-export async function requestPasswordReset(
-  input: ForgotPasswordInput,
-  ctx: RequestContext,
-): Promise<{ token: string | null; agentEmail: string | null; agentName: string | null }> {
-  const agent = await repo.findAgentByEmail(input.email);
-
-  if (!agent || !agent.is_active || agent.approval_status !== 'APPROVED') {
-    await repo.writeAudit({
-      actorRole: null,
-      actorId: null,
-      action: 'PASSWORD_RESET_REQUESTED_UNKNOWN',
-      metadata: { email: input.email },
-      ip: ctx.ip,
-    });
-    return { token: null, agentEmail: null, agentName: null };
-  }
-
-  // Raw token goes in the email; only its hash is stored.
-  const token = newResetToken();
-  await repo.createPasswordResetToken({
-    agentId: agent.id,
-    tokenHash: hashToken(token),
-    expiresAt: minutesFromNow(RESET_TTL_MINUTES),
-  });
-
-  await repo.writeAudit({
-    actorRole: 'AGENT',
-    actorId: agent.id,
-    action: 'PASSWORD_RESET_REQUESTED',
-    entityType: 'agent',
-    entityId: agent.id,
-    ip: ctx.ip,
-  });
-
-  return { token, agentEmail: agent.email, agentName: agent.name };
-}
-
-export async function resetPassword(
-  input: ResetPasswordInput,
-  ctx: RequestContext,
-): Promise<void> {
-  const passwordHash = await hashSecret(input.password);
-
-  const claimed = await repo.consumeResetToken({
-    tokenHash: hashToken(input.token),
-    passwordHash,
-  });
-
-  if (!claimed) {
-    throw badRequest('This reset link has expired or has already been used.');
-  }
-
-  await repo.writeAudit({
-    actorRole: 'AGENT',
-    actorId: claimed.agent_id,
-    action: 'PASSWORD_RESET_COMPLETED',
-    entityType: 'agent',
-    entityId: claimed.agent_id,
-    ip: ctx.ip,
-  });
-}
 
 /* =================================================================== */
 /* Gate scanner login (spec §2, Option A)                              */

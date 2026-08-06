@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import {
   AGENT_PASSWORD_MIN_LENGTH,
+  type AgentSignupResponse,
   type SessionResponse,
   type UnitGatewayResponse,
 } from '@pravasi/shared';
@@ -41,12 +42,12 @@ interface GatewayUnit extends UnitGatewayResponse {
   invitePin: string;
 }
 
-type Tab = 'login' | 'signup' | 'forgot';
+type Tab = 'login' | 'signup' | 'help';
 
 const TABS: Array<{ id: Tab; label: string }> = [
   { id: 'login', label: 'Agent Login' },
   { id: 'signup', label: 'First-Time' },
-  { id: 'forgot', label: 'Forgot' },
+  { id: 'help', label: 'Forgot?' },
 ];
 
 export default function LoginPage() {
@@ -152,7 +153,7 @@ function LoginFlow() {
               {tab === 'signup' && (
                 <SignupForm unit={gatewayUnit} onBack={() => setTab('login')} />
               )}
-              {tab === 'forgot' && <ForgotForm onBack={() => setTab('login')} />}
+              {tab === 'help' && <ForgotHelp onBack={() => setTab('login')} />}
             </motion.div>
           </AnimatePresence>
 
@@ -369,6 +370,8 @@ function SignupForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  /** Set only when the agent left the password blank — revealed once below. */
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
 
   const clearError = (key: string) =>
     setErrors((prev) => {
@@ -387,16 +390,19 @@ function SignupForm({
       next.mobile = 'Enter a valid 10-digit mobile number.';
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim()))
       next.email = 'Enter a valid email address.';
-    if (password.length < AGENT_PASSWORD_MIN_LENGTH)
+    /* Blank is allowed: the server generates one and returns it once. Only
+     * validate what was actually typed. */
+    if (password && password.length < AGENT_PASSWORD_MIN_LENGTH)
       next.password = `At least ${AGENT_PASSWORD_MIN_LENGTH} characters.`;
-    if (confirm !== password) next.confirm = 'Passwords do not match.';
+    if (password && confirm !== password)
+      next.confirm = 'Passwords do not match.';
 
     setErrors(next);
     if (Object.keys(next).length) return;
 
     setBusy(true);
     try {
-      await apiPost('/auth/signup', {
+      const result = await apiPost<AgentSignupResponse>('/auth/signup', {
         name: name.trim(),
         mobile_number: mobile,
         email: email.trim(),
@@ -406,10 +412,12 @@ function SignupForm({
         // it, since they already proved they know it to get this far.
         unit_code: unit.unitCode,
         agent_invite_pin: unit.invitePin,
-        password,
-        confirm_password: confirm,
+        // Omitted entirely when blank — the schema reads absent as "generate
+        // one", where an empty string would fail the min-length rule.
+        ...(password ? { password, confirm_password: confirm } : {}),
       });
       // 202 Accepted — the account exists but cannot sign in yet.
+      setTempPassword(result.temporaryPassword);
       setDone(true);
     } catch (err) {
       toast.error('Could not create the account', {
@@ -427,10 +435,33 @@ function SignupForm({
           icon={CheckCircle2}
           tone="success"
           title="Account created"
-          body="Awaiting admin approval. You'll be able to sign in once an administrator activates your account."
+          body="Awaiting approval from your unit head. You'll be able to sign in once they activate your account."
           actionLabel="Back to Sign In"
           onAction={onBack}
         />
+
+        {/* Shown exactly once — only the hash is stored, so it cannot be
+            retrieved later. If it is lost, the unit head resets it. */}
+        {tempPassword && (
+          <div
+            className="mt-4 rounded-2xl px-4 py-4 text-center"
+            style={{ backgroundColor: `${VIOLET}0d` }}
+          >
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">
+              Write this down now
+            </p>
+            <p
+              className="mt-2 font-mono text-[24px] font-bold tracking-[0.08em]"
+              style={{ color: VIOLET_DEEP }}
+            >
+              {tempPassword}
+            </p>
+            <p className="mt-2 text-[12px] leading-snug text-gray-500">
+              This is your password. It is not shown again and is not emailed.
+              If you lose it, your unit head can reset it for you.
+            </p>
+          </div>
+        )}
       </div>
     );
   }
@@ -506,7 +537,7 @@ function SignupForm({
 
       <Field
         label="New Password"
-        hint={`Min ${AGENT_PASSWORD_MIN_LENGTH} characters`}
+        hint={`Optional — blank means we create one (min ${AGENT_PASSWORD_MIN_LENGTH})`}
         type="password"
         value={password}
         onChange={(v) => {
@@ -520,6 +551,7 @@ function SignupForm({
 
       <Field
         label="Confirm Password"
+        hint="Only if you set one above"
         type="password"
         value={confirm}
         onChange={(v) => {
@@ -539,77 +571,31 @@ function SignupForm({
 }
 
 /* ================================================================== */
-/* Tab 3 — Forgot password                                             */
+/* Tab 3 — Forgot password → ask your unit head                        */
 /* ================================================================== */
 
-function ForgotForm({ onBack }: { onBack: () => void }) {
-  const [email, setEmail] = useState('');
-  const [error, setError] = useState<string | undefined>();
-  const [busy, setBusy] = useState(false);
-  const [sent, setSent] = useState(false);
-
-  const submit = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) {
-      setError('Enter a valid email address.');
-      return;
-    }
-
-    setBusy(true);
-    try {
-      await apiPost('/auth/forgot-password', { email: email.trim() });
-      setSent(true);
-    } catch (err) {
-      toast.error('Could not send the reset link', {
-        description: errorMessage(err),
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  if (sent) {
-    return (
-      <div className="mt-6">
-        {/* Deliberately does not confirm the address exists — the API does not
-            either, and the UI must not leak what the API protects. */}
-        <AuthOutcome
-          icon={Mail}
-          tone="info"
-          title="Check your email"
-          body="If that address has an approved account, a reset link is on its way. It expires in 60 minutes."
-          actionLabel="Back to Sign In"
-          onAction={onBack}
-        />
-      </div>
-    );
-  }
-
+/**
+ * Not a form. Self-service email reset was retired (migration 013): agents
+ * share email addresses — typically their unit head's — so a reset link
+ * could be minted for the wrong agent, and anyone with access to that
+ * shared inbox could claim it.
+ *
+ * Recovery is now a person: the unit admin rotates the password from their
+ * own dashboard and reads the new one out. This screen exists so an agent
+ * who taps "Forgot?" is told exactly that, rather than finding the tab gone
+ * and assuming the app is broken.
+ */
+function ForgotHelp({ onBack }: { onBack: () => void }) {
   return (
-    <form onSubmit={submit} noValidate className="mt-6 space-y-4">
-      <AuthHeader
-        icon={Mail}
-        title="Forgot password"
-        subtitle="We'll email you a reset link"
+    <div className="mt-6">
+      <AuthOutcome
+        icon={Building2}
+        tone="info"
+        title="Ask your unit head"
+        body="Passwords are reset by your unit admin, not by email. Ask them to open their dashboard and reset yours — they can give you a new one straight away."
+        actionLabel="Back to Sign In"
+        onAction={onBack}
       />
-      <Field
-        label="Email Address"
-        type="email"
-        inputMode="email"
-        value={email}
-        onChange={(v) => {
-          setEmail(v);
-          setError(undefined);
-        }}
-        placeholder="name@example.com"
-        autoComplete="email"
-        error={error}
-        required
-      />
-      <Submit busy={busy} busyLabel="Sending…">
-        Send Reset Link
-      </Submit>
-    </form>
+    </div>
   );
 }

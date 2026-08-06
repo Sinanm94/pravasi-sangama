@@ -4,12 +4,15 @@ import {
   UnitAdminTicketQuerySchema,
   type AdminTicketRow,
   type PendingAgent,
+  type AgentPasswordResetResponse,
   type UnitAdminAgentListResponse,
   type UnitAdminInvitePinResponse,
   type UnitAdminTicketListResponse,
 } from '@pravasi/shared';
 import { unitAdminScope } from '../../middleware/auth.js';
-import { conflict, forbidden } from '../../lib/errors.js';
+import { conflict, forbidden, notFound } from '../../lib/errors.js';
+import { hashSecret } from '../../lib/crypto.js';
+import { generateAgentPassword } from '../../lib/passwordGen.js';
 // Reusing the superuser module's decideAgent and writeAudit rather than
 // duplicating the race-safe UPDATE (§10.2's "the row is the lock" pattern
 // applies here too) and the audit_logs insert. Both already accept an actor
@@ -196,6 +199,69 @@ export const listInvitePins = handle(async (req, res) => {
       invitePin: r.agent_invite_pin,
       hasPin: r.has_pin,
     })),
+  };
+
+  res.status(200).json(body);
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /api/unit-admin/agents/:id/reset-password                      */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Rotate one of this admin's own agents' passwords and reveal the new one
+ * once, so a unit head can get an agent who forgot theirs back to work
+ * without an administrator.
+ *
+ * This REPLACES the self-service email reset, which had to go: agents share
+ * email addresses now (migration 013), so a link mailed to an address could
+ * be minted for the wrong agent and claimed by anyone on that inbox.
+ *
+ * Rotate-and-reveal, not view-stored-plaintext, and that distinction is
+ * deliberate. Agent passwords are not stored readably the way the unit
+ * invite PIN is (migration 011), for two reasons that do not apply to the
+ * PIN: an agent password authorises issuing tickets, and agents CHOOSE
+ * their own at signup — people reuse passwords, so a readable store would
+ * expose credentials those volunteers use elsewhere, which is a harm well
+ * beyond this event. The operational need is "my agent cannot sign in";
+ * that is fully met by handing them a fresh one.
+ */
+export const resetAgentPassword = handle(async (req, res) => {
+  const claims = unitAdminScope(req);
+  await requireAnyScope(claims.unitAdminId);
+
+  const agentId = String(req.params.id);
+  const temporaryPassword = generateAgentPassword();
+
+  const agent = await repo.resetAgentPassword({
+    adminId: claims.unitAdminId,
+    agentId,
+    passwordHash: await hashSecret(temporaryPassword),
+  });
+
+  // Null covers "no such agent" AND "not in your scope" — the caller is not
+  // told which, so this cannot be used to probe for agent ids elsewhere.
+  if (!agent) {
+    throw notFound('No such agent in your unit.');
+  }
+
+  await adminRepo.writeAudit({
+    superuserId: claims.unitAdminId,
+    actorRole: 'UNIT_ADMIN',
+    action: 'AGENT_PASSWORD_RESET',
+    entityType: 'agent',
+    entityId: agent.id,
+    // Never the password itself, not even hashed — audit_logs is read far
+    // more widely than the credential needs to be.
+    metadata: { mobile_number: agent.mobile_number },
+    ip: req.ip ?? null,
+  });
+
+  const body: AgentPasswordResetResponse = {
+    agentId: agent.id,
+    agentName: agent.name,
+    mobileNumber: agent.mobile_number,
+    temporaryPassword,
   };
 
   res.status(200).json(body);

@@ -67,8 +67,10 @@ rejecting agent registrations posted to that unit — no analytics, no ticket
 ledger, no CRUD. Exists to remove the superuser as the sole approval bottleneck
 across 30+ locations run by non-technical volunteers. See §3.3.
 
-**Agent** — The human issuing tickets. Assigned to one unit. Identified by mobile
-number. Cannot access analytics, cannot edit or revoke issued tickets, and can
+**Agent** — The human issuing tickets. Assigned to one unit. Identified by
+**mobile number only** — `agents.email` stopped being unique in migration 013
+so agents without a personal address can share their unit head's, which means
+an email no longer resolves one agent and login no longer accepts it. Cannot access analytics, cannot edit or revoke issued tickets, and can
 only see registrations made from their own unit.
 
 > **Rule:** authorization is always evaluated bottom-up from the token's
@@ -188,6 +190,43 @@ machinery this section documents as deleted, and reusing it would have
 dragged those assumptions back in for a gate that no longer works that way.
 If `access_code_hash` ever gets a real reader, that is a third, distinct
 decision — not a continuation of either the old flow or the gateway above.
+
+### 3.2.1 Agent credentials and recovery (migration 013)
+
+**Agents may share an email address.** Many field agents have none of their
+own and register under their unit head's. `agents.email` is therefore a
+contact field, not an identifier; `mobile_number` remains UNIQUE and is the
+Agent ID (§2).
+
+Two things depended on that dropped uniqueness and both were changed with
+it — neither is optional, and re-introducing either reopens a real hole:
+
+- **Login is mobile-only.** It used to accept `mobile OR email`; with a
+  shared address that `LIMIT 1` returns an arbitrary agent.
+- **Self-service email password reset is GONE.** It looked the agent up by
+  address, so the link could be minted for a *different* agent than the one
+  who asked, and anyone on the shared inbox — the unit head, every other
+  agent on it — could claim it. `/login`'s "Forgot?" tab is now a screen
+  telling the agent to ask their unit head. `password_reset_tokens` remains
+  for history; nothing writes to it.
+
+**Passwords.** The signup password is **optional**: an agent who types one
+gets the old behaviour, and an agent who leaves it blank gets a generated
+`psa<4 digits>-pw` shown once on the success screen — so an account is never
+created without a credential. Recovery is
+`POST /api/unit-admin/agents/:id/reset-password`, on the unit admin's own
+dashboard, scoped by the same OR-predicate as every other unit-admin action
+and written to `audit_logs` as `AGENT_PASSWORD_RESET`.
+
+> **Rotate-and-reveal, NOT stored plaintext** — deliberately unlike the unit
+> invite PIN (migration 011), and the difference is worth understanding
+> before someone "fixes" the inconsistency. That PIN is 4 digits, already
+> committed to this repo, and explicitly not an access control. An agent
+> password authorises **issuing tickets**, and agents *choose their own* at
+> signup — people reuse passwords, so storing them readably would expose
+> credentials those volunteers use on other services, which is harm beyond
+> this event. The operational need is "my agent can't sign in", and handing
+> them a fresh password meets it completely.
 
 ### 3.3 Unit Admin login — decentralised approvals (migrations 005, 007)
 

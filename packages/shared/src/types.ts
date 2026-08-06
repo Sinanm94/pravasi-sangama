@@ -339,6 +339,13 @@ export interface AgentSignupResponse {
   status: ApprovalStatus;
   message: string;
   agent: { id: string; name: string; mobileNumber: string; email: string };
+  /**
+   * Set ONLY when the agent left the password blank and the server generated
+   * one. Returned exactly once, in this response — it is stored as a bcrypt
+   * hash and is not recoverable afterwards. Null when the agent chose their
+   * own. If it is lost, the unit admin rotates it (§3.3).
+   */
+  temporaryPassword: string | null;
 }
 
 /**
@@ -536,6 +543,22 @@ export interface UnitInvitePin {
   invitePin: string | null;
   /** False when this unit has no invite PIN configured at all. */
   hasPin: boolean;
+}
+
+/**
+ * POST /api/unit-admin/agents/:id/reset-password — the reply.
+ *
+ * `temporaryPassword` is returned exactly ONCE, here. Only its bcrypt hash
+ * is stored, so it cannot be shown again; if the unit head loses it before
+ * handing it over, they rotate again. That is deliberate — see §3.3 on why
+ * agent passwords are rotated-and-revealed rather than stored readably the
+ * way the unit invite PIN is.
+ */
+export interface AgentPasswordResetResponse {
+  agentId: string;
+  agentName: string;
+  mobileNumber: string;
+  temporaryPassword: string;
 }
 
 export interface UnitAdminInvitePinResponse {
