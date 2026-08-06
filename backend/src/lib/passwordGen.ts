@@ -18,6 +18,24 @@ export function randomChar(pool: string): string {
 }
 
 /**
+ * `count` crypto-random decimal digits.
+ *
+ * Deliberately the FULL 0–9, not PASSWORD_DIGITS above. The ambiguous-digit
+ * exclusion exists to stop `0`/`O` and `1`/`l` being confused inside a mixed
+ * alphanumeric string; in an all-digit run there is no letter to confuse
+ * them with, and dropping two of ten digits would cut the space by a third
+ * (8^n vs 10^n) for no readability gain. Used for the unit-admin password
+ * suffix and the gate PINs.
+ */
+export function randomDigits(count: number): string {
+  let out = '';
+  for (let i = 0; i < count; i += 1) {
+    out += randomInt(0, 10).toString();
+  }
+  return out;
+}
+
+/**
  * `length` characters, guaranteeing at least one upper/lower/digit rather
  * than leaving it to chance — "a mix" is the requirement, not merely a pool
  * large enough that a mix is likely. The three guaranteed picks are placed

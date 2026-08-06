@@ -264,12 +264,33 @@ idempotent, safe to re-run.
 > npm run db:bulk-rotate-passwords -w @pravasi/backend         # all 33 at once
 > ```
 >
-> `db:bulk-rotate-passwords` generates `TitleCasedUnitCode-XXX` (e.g.
-> `Bat01-7kX`) rather than a fully random string — the account's own
-> username, already public on the roster, buys memorability for free;
-> the 3-character suffix (`lib/passwordGen.ts`'s unambiguous alphabet)
-> carries the entire security budget. Prints once, to the console, as
-> the distribution list — never written to a file.
+> `db:bulk-rotate-passwords` generates **`<sector><4 digits>-pw`** — e.g.
+> `BAD01` → `bad0846-pw`. All lowercase, so no shift key, and the only
+> variable part is a digit run a numeric keypad handles: the staff using
+> this are coming off paper systems and type on phones. Prints once, to
+> the console, as the distribution list — never written to a file.
+>
+> ⚠ **This format carries 4 digits of entropy — 10,000 per account — and
+> nothing else in it is secret.** The prefix is derived from the public
+> username and `-pw` is constant, so an attacker who knows a unit code
+> (it is printed on the roster and *is* the username) is guessing a
+> 4-digit number. That is ~20x weaker than the `Bat01-7kX` format it
+> replaced, and it was chosen deliberately, on instruction, with the
+> tradeoff stated. What actually stands behind it:
+>
+> - `loginLimiter` (auth.routes.ts) — 20 attempts / 15 min / IP. One IP
+>   needs ~125 hours to exhaust one account; a spray from many IPs is
+>   proportionally faster, which is the real exposure.
+> - Blast radius is bounded by role: a unit admin approves agents and
+>   reads its own subtree. It cannot issue tickets, revoke them, scan, or
+>   reach another unit. The worst case is a rogue *agent* being approved —
+>   who then can issue — so treat an unexpected approval as the signal.
+> - `AGENT_APPROVED` / `AGENT_REJECTED` rows in `audit_logs` carry the
+>   approving `unit_admins.id`, so misuse is attributable after the fact.
+>
+> If that stops being acceptable, raise `DIGIT_COUNT` in
+> `bulk-rotate-passwords.ts` rather than reintroducing letters — each
+> extra digit is 10x the space for one more keypress.
 
 **Resolved: Zone Supervisor coverage uses the mapping table (Option B),
 seeded with a placeholder split — replace before the event.** The 3 accounts

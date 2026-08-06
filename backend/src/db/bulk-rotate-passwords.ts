@@ -1,5 +1,5 @@
 import { hashSecret } from '../lib/crypto.js';
-import { PASSWORD_ALPHABET, randomChar } from '../lib/passwordGen.js';
+import { randomDigits } from '../lib/passwordGen.js';
 import { closePool, withTransaction } from './index.js';
 
 /**
@@ -20,6 +20,9 @@ import { closePool, withTransaction } from './index.js';
  * into wherever it's being distributed from and don't leave it sitting in
  * shell scrollback or a saved terminal log any longer than necessary.
  *
+ * Passwords are `<sector><4 digits>-pw` (e.g. `bad0846-pw`) — see
+ * generateMemorablePassword below, including the entropy note.
+ *
  * Run with: npm run db:bulk-rotate-passwords -w @pravasi/backend
  */
 
@@ -27,36 +30,46 @@ import { closePool, withTransaction } from './index.js';
 /* Password generation                                                 */
 /* ------------------------------------------------------------------ */
 
-const SUFFIX_LENGTH = 3;
+const DIGIT_COUNT = 4;
+const STATIC_SUFFIX = '-pw';
 
-/** BAT01 -> Bat01. Every unit_admins.username is already exactly this
- *  shape — 3-letter sector + 2 digits for the 30 unit-scoped accounts,
- *  ZON0N for the 3 zone accounts — so no separate unit-code lookup is
- *  needed, the username IS the code (provision-unit-admins.ts's own
- *  design). */
-function titleCase(code: string): string {
-  return code.charAt(0).toUpperCase() + code.slice(1).toLowerCase();
+/**
+ * The leading run of letters from a unit code, lowercased: `BAD01` -> `bad`,
+ * `ZON03` -> `zon`.
+ *
+ * Every unit_admins.username is a 3-letter sector abbreviation plus two
+ * digits (provision-unit-admins.ts's own design — the username IS the unit
+ * code), so the leading run is always the sector. The fallback only fires
+ * for a hand-created account with no leading letters at all; it degrades to
+ * the sanitised code rather than producing a password that starts with the
+ * digit block.
+ */
+function unitPrefix(username: string): string {
+  const leading = /^[A-Za-z]+/.exec(username)?.[0];
+  return (leading ?? username.replace(/[^A-Za-z0-9]/g, '')).toLowerCase();
 }
 
 /**
- * TitleCasedUnitCode-XXX, e.g. `Bat01-7kX`. The previous fully-random 6
- * characters were unpredictable but hard for a volunteer to remember or
- * recover from a typo. Prefixing with the account's own username — already
- * public, already printed on the unit roster and every dashboard — buys
- * memorability for free without weakening the password: the entire security
- * budget is carried by the 3-character suffix.
+ * `<prefix><4 digits>-pw`, e.g. `bad0846-pw`.
  *
- * The suffix is 3 independent picks from the full alphabet, not a
- * guaranteed one-of-each-class triple like generateSecurePassword() uses —
- * at only 3 characters, forcing a fixed class per position would narrow the
- * search space and telegraph the pattern more than it would help anyone
- * remember it.
+ * Chosen for typing speed on a phone by staff coming off paper systems: all
+ * lowercase, so no shift key, and the only variable part is a 4-digit run
+ * that a numeric keypad handles.
+ *
+ * ⚠ ENTROPY: 4 digits, so 10,000 possibilities per account, and nothing
+ * else in the string is secret — the prefix is derived from the public
+ * username and `-pw` is constant. This is a DELIBERATE downgrade from the
+ * previous `Bat01-7kX` (3 chars over a 58-char alphabet, ~195,000), made on
+ * explicit instruction with the tradeoff stated. What stands between that
+ * and an attacker is the login rate limiter (auth.routes.ts `loginLimiter`,
+ * 20 attempts / 15 min / IP) plus the fact that a unit admin can only
+ * approve agents and read their own subtree — they cannot issue tickets,
+ * revoke, or reach another unit. If that ceases to be acceptable, raise
+ * DIGIT_COUNT here rather than reintroducing letters; each extra digit is
+ * 10x the space and costs one keypress.
  */
-function generateMemorablePassword(code: string): string {
-  const suffix = Array.from({ length: SUFFIX_LENGTH }, () =>
-    randomChar(PASSWORD_ALPHABET),
-  ).join('');
-  return `${titleCase(code)}-${suffix}`;
+function generateMemorablePassword(username: string): string {
+  return `${unitPrefix(username)}${randomDigits(DIGIT_COUNT)}${STATIC_SUFFIX}`;
 }
 
 /* ------------------------------------------------------------------ */

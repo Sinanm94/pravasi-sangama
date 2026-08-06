@@ -1,5 +1,5 @@
-import { randomInt } from 'node:crypto';
 import { hashSecret } from '../lib/crypto.js';
+import { randomDigits } from '../lib/passwordGen.js';
 import { closePool, withTransaction } from './index.js';
 
 /**
@@ -41,14 +41,6 @@ const DIVISION = { code: 'RIYADH', name: 'Riyadh' };
 const GATE_COUNT = 20;
 const PIN_LENGTH = 6;
 
-function randomPin(length: number): string {
-  let out = '';
-  for (let i = 0; i < length; i += 1) {
-    out += randomInt(0, 10).toString();
-  }
-  return out;
-}
-
 interface ProvisionedGate {
   gateCode: string;
   pin: string;
@@ -72,7 +64,7 @@ async function provision(): Promise<ProvisionedGate[]> {
     for (let n = 1; n <= GATE_COUNT; n += 1) {
       const gateCode = `SCAN${String(n).padStart(2, '0')}`;
       const name = `Gate Scanner ${String(n).padStart(2, '0')}`;
-      const pin = randomPin(PIN_LENGTH);
+      const pin = randomDigits(PIN_LENGTH);
       const pinHash = await hashSecret(pin);
 
       await client.query(
