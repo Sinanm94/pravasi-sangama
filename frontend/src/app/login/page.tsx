@@ -9,8 +9,6 @@ import {
   Building2,
   CheckCircle2,
   Mail,
-  ScanLine,
-  ShieldCheck,
   User,
   UserPlus,
 } from 'lucide-react';
@@ -70,22 +68,15 @@ function LoginFlow() {
   const login = useAuthStore((s) => s.login);
 
   const [tab, setTab] = useState<Tab>('login');
-  // `?mode=admin` / `?mode=unit-admin` — a direct link into either form
-  // without clicking through the card, e.g. while a deployment issue is
-  // hiding the buttons themselves, or for a bookmark on a shared device.
-  const [adminMode, setAdminMode] = useState(() => params.get('mode') === 'admin');
-  const [unitAdminMode, setUnitAdminMode] = useState(
-    () => params.get('mode') === 'unit-admin',
-  );
 
   /**
-   * The Unit Gateway (§3.2) — reinstated, on explicit instruction, in front
-   * of the whole agent portal (both tabs below), not just First-Time Setup.
-   * Purely client-side: no cookie, no session, just "has this visit cleared
-   * the gateway". Administrator / Unit admin / Gate scanner sign-in are not
-   * agent concepts and were never behind this gate either before or after —
-   * their links live on the gateway screen itself so nobody needs an agent
-   * invite PIN to reach their own login.
+   * The Unit Gateway (§3.2) — in front of the whole agent portal (both tabs
+   * below), not just First-Time Setup. Purely client-side: no cookie, no
+   * session, just "has this visit cleared the gateway".
+   *
+   * There are no administrative entry points on this page. Super User, Unit
+   * Admin and Gate Scanner sign-in live at `/management` — this is the
+   * public door and handles event staff only.
    */
   const [gatewayUnit, setGatewayUnit] = useState<GatewayUnit | null>(null);
 
@@ -95,33 +86,12 @@ function LoginFlow() {
     if (status === 'idle') void hydrate();
   }, [status, hydrate]);
 
-  const showTabs = !adminMode && !unitAdminMode && gatewayUnit !== null;
+  const showTabs = gatewayUnit !== null;
 
   return (
     <AuthShell>
-      {adminMode ? (
-        <AdminForm
-          onDone={(session) => {
-            login(session);
-            router.replace(next ?? '/dashboard');
-          }}
-          onBack={() => setAdminMode(false)}
-        />
-      ) : unitAdminMode ? (
-        <UnitAdminForm
-          onDone={(session) => {
-            login(session);
-            router.replace(next ?? '/unit/dashboard');
-          }}
-          onBack={() => setUnitAdminMode(false)}
-        />
-      ) : gatewayUnit === null ? (
-        <UnitGatewayScreen
-          onUnlock={setGatewayUnit}
-          onAdmin={() => setAdminMode(true)}
-          onUnitAdmin={() => setUnitAdminMode(true)}
-          onScanner={() => router.push('/scanner/login')}
-        />
+      {gatewayUnit === null ? (
+        <UnitGatewayScreen onUnlock={setGatewayUnit} />
       ) : (
         <>
           <div className="-mt-1 mb-4 flex items-center gap-2 rounded-2xl bg-gray-50 px-4 py-2.5">
@@ -186,25 +156,12 @@ function LoginFlow() {
             </motion.div>
           </AnimatePresence>
 
+          {/* "Switch unit" only. Everything administrative moved to
+              /management — this page is event staff and nothing else. */}
           {showTabs && (
-            <div className="mt-6 space-y-2.5 border-t border-gray-100 pt-5">
+            <div className="mt-6 border-t border-gray-100 pt-5">
               <SubtleButton icon={ArrowLeft} onClick={() => setGatewayUnit(null)}>
                 Switch unit
-              </SubtleButton>
-              <SubtleButton icon={ShieldCheck} onClick={() => setAdminMode(true)}>
-                Administrator sign in
-              </SubtleButton>
-              <SubtleButton
-                icon={Building2}
-                onClick={() => setUnitAdminMode(true)}
-              >
-                Unit admin sign in
-              </SubtleButton>
-              <SubtleButton
-                icon={ScanLine}
-                onClick={() => router.push('/scanner/login')}
-              >
-                Gate scanner sign in
               </SubtleButton>
             </div>
           )}
@@ -228,14 +185,8 @@ function LoginFlow() {
  */
 function UnitGatewayScreen({
   onUnlock,
-  onAdmin,
-  onUnitAdmin,
-  onScanner,
 }: {
   onUnlock: (unit: GatewayUnit) => void;
-  onAdmin: () => void;
-  onUnitAdmin: () => void;
-  onScanner: () => void;
 }) {
   const [unitCode, setUnitCode] = useState('');
   const [pin, setPin] = useState('');
@@ -267,61 +218,47 @@ function UnitGatewayScreen({
   };
 
   return (
-    <>
-      <form onSubmit={submit} noValidate className="space-y-4">
-        <AuthHeader
-          icon={Building2}
-          title="Welcome"
-          subtitle="Enter your unit code and invite PIN to continue"
-        />
+    <form onSubmit={submit} noValidate className="space-y-4">
+      <AuthHeader
+        icon={Building2}
+        title="Welcome"
+        subtitle="Enter your unit code and invite PIN to continue"
+      />
 
-        <Field
-          label="Unit Code"
-          hint="e.g. BAT01"
-          value={unitCode}
-          onChange={(v) => {
-            setUnitCode(v.toUpperCase());
-            setErrors((e) => ({ ...e, unitCode: undefined }));
-          }}
-          placeholder="BAT01"
-          autoComplete="off"
-          error={errors.unitCode}
-          required
-        />
+      <Field
+        label="Unit Code"
+        hint="e.g. BAT01"
+        value={unitCode}
+        onChange={(v) => {
+          setUnitCode(v.toUpperCase());
+          setErrors((e) => ({ ...e, unitCode: undefined }));
+        }}
+        placeholder="BAT01"
+        autoComplete="off"
+        error={errors.unitCode}
+        required
+      />
 
-        <Field
-          label="Invite PIN"
-          hint="Ask your unit head"
-          type="password"
-          inputMode="numeric"
-          value={pin}
-          onChange={(v) => {
-            setPin(v.replace(/\D/g, '').slice(0, 4));
-            setErrors((e) => ({ ...e, pin: undefined }));
-          }}
-          placeholder="••••"
-          autoComplete="off"
-          error={errors.pin}
-          required
-        />
+      <Field
+        label="Invite PIN"
+        hint="Ask your unit head"
+        type="password"
+        inputMode="numeric"
+        value={pin}
+        onChange={(v) => {
+          setPin(v.replace(/\D/g, '').slice(0, 4));
+          setErrors((e) => ({ ...e, pin: undefined }));
+        }}
+        placeholder="••••"
+        autoComplete="off"
+        error={errors.pin}
+        required
+      />
 
-        <Submit busy={busy} busyLabel="Checking…">
-          Continue
-        </Submit>
-      </form>
-
-      <div className="mt-6 space-y-2.5 border-t border-gray-100 pt-5">
-        <SubtleButton icon={ShieldCheck} onClick={onAdmin}>
-          Administrator sign in
-        </SubtleButton>
-        <SubtleButton icon={Building2} onClick={onUnitAdmin}>
-          Unit admin sign in
-        </SubtleButton>
-        <SubtleButton icon={ScanLine} onClick={onScanner}>
-          Gate scanner sign in
-        </SubtleButton>
-      </div>
-    </>
+      <Submit busy={busy} busyLabel="Checking…">
+      Continue
+      </Submit>
+    </form>
   );
 }
 
@@ -673,145 +610,6 @@ function ForgotForm({ onBack }: { onBack: () => void }) {
       <Submit busy={busy} busyLabel="Sending…">
         Send Reset Link
       </Submit>
-    </form>
-  );
-}
-
-/* ================================================================== */
-/* Administrator (spec §4 — three seeded accounts, no signup)          */
-/* ================================================================== */
-
-function AdminForm({
-  onDone,
-  onBack,
-}: {
-  onDone: (s: SessionResponse) => void;
-  onBack: () => void;
-}) {
-  /* Sent as `username`. SuperuserLoginSchema and
-   * auth.repository.ts#findSuperuserByUsername (backend, updated
-   * 2026-08-01) accept either the short username (admin1) or the full
-   * seeded email (admin1@pravasisangama.com) — either can be typed here. */
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    setBusy(true);
-    try {
-      onDone(
-        await apiPost<SessionResponse>('/auth/superuser-login', {
-          username: username.trim(),
-          password,
-        }),
-      );
-    } catch (err) {
-      toast.error('Sign in failed', { description: errorMessage(err) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <AuthHeader
-        icon={ShieldCheck}
-        title="Administrator sign in"
-        subtitle="Full system access"
-      />
-      <Field
-        label="Username"
-        type="text"
-        name="username"
-        value={username}
-        onChange={setUsername}
-        autoComplete="username"
-        required
-      />
-      <Field
-        label="Password"
-        type="password"
-        value={password}
-        onChange={setPassword}
-        autoComplete="current-password"
-        required
-      />
-      <Submit busy={busy} busyLabel="Signing in…">
-        Sign In
-      </Submit>
-
-      <SubtleButton icon={ArrowLeft} onClick={onBack} className="pt-1">
-        Back to agent sign in
-      </SubtleButton>
-    </form>
-  );
-}
-
-/* ================================================================== */
-/* Tab 4 — Unit admin sign in (decentralised approvals, §2)             */
-/* ================================================================== */
-
-function UnitAdminForm({
-  onDone,
-  onBack,
-}: {
-  onDone: (s: SessionResponse) => void;
-  onBack: () => void;
-}) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  const submit = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    setBusy(true);
-    try {
-      onDone(
-        await apiPost<SessionResponse>('/auth/unit-admin-login', {
-          username: username.trim(),
-          password,
-        }),
-      );
-    } catch (err) {
-      toast.error('Sign in failed', { description: errorMessage(err) });
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <form onSubmit={submit} className="space-y-4">
-      <AuthHeader
-        icon={Building2}
-        title="Unit admin sign in"
-        subtitle="Approve agents for your unit"
-      />
-      <Field
-        label="Unit ID"
-        hint="e.g. BAT01"
-        type="text"
-        name="username"
-        value={username}
-        onChange={(v) => setUsername(v.toUpperCase())}
-        autoComplete="username"
-        required
-      />
-      <Field
-        label="Password"
-        type="password"
-        value={password}
-        onChange={setPassword}
-        autoComplete="current-password"
-        required
-      />
-      <Submit busy={busy} busyLabel="Signing in…">
-        Sign In
-      </Submit>
-
-      <SubtleButton icon={ArrowLeft} onClick={onBack} className="pt-1">
-        Back to agent sign in
-      </SubtleButton>
     </form>
   );
 }

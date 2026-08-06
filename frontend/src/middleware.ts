@@ -26,8 +26,17 @@ import { SESSION_COOKIE_NAME, type AuthRole } from '@pravasi/shared';
  * stays reachable. `/scanner/login` is the case that matters: it lives under
  * `/scanner`, and without this exemption an event volunteer with no session
  * would be bounced to the agent login and could never sign in at all.
+ *
+ * `/management` is a login page and must be reachable with no session, for
+ * the same reason. It is listed here rather than simply left out of the
+ * matcher so that an already-signed-in visitor is bounced to their own home
+ * instead of being shown a role chooser they have no use for.
+ *
+ * Note this is also exactly why the management portal is NOT at `/admin`:
+ * ROUTE_ROLES guards that whole prefix with SUPERUSER, so an unauthenticated
+ * visitor would be redirected to /login and could never reach the form.
  */
-const PUBLIC_ROUTES = ['/scanner/login'];
+const PUBLIC_ROUTES = ['/scanner/login', '/management'];
 
 const ROUTE_ROLES: Array<{ prefix: string; allow: AuthRole[] }> = [
   { prefix: '/dashboard', allow: ['SUPERUSER'] },
@@ -72,9 +81,13 @@ export function middleware(req: NextRequest) {
   /* Public routes win over every prefix rule below. A volunteer arriving at
    * the gate with no session must be able to reach /scanner/login. */
   if (PUBLIC_ROUTES.includes(pathname)) {
-    // Already holding a gate session — skip the form.
+    // Already signed in — send them on rather than showing a login form.
+    // A gate session has only one destination; everyone else gets their home.
     if (role === 'SCANNER') {
       return NextResponse.redirect(new URL('/scanner', req.url));
+    }
+    if (pathname === '/management' && role) {
+      return NextResponse.redirect(new URL(homeFor(role), req.url));
     }
     return NextResponse.next();
   }
@@ -82,6 +95,24 @@ export function middleware(req: NextRequest) {
   /* Already signed in and sitting on /login — send them where they belong. */
   if (pathname === '/login' && role) {
     return NextResponse.redirect(new URL(homeFor(role), req.url));
+  }
+
+  /* Legacy deep links. `/login?mode=admin|unit-admin` used to open those
+   * forms inline, before they moved to /management. Redirect rather than
+   * drop, so a bookmark saved off a shared event phone still lands
+   * somewhere useful instead of on a gateway asking for a unit PIN. */
+  if (pathname === '/login') {
+    const legacy = req.nextUrl.searchParams.get('mode');
+    if (legacy === 'admin' || legacy === 'unit-admin') {
+      const url = new URL('/management', req.url);
+      url.searchParams.set(
+        'role',
+        legacy === 'admin' ? 'superuser' : 'unit-admin',
+      );
+      const next = req.nextUrl.searchParams.get('next');
+      if (next) url.searchParams.set('next', next);
+      return NextResponse.redirect(url);
+    }
   }
 
   const rule = ROUTE_ROLES.find(
@@ -119,6 +150,7 @@ export function homeFor(role: AuthRole): string {
 export const config = {
   matcher: [
     '/login',
+    '/management',
     '/dashboard/:path*',
     '/admin/:path*',
     '/ticketing/:path*',

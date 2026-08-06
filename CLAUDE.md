@@ -687,10 +687,12 @@ pravasi-sangama/
 - `frontend/src/store/useAuthStore.ts` — Zustand session mirror (not persisted).
 - `frontend/src/middleware.ts` + `components/auth/ProtectedRoute.tsx` — the two
   routing layers. **Neither is an authorization boundary** — see §11.
-- `frontend/src/app/` — `/login`, `/dashboard`, `/ticketing`, `/scanner`,
-  `/agent/dashboard` (agent ledger), `/admin/directory`,
-  `/admin/tickets` (master ledger), `/admin/gates`, `/unit/dashboard` (unit
-  admin's own approvals — §3.3).
+- `frontend/src/app/` — `/login` (public: Unit Gateway → agent login /
+  first-time setup, **nothing administrative**), `/management` (Super User
+  and Unit Admin sign-in, plus a link to the gate scanner — see §11),
+  `/dashboard`, `/ticketing`, `/scanner`, `/agent/dashboard` (agent ledger),
+  `/admin/directory`, `/admin/tickets` (master ledger), `/admin/gates`,
+  `/unit/dashboard` (unit admin's own approvals — §3.3).
 - `backend/src/modules/admin/` — approvals, gates, agent directory, and the
   master ticket ledger (`GET /api/admin/tickets` + `/filter-options`).
   Ledger totals are a SQL aggregate over the whole filtered set, deliberately
@@ -769,6 +771,39 @@ Route groups (`(admin)`, `(agent)`) produce **no URL segment**. The live paths
 are `/dashboard`, `/ticketing`, `/scanner`, `/agent`, `/unit`, and
 `middleware.ts` matches those literal paths — adding a page means adding it to
 `ROUTE_ROLES` *and* `matcher`.
+
+**Two login surfaces, split by audience.**
+
+| Path | Who | Contains |
+| --- | --- | --- |
+| `/login` | Event staff | Unit Gateway, Agent Login, First-Time Setup |
+| `/management` | Management | Super User, Unit Admin, → Gate Scanner |
+
+`/login` carries **no administrative entry points at all** — the three
+sign-in links that used to sit at the bottom of that card were removed, and
+`AdminForm` / `UnitAdminForm` moved to `app/management/page.tsx`. Several
+hundred agents use `/login`; none of them should be looking at a door they
+must never open.
+
+> **The path is segregation, not secrecy.** A URL is not a credential:
+> `/management` is in this repository, in the built bundle, and in browser
+> history. What protects those roles is unchanged — the passwords,
+> `requireSuperuser` / `requireUnitAdmin` / `requireScanAccess` on every
+> endpoint, and the rate limiter. Do not treat "it's on a separate path" as
+> a control.
+
+Both are in `PUBLIC_ROUTES`, since a login page has to be reachable without
+a session; `/management` is listed there (rather than merely left out of
+`matcher`) so an already-signed-in visitor is bounced to their own home
+instead of being shown a role chooser. **`/management`, not `/admin`,
+precisely because** `ROUTE_ROLES` guards the whole `/admin` prefix with
+`SUPERUSER` — a login form living there would redirect its own users away
+before they could sign in.
+
+Gate Scanner is a link to `/scanner/login`, not a fourth inline form: that
+page already exists, is already public, and is part of the offline PWA
+shell. `/login?mode=admin|unit-admin` (the older deep links) redirect to
+`/management?role=…` so saved bookmarks still land somewhere useful.
 
 Sharing `JWT_SECRET` with Next to verify in middleware was rejected: it would
 let the web tier mint tokens, which is a worse trade than an empty shell.
