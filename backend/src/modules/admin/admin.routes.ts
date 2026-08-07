@@ -36,6 +36,13 @@ adminRoutes.post('/agents/:id/decision', controller.decideAgent);
 /* --- Agent directory + issuance totals ---------------------------- */
 adminRoutes.get('/agent-directory', controller.listAgentDirectory);
 
+/* --- Agent account control (§3.4) --------------------------------- *
+ * The superuser fallback. With the Unit Admin tier disabled, the reset
+ * below is the only password recovery an agent has, and `active` is the
+ * only way to switch off an account that auto-approval let in. */
+adminRoutes.post('/agents/:id/reset-password', controller.resetAgentPassword);
+adminRoutes.post('/agents/:id/active', controller.setAgentActive);
+
 /* --- Master ticket ledger ---------------------------------------- */
 adminRoutes.get('/tickets', controller.listTicketLedger);
 adminRoutes.get('/tickets/export', controller.exportTicketLedger);

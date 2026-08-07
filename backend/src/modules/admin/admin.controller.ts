@@ -9,11 +9,13 @@ import {
   type AdminTicketLedgerResponse,
   type AdminTicketRow,
   type AgentDirectoryEntry,
+  type AgentPasswordResetResponse,
   type AgentDirectoryResponse,
   type GateSummary,
   type PendingAgent,
 } from '@pravasi/shared';
 import { hashSecret } from '../../lib/crypto.js';
+import { generateAgentPassword } from '../../lib/passwordGen.js';
 import { badRequest, conflict, notFound, unauthorized } from '../../lib/errors.js';
 import * as repo from './admin.repository.js';
 
@@ -403,4 +405,80 @@ export const listFilterOptions = handle(async (_req, res) => {
   };
 
   res.status(200).json(body);
+});
+
+/* ------------------------------------------------------------------ */
+/* Agent account control — superuser fallback (§3.4)                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Rotate any agent's password and reveal it once.
+ *
+ * With the Unit Admin tier disabled this is the ONLY password recovery an
+ * agent has — self-service email reset was retired when agents began
+ * sharing addresses (migration 013), and the unit-admin reset is
+ * unreachable while that tier is off.
+ *
+ * Rotate-and-reveal, never stored plaintext, for the same reason as the
+ * unit-admin version: agents choose their own passwords at signup and
+ * people reuse passwords, so a readable store would expose credentials
+ * those volunteers use elsewhere.
+ */
+export const resetAgentPassword = handle(async (req, res) => {
+  const actor = superuserId(req);
+  const agentId = String(req.params.id);
+  const temporaryPassword = generateAgentPassword();
+
+  const agent = await repo.resetAnyAgentPassword({
+    agentId,
+    passwordHash: await hashSecret(temporaryPassword),
+  });
+
+  if (!agent) throw notFound('No such agent');
+
+  await repo.writeAudit({
+    superuserId: actor,
+    action: 'AGENT_PASSWORD_RESET',
+    entityType: 'agent',
+    entityId: agent.id,
+    // Never the password, not even hashed — audit_logs is read widely.
+    metadata: { mobile_number: agent.mobile_number },
+    ip: req.ip ?? null,
+  });
+
+  const body: AgentPasswordResetResponse = {
+    agentId: agent.id,
+    agentName: agent.name,
+    mobileNumber: agent.mobile_number,
+    temporaryPassword,
+  };
+
+  res.status(200).json(body);
+});
+
+/**
+ * Enable or disable an agent account.
+ *
+ * The remedy of last resort now that registrations are auto-approved: an
+ * agent who should not have one can be switched off here, and nowhere else.
+ * Their tickets are untouched — that is a separate problem, and ticket
+ * revocation is still unbuilt (see Known debt).
+ */
+export const setAgentActive = handle(async (req, res) => {
+  const actor = superuserId(req);
+  const agentId = String(req.params.id);
+  const isActive = req.body?.is_active === true;
+
+  const agent = await repo.setAgentActive(agentId, isActive);
+  if (!agent) throw notFound('No such agent');
+
+  await repo.writeAudit({
+    superuserId: actor,
+    action: isActive ? 'AGENT_ACTIVATED' : 'AGENT_DEACTIVATED',
+    entityType: 'agent',
+    entityId: agent.id,
+    ip: req.ip ?? null,
+  });
+
+  res.status(200).json({ id: agent.id, isActive: agent.is_active });
 });

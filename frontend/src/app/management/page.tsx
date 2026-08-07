@@ -81,9 +81,12 @@ function ManagementFlow() {
   /* `?role=` keeps the old `/login?mode=` deep links working — middleware
    * rewrites those here — and lets someone bookmark straight to their own
    * form rather than the chooser. */
+  /* `?role=unit-admin` deliberately no longer resolves — that tier is off
+   * (§3.4), and honouring an old bookmark straight into a hidden form would
+   * defeat hiding it. It falls through to the chooser. */
   const initial = params.get('role');
   const [mode, setMode] = useState<Mode>(
-    initial === 'superuser' || initial === 'unit-admin' ? initial : 'choose',
+    initial === 'superuser' ? 'superuser' : 'choose',
   );
 
   const next = params.get('next');
@@ -122,7 +125,6 @@ function ManagementFlow() {
           ) : (
             <RoleChooser
               onSuperuser={() => setMode('superuser')}
-              onUnitAdmin={() => setMode('unit-admin')}
               onScanner={() => router.push('/scanner/login')}
               onPublic={() => router.push('/login')}
             />
@@ -137,14 +139,22 @@ function ManagementFlow() {
 /* The chooser                                                         */
 /* ================================================================== */
 
+/**
+ * Unit Admin is intentionally absent (§3.4). The tier is switched off —
+ * agent approval is automatic and password recovery moved to the superuser
+ * — so offering the role here would hand someone a sign-in that leads to a
+ * dashboard with nothing left to do.
+ *
+ * The login endpoint, the `unit_admins` rows and /unit/dashboard all still
+ * exist and still work; only the way in from this portal is gone. Turning
+ * the tier back on is re-adding this card, not rebuilding anything.
+ */
 function RoleChooser({
   onSuperuser,
-  onUnitAdmin,
   onScanner,
   onPublic,
 }: {
   onSuperuser: () => void;
-  onUnitAdmin: () => void;
   onScanner: () => void;
   onPublic: () => void;
 }) {
@@ -162,12 +172,6 @@ function RoleChooser({
           label="Super User"
           detail="Analytics, ticket ledger, gates"
           onClick={onSuperuser}
-        />
-        <RoleCard
-          icon={Building2}
-          label="Unit Admin"
-          detail="Approve agents for your unit"
-          onClick={onUnitAdmin}
         />
         <RoleCard
           icon={ScanLine}

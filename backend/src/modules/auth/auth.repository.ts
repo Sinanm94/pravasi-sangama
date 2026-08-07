@@ -310,7 +310,13 @@ export async function createSelfRegisteredAgent(params: {
     `INSERT INTO agents
        (unit_id, mobile_number, name, email, pin_hash,
         self_registered, approval_status, is_active)
-     VALUES ($1, $2, $3, $4, $5, TRUE, 'PENDING', TRUE)
+     -- APPROVED on creation, not PENDING. The approval queue is disabled:
+     -- the Unit Admin tier that staffed it is switched off, and leaving new
+     -- agents PENDING with nobody to approve them would strand every
+     -- registration. The barrier that remains is units.agent_invite_pin_hash,
+     -- re-verified in agentSignup() before this INSERT runs — a stranger
+     -- cannot reach this statement without a unit's 4-digit PIN. See §3.4.
+     VALUES ($1, $2, $3, $4, $5, TRUE, 'APPROVED', TRUE)
      RETURNING id`,
     [
       params.unitId,

@@ -8,14 +8,23 @@ import {
   ArrowUp,
   RefreshCw,
   Search,
+  Loader2,
+  RotateCcw,
   Ticket,
   Users,
+  UserCheck,
   UserX,
+  X,
 } from 'lucide-react';
-import type { AgentDirectoryEntry, AgentDirectoryResponse } from '@pravasi/shared';
+import { toast } from 'sonner';
+import type {
+  AgentDirectoryEntry,
+  AgentDirectoryResponse,
+  AgentPasswordResetResponse,
+} from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
-import { apiGet, errorMessage } from '@/lib/apiClient';
+import { apiGet, apiPost, errorMessage } from '@/lib/apiClient';
 import { springSurface } from '@/lib/motion';
 
 const VIOLET = '#5E17EB';
@@ -35,12 +44,58 @@ export default function AgentDirectoryPage() {
 
 function DirectoryScreen() {
   const [data, setData] = useState<AgentDirectoryResponse | null>(null);
+
+  /* Superuser account control (§3.4). With the Unit Admin tier off, this is
+   * the only place an agent's password can be recovered, and the only place
+   * an auto-approved account can be switched off. */
+  const [busyAgent, setBusyAgent] = useState<string | null>(null);
+  const [resetResult, setResetResult] =
+    useState<AgentPasswordResetResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<SortKey>('tickets');
   const [descending, setDescending] = useState(true);
+
+  const resetPassword = async (agent: AgentDirectoryEntry) => {
+    if (busyAgent) return;
+    setBusyAgent(agent.id);
+    try {
+      setResetResult(
+        await apiPost<AgentPasswordResetResponse>(
+          `/admin/agents/${agent.id}/reset-password`,
+        ),
+      );
+    } catch (err) {
+      toast.error('Could not reset that password', {
+        description: errorMessage(err),
+      });
+    } finally {
+      setBusyAgent(null);
+    }
+  };
+
+  const toggleActive = async (agent: AgentDirectoryEntry) => {
+    if (busyAgent) return;
+    setBusyAgent(agent.id);
+    const next = !agent.isActive;
+    try {
+      await apiPost(`/admin/agents/${agent.id}/active`, { is_active: next });
+      // Re-read rather than patching locally: the directory's totals and
+      // ordering are server-derived, so a local flip would drift from them.
+      await load(true);
+      toast.success(next ? 'Agent enabled' : 'Agent disabled', {
+        description: agent.name,
+      });
+    } catch (err) {
+      toast.error('Could not update that account', {
+        description: errorMessage(err),
+      });
+    } finally {
+      setBusyAgent(null);
+    }
+  };
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -139,6 +194,13 @@ function DirectoryScreen() {
         </button>
       }
     >
+      {resetResult && (
+        <ResetResultCard
+          result={resetResult}
+          onDismiss={() => setResetResult(null)}
+        />
+      )}
+
       {loadError && (
         <div className="mb-4 flex items-start gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50 p-4">
           <AlertCircle
@@ -245,12 +307,25 @@ function DirectoryScreen() {
                       descending={descending}
                       onClick={() => toggleSort('last')}
                     />
+                    <th
+                      scope="col"
+                      className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-[0.08em] text-gray-400 sm:px-6"
+                    >
+                      Account
+                    </th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-gray-900/[0.05]">
                   {visible.map((agent) => (
-                    <AgentRow key={agent.id} agent={agent} busiest={busiest} />
+                    <AgentRow
+                      key={agent.id}
+                      agent={agent}
+                      busiest={busiest}
+                      busy={busyAgent === agent.id}
+                      onReset={() => void resetPassword(agent)}
+                      onToggleActive={() => void toggleActive(agent)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -272,12 +347,77 @@ function DirectoryScreen() {
 
 /* ================================================================== */
 
+/**
+ * A freshly generated agent password, shown exactly once.
+ *
+ * The server stores only a bcrypt hash, so this cannot be retrieved again —
+ * if it is dismissed before being written down, reset again. Rotate-and-
+ * reveal rather than a readable store is deliberate: agents choose their own
+ * passwords at signup and people reuse passwords, so keeping them readable
+ * would expose credentials those volunteers use on other services.
+ */
+function ResetResultCard({
+  result,
+  onDismiss,
+}: {
+  result: AgentPasswordResetResponse;
+  onDismiss: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={springSurface}
+      className="mb-4 rounded-3xl bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p
+            className="text-[11px] font-semibold uppercase tracking-[0.14em]"
+            style={{ color: VIOLET }}
+          >
+            New password for {result.agentName}
+          </p>
+          <p className="mt-0.5 text-[12px] tabular-nums text-gray-500">
+            {result.mobileNumber}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="shrink-0 rounded-full bg-gray-100 p-2 text-gray-500 transition-colors hover:bg-gray-200/80 hover:text-gray-900 active:scale-95"
+        >
+          <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+        </button>
+      </div>
+
+      <p className="mt-4 text-center font-mono text-[28px] font-bold tracking-[0.08em] text-gray-900">
+        {result.temporaryPassword}
+      </p>
+
+      <p className="mt-3 text-center text-[12px] leading-snug text-gray-500">
+        Pass this to {result.agentName} now — it is shown once and cannot be
+        looked up again. Resetting again is safe if you lose it.
+      </p>
+    </motion.div>
+  );
+}
+
+/* ================================================================== */
+
 function AgentRow({
   agent,
   busiest,
+  busy,
+  onReset,
+  onToggleActive,
 }: {
   agent: AgentDirectoryEntry;
   busiest: number;
+  busy: boolean;
+  onReset: () => void;
+  onToggleActive: () => void;
 }) {
   return (
     <motion.tr
@@ -357,6 +497,48 @@ function AgentRow({
           <span className="text-gray-400">Never</span>
         )}
       </td>
+      {/* Account control — the superuser fallback (§3.4). Reset is the only
+          password recovery an agent has while the Unit Admin tier is off;
+          disabling is the only remedy for an account auto-approval let in,
+          since decideAgent only ever matched PENDING rows. */}
+      <td className="px-5 py-4 sm:px-6">
+        <div className="flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onReset}
+            disabled={busy}
+            title="Generate a new password for this agent"
+            className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97] disabled:opacity-60"
+          >
+            {busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-3.5 w-3.5" strokeWidth={2.25} />
+            )}
+            Reset
+          </button>
+
+          <button
+            type="button"
+            onClick={onToggleActive}
+            disabled={busy}
+            title={agent.isActive ? 'Disable this account' : 'Enable this account'}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-medium transition-all duration-200 active:scale-[0.97] disabled:opacity-60 ${
+              agent.isActive
+                ? 'bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-700'
+                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+            }`}
+          >
+            {agent.isActive ? (
+              <UserX className="h-3.5 w-3.5" strokeWidth={2.25} />
+            ) : (
+              <UserCheck className="h-3.5 w-3.5" strokeWidth={2.25} />
+            )}
+            {agent.isActive ? 'Disable' : 'Enable'}
+          </button>
+        </div>
+      </td>
+
     </motion.tr>
   );
 }

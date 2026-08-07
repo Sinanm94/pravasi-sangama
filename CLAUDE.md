@@ -228,7 +228,43 @@ and written to `audit_logs` as `AGENT_PASSWORD_RESET`.
 > this event. The operational need is "my agent can't sign in", and handing
 > them a fresh password meets it completely.
 
-### 3.3 Unit Admin login — decentralised approvals (migrations 005, 007)
+### 3.4 Simplified onboarding — the Unit Admin tier is OFF
+
+The multi-step flow proved too complex for field staff, so the architecture
+was flattened. **§3.3 below still describes code that exists and works; it
+is simply not reachable from the UI right now.** Nothing was deleted, so
+turning the tier back on is re-exposing it, not rebuilding it.
+
+What changed:
+
+- **No Unit Gateway on `/login`.** It stood in front of *both* tabs, so a
+  returning agent cleared a unit PIN before every sign-in. Sign-in is now
+  mobile + password, nothing else.
+- **The invite PIN survives on First-Time Setup only** — one field beside a
+  unit dropdown, on the one form an agent fills in once. This is deliberate
+  and load-bearing: see the warning below.
+- **Registrations are auto-approved.** `createSelfRegisteredAgent` inserts
+  `APPROVED`, so an agent signs in and issues immediately.
+- **Unit Admin is hidden from `/management`.** The login endpoint,
+  `unit_admins` rows and `/unit/dashboard` are untouched; only the way in
+  from the portal is gone. `?role=unit-admin` no longer resolves either.
+- **Recovery is the superuser's.** `POST /api/admin/agents/:id/reset-password`
+  rotates any agent's password and reveals it once, on `/admin/directory`.
+
+> ⚠ **The invite PIN is now the ONLY barrier to minting a ticket issuer.**
+> Approval and the PIN used to be two independent checks; auto-approval
+> removed one, so the remaining one carries the whole load. Drop it and
+> anyone who finds `/login` can self-register and issue real tickets — this
+> was raised explicitly and keeping the PIN on signup was the decision.
+>
+> Two gaps make that worse than it sounds, and both are still open:
+> **ticket revocation is unbuilt** (a fraudulent ticket needs direct SQL),
+> and `decideAgent` only matches `approval_status = 'PENDING'`, so an
+> auto-approved agent can never be rejected. The second gap is why
+> `POST /api/admin/agents/:id/active` was added alongside this work — it is
+> the *only* in-app way to switch off an account auto-approval let in.
+
+### 3.3 Unit Admin login — decentralised approvals (migrations 005, 007) — **DISABLED, see §3.4**
 
 Route: `/login` → "Unit admin sign in". Single step: **Unit ID** (e.g. `BAT01`)
 + **password**, same shape as superuser login, against a dedicated

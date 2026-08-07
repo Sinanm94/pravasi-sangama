@@ -525,3 +525,60 @@ export async function listFilterOptions(): Promise<FilterOptionRows> {
     agents: agents.rows,
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Agent account control — the superuser fallback (§3.4)               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sets a new password hash for ANY agent. Unrestricted by design — this is
+ * the superuser equivalent of the unit-admin reset, and with the Unit Admin
+ * tier switched off it is the only recovery path an agent has.
+ *
+ * No scope predicate, deliberately: §2's "ultimate authority". Compare
+ * unit-admin.repository.ts's `resetAgentPassword`, which carries the
+ * OR-scope because that caller is bounded to its own units.
+ */
+export async function resetAnyAgentPassword(params: {
+  agentId: string;
+  passwordHash: string;
+}): Promise<{ id: string; name: string; mobile_number: string } | null> {
+  const { rows } = await query<{
+    id: string;
+    name: string;
+    mobile_number: string;
+  }>(
+    `UPDATE agents
+        SET pin_hash = $2
+      WHERE id = $1
+    RETURNING id, name, mobile_number`,
+    [params.agentId, params.passwordHash],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Switch an agent's account on or off.
+ *
+ * This exists because auto-approval (§3.4) closed the only route that used
+ * to set `is_active = FALSE`: `decideAgent` matches `approval_status =
+ * 'PENDING'`, and an auto-approved agent is never PENDING, so a rogue or
+ * mistaken registration had NO in-app remedy at all. Deactivating is the
+ * remedy — the row and its ticket history stay, but the account can no
+ * longer authenticate (`agentLogin` refuses `!is_active`).
+ */
+export async function setAgentActive(
+  agentId: string,
+  isActive: boolean,
+): Promise<{ id: string; name: string; is_active: boolean } | null> {
+  const { rows } = await query<{
+    id: string;
+    name: string;
+    is_active: boolean;
+  }>(
+    `UPDATE agents SET is_active = $2 WHERE id = $1
+     RETURNING id, name, is_active`,
+    [agentId, isActive],
+  );
+  return rows[0] ?? null;
+}

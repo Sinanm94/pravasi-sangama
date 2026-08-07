@@ -334,7 +334,7 @@ export interface SessionResponse {
 /* Account management                                                  */
 /* ------------------------------------------------------------------ */
 
-/** What signup returns. No session — approval comes first (spec §3). */
+/** What signup returns. Still no session; the agent signs in next (§3.4). */
 export interface AgentSignupResponse {
   status: ApprovalStatus;
   message: string;
@@ -343,7 +343,7 @@ export interface AgentSignupResponse {
    * Set ONLY when the agent left the password blank and the server generated
    * one. Returned exactly once, in this response — it is stored as a bcrypt
    * hash and is not recoverable afterwards. Null when the agent chose their
-   * own. If it is lost, the unit admin rotates it (§3.3).
+   * own. If it is lost, a superuser rotates it (§3.4).
    */
   temporaryPassword: string | null;
 }

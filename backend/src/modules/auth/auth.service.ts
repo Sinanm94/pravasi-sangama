@@ -404,13 +404,16 @@ export async function agentSignup(
     ip: ctx.ip,
   });
 
-  /* No session is issued. The account is PENDING until a superuser approves
-   * it, which is the whole point — tickets are financial instruments and
-   * self-service must not mint an issuer. */
+  /* Still no session — the agent signs in normally on the next screen.
+   *
+   * The account is APPROVED immediately (§3.4). Tickets are financial
+   * instruments and self-service must not mint an issuer FREELY, which is
+   * why the unit invite PIN is verified above before we ever get here: it
+   * is now the only barrier, so it is doing the whole job that the PIN and
+   * the human approval step used to share. */
   return {
-    status: 'PENDING',
-    message:
-      'Registration received. An administrator must approve your account before you can sign in.',
+    status: 'APPROVED',
+    message: 'Account created. You can sign in now.',
     agent: {
       id: created.id,
       name: input.name,
