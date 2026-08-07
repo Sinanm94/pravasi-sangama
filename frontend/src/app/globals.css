@@ -83,6 +83,33 @@
     visibility: visible !important;
   }
 
+  /*
+   * Overlays are REMOVED, not merely hidden.
+   *
+   * `visibility: hidden` above is right for ordinary page content — it
+   * leaves the element tree intact, so a `display: none` on some ancestor
+   * cannot take the ticket down with it (see the note above this block).
+   * But hidden elements still occupy layout, and an overlay that covers the
+   * viewport with `position: fixed` + `backdrop-filter` is exactly the case
+   * where that leaks into the printed page: the share modal was appearing
+   * on top of the ticket in the PDF.
+   *
+   * `display: none` is safe for these specific selectors because none of
+   * them can ever be an ancestor of `[data-print-ticket]` — the modal is a
+   * sibling of the pass, and toasts are portalled to the end of <body>.
+   * Do NOT widen this to something that could wrap the ticket.
+   *
+   * The modal is also closed programmatically before printing
+   * (ShareTicketModal.handlePrint), which is the primary fix. This is the
+   * backstop for anything else that floats above the page — and for any
+   * overlay added later, which only needs `data-print-hide` to be covered.
+   */
+  html[data-printing='ticket'] [role='dialog'],
+  html[data-printing='ticket'] [data-sonner-toaster],
+  html[data-printing='ticket'] [data-print-hide] {
+    display: none !important;
+  }
+
   html[data-printing='ticket'] [data-print-ticket] {
     position: fixed !important;
     top: 0 !important;

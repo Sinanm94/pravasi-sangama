@@ -150,6 +150,29 @@ export default function ShareTicketModal({
   const handlePrint = useCallback(async () => {
     setBusy('pdf');
     try {
+      /* Close this modal FIRST, and wait for it to actually leave the DOM.
+       *
+       * The print stylesheet hides the rest of the page with
+       * `visibility: hidden`, which is right for ordinary content but leaves
+       * elements occupying layout — and this modal is a viewport-covering
+       * `position: fixed` overlay with a `backdrop-filter`, which is exactly
+       * the case that leaked into the PDF: the share sheet printed on top of
+       * the ticket.
+       *
+       * globals.css also `display: none`s `[role="dialog"]` while printing,
+       * so this is belt and braces. But unmounting is the deterministic fix:
+       * an element that is not in the document cannot be laid out at all,
+       * whatever the stylesheet does or which browser is rendering.
+       *
+       * Two frames, not one: React commits the unmount on the next frame,
+       * and the layout that follows it settles on the one after. printTicket
+       * does its own double-rAF on top of this before calling window.print().
+       */
+      onClose();
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
       // meta drives the suggested PDF filename via document.title.
       await printTicket({
         ticketNumber: meta.ticketNumber,
@@ -160,7 +183,7 @@ export default function ShareTicketModal({
     } finally {
       setBusy(null);
     }
-  }, [meta]);
+  }, [meta, onClose]);
 
   const handleImage = useCallback(async () => {
     setBusy('image');

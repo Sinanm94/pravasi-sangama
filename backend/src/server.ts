@@ -1,6 +1,7 @@
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { closePool, healthcheck } from './db/index.js';
+import { isMailConfigured } from './lib/mailer.js';
 import { closeSocket, initSocket } from './socket.js';
 
 const app = createApp();
@@ -20,6 +21,32 @@ initSocket(server);
 void healthcheck().then((ok) => {
   if (!ok) console.error('[server] database unreachable at boot');
 });
+
+/* Same posture as the database check: say it at boot rather than let the
+ * first agent discover it.
+ *
+ * Emailing a ticket is the one feature that fails ONLY when someone tries to
+ * use it — sendMail() throws 503 EMAIL_NOT_CONFIGURED in production, which
+ * surfaces at a registration desk with a purchaser waiting, long after the
+ * deploy that caused it. SMTP is legitimately optional (a deployment may
+ * choose print/WhatsApp only), so this warns rather than refusing to start. */
+if (!isMailConfigured()) {
+  const detail =
+    'set SMTP_HOST and MAIL_FROM (plus SMTP_PORT/SMTP_SECURE/SMTP_USER/' +
+    'SMTP_PASS as your provider requires)';
+
+  if (env.NODE_ENV === 'production') {
+    console.error(
+      `[server] EMAIL DISABLED — "Send Email" on the share sheet will return ` +
+        `503 for every ticket. To enable it, ${detail}.`,
+    );
+  } else {
+    console.warn(
+      `[server] email not configured — sends are logged, not delivered. To ` +
+        `deliver for real, ${detail}.`,
+    );
+  }
+}
 
 async function shutdown(signal: string) {
   console.log(`[server] ${signal} received, draining`);

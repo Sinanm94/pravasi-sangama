@@ -722,6 +722,19 @@ WhatsApp (`lib/shareTicket.ts`), where the output is an image anyway.
 Tickets are printed and saved as PDF constantly. Every ticket-bearing screen must:
 
 - Mark all app chrome `print:hidden` (search bars, action bars, nav, toasts).
+- **Overlays are `display: none` while printing, not merely hidden.** The
+  isolation block hides the page with `visibility: hidden`, which keeps the
+  element tree intact — but hidden elements still occupy layout, and a
+  viewport-covering `position: fixed` overlay with a `backdrop-filter`
+  leaks into the PDF anyway. That is how the share modal ended up printed on
+  top of the ticket. `globals.css` therefore `display: none`s
+  `[role="dialog"]`, the sonner toaster and anything marked
+  `data-print-hide`; a new overlay only needs that attribute to be covered.
+  Never widen those selectors to something that could wrap the ticket.
+- **Close a modal before calling `window.print()`.** `ShareTicketModal`
+  unmounts itself and waits two frames first. The CSS above is the backstop;
+  an element that is not in the document cannot be laid out at all, whatever
+  the browser does.
 - Neutralize mobile layout hacks for print: `print:min-w-0`,
   `print:overflow-visible`, `print:shadow-none`.
 - `globals.css` must carry `-webkit-print-color-adjust: exact;` and
