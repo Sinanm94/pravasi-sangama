@@ -237,12 +237,10 @@ turning the tier back on is re-exposing it, not rebuilding it.
 
 What changed:
 
-- **No Unit Gateway on `/login`.** It stood in front of *both* tabs, so a
-  returning agent cleared a unit PIN before every sign-in. Sign-in is now
-  mobile + password, nothing else.
-- **The invite PIN survives on First-Time Setup only** — one field beside a
-  unit dropdown, on the one form an agent fills in once. This is deliberate
-  and load-bearing: see the warning below.
+- **The Unit Gateway is back, but STICKY** — see §3.5. It gates the portal
+  again, and the signup form is locked to whatever unit it resolved (no
+  dropdown), but a device is asked at most once rather than every visit.
+  That repetition, not the gate itself, was the friction.
 - **Registrations are auto-approved.** `createSelfRegisteredAgent` inserts
   `APPROVED`, so an agent signs in and issues immediately.
 - **Unit Admin is hidden from `/management`.** The login endpoint,
@@ -263,6 +261,55 @@ What changed:
 > auto-approved agent can never be rejected. The second gap is why
 > `POST /api/admin/agents/:id/active` was added alongside this work — it is
 > the *only* in-app way to switch off an account auto-approval let in.
+
+### 3.5 The sticky Unit Gateway
+
+The gateway has now been removed and restored twice. What changed the third
+time is *how often it asks*, which was always the real complaint — not that
+it existed, but that it stood in front of **every** sign-in, so an agent who
+signs in five times a day cleared a unit PIN five times a day.
+
+**It is now asked once per device.** On success, `frontend/src/lib/
+unitGateway.ts` writes the unit to `localStorage`; on the next visit the
+gateway is skipped entirely and the agent lands on the Agent Login tab for
+their saved unit. A successful sign-in re-saves the unit from the SERVER's
+answer, so a device sitting on the wrong unit self-corrects the first time
+a real agent uses it.
+
+**What is stored, and what is deliberately not:**
+
+| | |
+| --- | --- |
+| stored | `unit_code`, unit name, cleared-at timestamp |
+| **never stored** | the agent invite PIN |
+
+The unit code is public — printed on rosters, and a plain dropdown option
+until recently. The PIN is not, and these are shared phones: writing it to
+`localStorage` would leak it to anyone who opens devtools on a borrowed
+device.
+
+That omission is what keeps the gate meaningful, and it works because
+`agentSignup` re-verifies `agent_invite_pin` server-side on every
+registration:
+
+- **Signing in** on a sticky device needs no PIN → zero friction, the
+  common case by far.
+- **Registering** on a sticky device re-asks for the PIN, because the visit
+  holds none in memory. So a borrowed or stolen phone can be used by an
+  agent who already has an account, but **cannot mint a new one** — which
+  is precisely what the gateway is for.
+
+`ActiveUnit.invitePin` is therefore `string | null`: set only for a visit
+that itself cleared the gateway, held in React state, never persisted.
+
+> This does **not** weaken §3.2's "JWTs live in httpOnly cookies, never
+> `localStorage`". No token, session or credential is written here. It is a
+> device preference; the cookie is still the only thing that authenticates.
+
+A **Change** control sits next to the unit chip and clears the saved state.
+Without it a phone that cleared the wrong unit would be stuck short of
+wiping site data, and a device genuinely moving between units on event day
+could never follow.
 
 ### 3.3 Unit Admin login — decentralised approvals (migrations 005, 007) — **DISABLED, see §3.4**
 
