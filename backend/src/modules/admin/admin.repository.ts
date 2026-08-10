@@ -742,7 +742,15 @@ export async function findTicketById(
 }
 
 /** Why a reissue was refused, so the caller can say something useful. */
-export type ReissueFailure = 'TICKET_REVOKED' | 'ALREADY_ENTERED' | 'NOT_FOUND';
+export type ReissueFailure =
+  | 'TICKET_REVOKED'
+  | 'ALREADY_ENTERED'
+  | 'NOT_FOUND'
+  /** The schema still has the pre-migration-014 unique indexes. */
+  | 'MIGRATION_REQUIRED';
+
+/** Postgres unique_violation. */
+const UNIQUE_VIOLATION_CODE = '23505';
 
 export interface ReissueOutcome {
   ok: boolean;
@@ -823,11 +831,27 @@ export async function reissueTicketCodes(
       return `($1, $${base}, $${base + 1}::qr_code_kind, $${base + 2}::SMALLINT)`;
     });
 
-    await client.query(
-      `INSERT INTO qr_codes (ticket_id, qr_hash, code_kind, guest_index)
-       VALUES ${tuples.join(', ')}`,
-      values,
-    );
+    try {
+      await client.query(
+        `INSERT INTO qr_codes (ticket_id, qr_hash, code_kind, guest_index)
+         VALUES ${tuples.join(', ')}`,
+        values,
+      );
+    } catch (err) {
+      /* The replacement codes take the same guest slots as the ones just
+       * revoked. That is only legal once migration 014 has narrowed
+       * uq_qr_codes_ticket_guest / uq_qr_codes_ticket_location to
+       * `status <> 'REVOKED'`.
+       *
+       * Against an un-migrated database this INSERT raises 23505 and the
+       * request dies as an anonymous 500 — which is precisely what happened
+       * in the field, and cost a round trip to diagnose from a screenshot.
+       * Name the cause instead. */
+      if ((err as { code?: string }).code === UNIQUE_VIOLATION_CODE) {
+        return { ok: false, failure: 'MIGRATION_REQUIRED' };
+      }
+      throw err;
+    }
 
     return { ok: true, revokedCount: revokedCount ?? 0 };
   });

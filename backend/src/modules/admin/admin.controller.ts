@@ -22,7 +22,13 @@ import {
 import { hashSecret } from '../../lib/crypto.js';
 import { generateAgentPassword } from '../../lib/passwordGen.js';
 import { generateQrPayload, hashQrPayload } from '../../lib/identifiers.js';
-import { badRequest, conflict, notFound, unauthorized } from '../../lib/errors.js';
+import {
+  AppError,
+  badRequest,
+  conflict,
+  notFound,
+  unauthorized,
+} from '../../lib/errors.js';
 import * as repo from './admin.repository.js';
 
 const handle =
@@ -604,6 +610,18 @@ export const reissueTicket = handle(async (req, res) => {
 
   if (!outcome.ok) {
     if (outcome.failure === 'NOT_FOUND') throw notFound('No such ticket');
+
+    /* A deployment problem, not a business one — say so plainly instead of
+     * letting it read as "this ticket cannot be reprinted". */
+    if (outcome.failure === 'MIGRATION_REQUIRED') {
+      throw new AppError(
+        503,
+        'MIGRATION_REQUIRED',
+        'Reprint needs database migration 014. Run "npm run db:migrate -w ' +
+          '@pravasi/backend" against this environment, then try again. No ' +
+          'ticket was changed.',
+      );
+    }
 
     /* Say which of the two refusals it was, and how many guests entered.
      * "Something went wrong" sends an organiser to a developer; "2 of 4
