@@ -1,11 +1,14 @@
 import type { Request, RequestHandler, Response } from 'express';
 import {
+  AdminScanQuerySchema,
   AdminTicketExportQuerySchema,
   AdminTicketQuerySchema,
   AgentDecisionSchema,
   CreateGateSchema,
   RotateGatePinSchema,
   type AdminFilterOptions,
+  type AdminScanLogResponse,
+  type AdminScanRow,
   type AdminTicketLedgerResponse,
   type AdminTicketRow,
   type AgentDirectoryEntry,
@@ -481,4 +484,61 @@ export const setAgentActive = handle(async (req, res) => {
   });
 
   res.status(200).json({ id: agent.id, isActive: agent.is_active });
+});
+
+/* ------------------------------------------------------------------ */
+/* GET /api/admin/scans — the scan log                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Every scan ATTEMPT, not just admissions — a burst of DUPLICATE at one gate
+ * is the signature of a copied ticket (§10.1), and an UNKNOWN_CODE run means
+ * something is wrong with what is being handed out. Both are invisible if
+ * the log only records successes.
+ *
+ * Timestamps go out as UTC ISO; the client renders them in EVENT_TIME_ZONE.
+ * Formatting server-side would bake a timezone into the wire format and make
+ * the value useless for anything but display.
+ */
+export const listScanLog = handle(async (req, res) => {
+  const q = AdminScanQuerySchema.parse(req.query);
+
+  const filters = {
+    result: q.result,
+    gateLabel: q.gate_label,
+    search: q.search,
+  };
+
+  const [rows, totals, gates] = await Promise.all([
+    repo.listScanLog(filters, q.limit),
+    repo.summariseScanLog(filters),
+    repo.listScannedGates(),
+  ]);
+
+  const scans: AdminScanRow[] = rows.map((r) => ({
+    id: r.id,
+    scannedAt: r.created_at.toISOString(),
+    result: r.result,
+    gateLabel: r.gate_label,
+    agentName: r.agent_name,
+    unitName: r.unit_name,
+    unitSector: r.unit_sector,
+    ticketId: r.ticket_id,
+    ticketNumber: r.ticket_number,
+    ticketType: r.ticket_type,
+    purchaserName: r.purchaser_name,
+    purchaserMobile: r.purchaser_mobile,
+    codeKind: r.code_kind,
+    guestIndex: r.guest_index,
+  }));
+
+  const body: AdminScanLogResponse = {
+    scans,
+    totals,
+    gates,
+    truncated: totals.total > scans.length,
+    limit: q.limit,
+  };
+
+  res.status(200).json(body);
 });

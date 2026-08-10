@@ -5,6 +5,7 @@ import {
   GATE_PIN_MAX_LENGTH,
   GATE_PIN_MIN_LENGTH,
   MOBILE_NUMBER_REGEX,
+  SCAN_RESULTS,
   TICKET_STATUSES,
   TICKET_TYPES,
 } from './constants.js';
@@ -483,6 +484,16 @@ export const AdminTicketExportQuerySchema = AdminTicketQuerySchema.omit({
 });
 
 export type AdminTicketExportQuery = z.infer<typeof AdminTicketExportQuerySchema>;
+
+/** Query for GET /api/admin/scans — the superuser's scan log. */
+export const AdminScanQuerySchema = z.object({
+  result: z.enum(SCAN_RESULTS).optional(),
+  gate_label: z.string().trim().max(120).optional(),
+  search: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().positive().max(1000).default(300),
+});
+
+export type AdminScanQuery = z.infer<typeof AdminScanQuerySchema>;
 
 /**
  * Query for GET /api/unit-admin/tickets.

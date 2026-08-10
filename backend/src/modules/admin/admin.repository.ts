@@ -1,4 +1,9 @@
-import type { TicketStatus, TicketType } from '@pravasi/shared';
+import type {
+  QrCodeKind,
+  ScanResult,
+  TicketStatus,
+  TicketType,
+} from '@pravasi/shared';
 import { query } from '../../db/index.js';
 
 /* ------------------------------------------------------------------ */
@@ -581,4 +586,132 @@ export async function setAgentActive(
     [agentId, isActive],
   );
   return rows[0] ?? null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Scan log — every scan attempt, for the superuser                    */
+/* ------------------------------------------------------------------ */
+
+export interface ScanLogFilters {
+  result?: ScanResult | undefined;
+  gateLabel?: string | undefined;
+  search?: string | undefined;
+}
+
+export interface ScanLogRow {
+  id: string;
+  created_at: Date;
+  result: ScanResult;
+  gate_label: string | null;
+  agent_name: string | null;
+  unit_name: string | null;
+  unit_sector: string | null;
+  ticket_id: string | null;
+  ticket_number: string | null;
+  ticket_type: TicketType | null;
+  purchaser_name: string | null;
+  purchaser_mobile: string | null;
+  code_kind: QrCodeKind | null;
+  guest_index: number | null;
+}
+
+/**
+ * Shared by the rows query and the counts, so the summary can never describe
+ * a different set than the table — same discipline as ticketLedgerWhere.
+ *
+ * LEFT JOINs throughout: an UNKNOWN_CODE scan has no ticket and no qr_code
+ * by definition, and those are exactly the rows worth looking at when
+ * something is wrong at a gate. An inner join would hide them.
+ */
+function scanLogWhere(f: ScanLogFilters): { sql: string; params: unknown[] } {
+  const clauses: string[] = [];
+  const params: unknown[] = [];
+
+  const add = (fragment: (i: number) => string, value: unknown) => {
+    params.push(value);
+    clauses.push(fragment(params.length));
+  };
+
+  if (f.result) add((i) => `s.result = $${i}::scan_result`, f.result);
+  if (f.gateLabel) add((i) => `s.gate_label = $${i}`, f.gateLabel);
+
+  if (f.search) {
+    const escaped = f.search.replace(/([\\%_])/g, '\\$1');
+    add(
+      (i) =>
+        `(t.ticket_number ILIKE $${i} OR t.purchaser_name ILIKE $${i}
+          OR t.purchaser_mobile ILIKE $${i} OR s.gate_label ILIKE $${i})`,
+      `%${escaped}%`,
+    );
+  }
+
+  return {
+    sql: clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '',
+    params,
+  };
+}
+
+export async function listScanLog(
+  filters: ScanLogFilters,
+  limit: number,
+): Promise<ScanLogRow[]> {
+  const { sql, params } = scanLogWhere(filters);
+
+  const { rows } = await query<ScanLogRow>(
+    `SELECT s.id::TEXT AS id, s.created_at, s.result, s.gate_label,
+            a.name   AS agent_name,
+            u.name   AS unit_name,
+            u.sector AS unit_sector,
+            t.id     AS ticket_id,
+            t.ticket_number, t.ticket_type,
+            t.purchaser_name, t.purchaser_mobile,
+            q.code_kind, q.guest_index
+       FROM scan_logs s
+       LEFT JOIN agents   a ON a.id = s.scanned_by
+       LEFT JOIN units    u ON u.id = s.unit_id
+       LEFT JOIN tickets  t ON t.id = s.ticket_id
+       LEFT JOIN qr_codes q ON q.id = s.qr_code_id
+       ${sql}
+      ORDER BY s.created_at DESC
+      LIMIT $${params.length + 1}`,
+    [...params, limit],
+  );
+  return rows;
+}
+
+/** Counts over the WHOLE filtered set, independent of the row cap. */
+export async function summariseScanLog(
+  filters: ScanLogFilters,
+): Promise<{ total: number; admitted: number; duplicate: number; rejected: number }> {
+  const { sql, params } = scanLogWhere(filters);
+
+  const { rows } = await query<{
+    total: number;
+    admitted: number;
+    duplicate: number;
+    rejected: number;
+  }>(
+    `SELECT COUNT(*)::INT AS total,
+            COUNT(*) FILTER (WHERE s.result = 'ADMITTED')::INT  AS admitted,
+            COUNT(*) FILTER (WHERE s.result = 'DUPLICATE')::INT AS duplicate,
+            COUNT(*) FILTER (
+              WHERE s.result IN ('REVOKED', 'UNKNOWN_CODE')
+            )::INT AS rejected
+       FROM scan_logs s
+       LEFT JOIN tickets t ON t.id = s.ticket_id
+       ${sql}`,
+    params,
+  );
+
+  return rows[0] ?? { total: 0, admitted: 0, duplicate: 0, rejected: 0 };
+}
+
+/** Distinct gates that actually appear in the log — a derived filter list. */
+export async function listScannedGates(): Promise<string[]> {
+  const { rows } = await query<{ gate_label: string }>(
+    `SELECT DISTINCT gate_label FROM scan_logs
+      WHERE gate_label IS NOT NULL AND TRIM(gate_label) <> ''
+      ORDER BY gate_label`,
+  );
+  return rows.map((r) => r.gate_label);
 }

@@ -585,6 +585,46 @@ export interface UnitAdminTicketListResponse {
   limit: number;
 }
 
+/**
+ * One row of the superuser scan log — every scan ATTEMPT, not just
+ * admissions. `ticket*` fields are null for an UNKNOWN_CODE scan, which has
+ * no ticket by definition and is exactly the row worth seeing when
+ * something is wrong at a gate.
+ *
+ * `scannedAt` is UTC ISO; render it in EVENT_TIME_ZONE, never the device's.
+ */
+export interface AdminScanRow {
+  id: string;
+  scannedAt: string;
+  result: ScanResult;
+  gateLabel: string | null;
+  agentName: string | null;
+  unitName: string | null;
+  unitSector: string | null;
+  ticketId: string | null;
+  ticketNumber: string | null;
+  ticketType: TicketType | null;
+  purchaserName: string | null;
+  purchaserMobile: string | null;
+  codeKind: QrCodeKind | null;
+  guestIndex: number | null;
+}
+
+export interface AdminScanLogResponse {
+  scans: AdminScanRow[];
+  /** Aggregated over the whole filtered set in SQL, not over `scans`. */
+  totals: {
+    total: number;
+    admitted: number;
+    duplicate: number;
+    rejected: number;
+  };
+  /** Distinct gate labels present in the log — derived, for the filter. */
+  gates: string[];
+  truncated: boolean;
+  limit: number;
+}
+
 /** Option lists for the ledger's dependent dropdowns. */
 export interface AdminFilterOptions {
   divisions: Array<{ id: string; name: string; code: string }>;

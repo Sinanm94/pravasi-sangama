@@ -48,6 +48,9 @@ adminRoutes.get('/tickets', controller.listTicketLedger);
 adminRoutes.get('/tickets/export', controller.exportTicketLedger);
 adminRoutes.get('/filter-options', controller.listFilterOptions);
 
+/* --- Scan log — every scan attempt (§10.1) ----------------------- */
+adminRoutes.get('/scans', controller.listScanLog);
+
 /* --- Gate channels (spec §2, Option A) --------------------------- */
 adminRoutes.get('/gates', controller.listGates);
 adminRoutes.post('/gates', controller.createGate);

@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { BarChart3, DoorOpen, LogOut, Tickets, Users } from 'lucide-react';
+import { BarChart3, DoorOpen, LogOut, ScanLine, Tickets, Users } from 'lucide-react';
 import { apiPost } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
@@ -29,6 +29,7 @@ const SECTIONS = [
   { href: '/dashboard', label: 'System Overview', icon: BarChart3 },
   { href: '/admin/directory', label: 'Agent Directory', icon: Users },
   { href: '/admin/tickets', label: 'Ticket Ledger', icon: Tickets },
+  { href: '/admin/scans', label: 'Scan Log', icon: ScanLine },
   { href: '/admin/gates', label: 'Gate Management', icon: DoorOpen },
 ];
 
