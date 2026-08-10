@@ -181,10 +181,11 @@ export default function NewRegistrationForm({
             </Field>
 
             <Field label="Mobile Number" required error={errors.mobile}>
+              {/* No country-code prefix. This event runs in Riyadh, so a
+                  hardcoded +91 was both wrong and misleading — the field has
+                  always validated as a bare 10 digits (MOBILE_NUMBER_REGEX)
+                  and never stored or sent a country code. */}
               <div className="relative">
-                <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[15px] text-gray-400">
-                  +91
-                </span>
                 <input
                   ref={(el) => {
                     fieldRefs.current.mobile = el;
@@ -196,9 +197,9 @@ export default function NewRegistrationForm({
                     setMobile(e.target.value.replace(/\D/g, '').slice(0, 10));
                     clearError('mobile');
                   }}
-                  placeholder="98765 43210"
+                  placeholder="9876543210"
                   autoComplete="tel"
-                  className={`${inputClass(!!errors.mobile)} pl-14`}
+                  className={inputClass(!!errors.mobile)}
                 />
               </div>
             </Field>

@@ -10,7 +10,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import type { VerifyScanResponse } from '@pravasi/shared';
+import { EVENT_TIME_ZONE, type VerifyScanResponse } from '@pravasi/shared';
 import { ScanNetworkError, bulkSync, verifyScan } from '@/lib/scanApi';
 import {
   dropSettled,
@@ -132,8 +132,8 @@ export default function GateScanner({
         if (seenAt) {
           show({
             status: 'DUPLICATE',
-            headline: 'Already Scanned',
-            detail: `Admitted on this device at ${formatTime(seenAt)}`,
+            headline: 'Already Entered',
+            detail: `Entered on this device at ${formatScanMoment(seenAt)}`,
             pending: true,
           });
           return;
@@ -458,14 +458,18 @@ function toOutcome(result: VerifyScanResponse): ScanOutcome {
   }
 
   if (result.status === 'DUPLICATE') {
+    /* "Already Entered", not "Already Scanned". The person holding this
+     * ticket is being told someone already walked in on it — that is what
+     * the gate agent has to act on, and "scanned" describes the machine
+     * rather than the situation. */
     const prior = result.priorScan;
     return {
       status: 'DUPLICATE',
-      headline: 'Already Scanned',
+      headline: 'Already Entered',
       detail: prior
-        ? `${formatTime(prior.scannedAt)}${
-            prior.agentName ? ` by ${prior.agentName}` : ''
-          }${prior.gateLabel ? ` at ${prior.gateLabel}` : ''}`
+        ? `${formatScanMoment(prior.scannedAt)}${
+            prior.agentName ? ` · ${prior.agentName}` : ''
+          }${prior.gateLabel ? ` · ${prior.gateLabel}` : ''}`
         : undefined,
     };
   }
@@ -477,10 +481,22 @@ function toOutcome(result: VerifyScanResponse): ScanOutcome {
   };
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], {
+/**
+ * Date AND time, always in the event's timezone (§ EVENT_TIME_ZONE).
+ *
+ * Was time-only on the device's clock. Both were wrong at a gate: a shift
+ * runs past midnight so the date matters, and a volunteer's phone may be on
+ * their home timezone — two people comparing screens would read different
+ * times for the same entry.
+ */
+function formatScanMoment(iso: string): string {
+  return new Date(iso).toLocaleString('en-GB', {
+    timeZone: EVENT_TIME_ZONE,
+    day: '2-digit',
+    month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
   });
 }
 

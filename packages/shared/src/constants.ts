@@ -202,6 +202,18 @@ export const ORGANISATION_NAME = 'Karnataka Cultural Foundation';
 export const EVENT_DATE_LABEL = '15, Oct 2026';
 
 /**
+ * The event's timezone. Every timestamp shown to staff — gate scans, the
+ * admin scan log — is rendered in this zone rather than the device's.
+ *
+ * A volunteer's phone may be set to any timezone (many are still on their
+ * home country's), and "was this ticket already used?" is a question about
+ * when it happened AT THE GATE. Two people comparing screens must see the
+ * same clock, so the zone is fixed here rather than left to the device.
+ * Timestamps are still STORED as UTC `timestamptz` — this is display only.
+ */
+export const EVENT_TIME_ZONE = 'Asia/Riyadh';
+
+/**
  * Static venue-information target — the real event location.
  *
  * EVERY ticket prints a Location panel carrying this link, on all tiers. It
@@ -223,8 +235,8 @@ export const VENUE_INFO_URL =
  * Generation is server-side only (`backend/src/lib/identifiers.ts`); these are
  * the shared format contracts for validation and display.
  *
- *   REQ-2026-K4H8QR   (6 chars from ID_CHARSET — 2^30 space)
- *   TKT-Q7X4M2        (6 chars from ID_CHARSET — 2^30 space)
+ *   REQ-K4H8Q   (5 chars from ID_CHARSET — 2^25 space)
+ *   TKT-Q7X4M   (5 chars from ID_CHARSET — 2^25 space)
  *
  * Previously 12/10 hex characters (2^48 / 2^40) — shortened because staff
  * search for and re-type these by hand off a printed stub, and hex mixed
@@ -243,14 +255,17 @@ export const VENUE_INFO_URL =
  */
 export const ID_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-export const REQUEST_NUMBER_PREFIX = `REQ-${EVENT_YEAR}-`;
+/* The year is gone from the request prefix. Every ticket in this database is
+ * a 2026 ticket, so `REQ-2026-` carried no information and was simply four
+ * more characters for someone to read off a printed stub and re-type. */
+export const REQUEST_NUMBER_PREFIX = 'REQ-';
 export const TICKET_NUMBER_PREFIX = 'TKT-';
 
-export const REQUEST_NUMBER_LENGTH = 6;
-export const TICKET_NUMBER_LENGTH = 6;
+export const REQUEST_NUMBER_LENGTH = 5;
+export const TICKET_NUMBER_LENGTH = 5;
 
 export const REQUEST_NUMBER_REGEX = new RegExp(
-  `^REQ-${EVENT_YEAR}-[${ID_CHARSET}]{${REQUEST_NUMBER_LENGTH}}$`,
+  `^REQ-[${ID_CHARSET}]{${REQUEST_NUMBER_LENGTH}}$`,
 );
 export const TICKET_NUMBER_REGEX = new RegExp(
   `^TKT-[${ID_CHARSET}]{${TICKET_NUMBER_LENGTH}}$`,
