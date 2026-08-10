@@ -513,14 +513,25 @@ volume to anyone holding one ticket and lets an attacker enumerate the range.
 Collisions are absorbed by the unique constraint plus a bounded retry of the
 whole transaction; never SELECT-then-INSERT, which races.
 
-Both are 6 characters drawn from `ID_CHARSET` (`packages/shared/src/constants.ts`)
-— uppercase A–Z and 2–9, with `0/O` and `1/I` dropped for the same
-ambiguous-character reason as the unit-admin passwords (§3.3). That's 5 bits
-per character, 2^30 of space — sized against this event's realistic ticket
-volume with room to spare (see `identifiers.ts` for the exact math), not
-against an arbitrary "sounds safe" length. Originally 12/10 hex characters;
-shortened because staff read these off a printed stub and re-type them by
-hand, and a longer, denser hex string is exactly what makes that error-prone.
+Both are **6 digits, no letters** — `REQ-403827`, `TKT-719564`. Staff read
+these off a printed stub and re-type them, usually on a phone's numeric
+keypad, and a letter/digit mix means switching keyboards and second-guessing
+an `O` against a `0`.
+
+Six digits, not five, and the extra one is load-bearing. A digit carries
+3.32 bits where the previous 32-character alphabet carried 5, so going
+numeric costs length to hold the same collision safety. Five digits is a
+100,000 space: at ~50,000 tickets three quarters of issuances would collide
+and **one in four would exhaust all five retries and fail outright at the
+desk**. Six digits puts that at ~1 in 113,000 — under one expected failure
+across the whole event. Past ~50,000 tickets, raise both lengths to 7 rather
+than reintroducing letters.
+
+Leading zeros are valid (`REQ-004821`); dropping them would discard a tenth
+of the space for no readability gain. Tickets issued under the older formats
+(12/10 hex, then 6 alphanumeric) keep their numbers and stay searchable —
+only newly generated ones use this shape, and the format regexes have no
+runtime callers that would reject an old one.
 
 **Not an admission credential.** Neither number gates entry — the QR payload
 does that, is a full UUID, and is never shortened. Being short and

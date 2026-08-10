@@ -235,40 +235,40 @@ export const VENUE_INFO_URL =
  * Generation is server-side only (`backend/src/lib/identifiers.ts`); these are
  * the shared format contracts for validation and display.
  *
- *   REQ-K4H8Q   (5 chars from ID_CHARSET — 2^25 space)
- *   TKT-Q7X4M   (5 chars from ID_CHARSET — 2^25 space)
+ *   REQ-403827   (6 digits — 1,000,000 space)
+ *   TKT-719564   (6 digits — 1,000,000 space)
  *
- * Previously 12/10 hex characters (2^48 / 2^40) — shortened because staff
- * search for and re-type these by hand off a printed stub, and hex mixed
- * with a "REQ-2026-" prefix reads as noise at that length. See
- * identifiers.ts for the collision-probability math at the new length: it
- * is deliberately generous relative to this event's realistic ticket
- * volume, and any collision that does occur is a silent, self-healing retry
- * (`NUMBER_COLLISION_RETRIES` in tickets.service.ts), never a failure.
+ * DIGITS ONLY. These are read off a printed stub and re-typed, often on a
+ * phone's numeric keypad by staff coming off paper systems — a letter/digit
+ * mix means switching keyboards and second-guessing an O against a 0.
  *
- * ID_CHARSET drops 0/O and 1/I — the same ambiguous-character exclusion as
- * the unit-admin password generator (db/bulk-rotate-passwords.ts) — and
- * stays single-case (uppercase) so nobody has to guess the case of a letter
- * read off paper. 32 characters is exactly 5 bits, so every character of a
- * generated id carries identical entropy with one crypto.randomInt(0, 32)
- * draw — see identifiers.ts.
+ * Six, not five, and that is not padding. A digit carries 3.32 bits where
+ * the old 32-character alphabet carried 5, so going numeric costs length to
+ * hold the same collision safety. At five digits the space is 100,000, and
+ * with ~50,000 tickets issued three quarters of every issuance would collide
+ * and ONE IN FOUR would exhaust all five retries in tickets.service and fail
+ * outright at the registration desk. Six digits puts that at roughly 1 in
+ * 113,000 issuances across the same volume — under one expected failure for
+ * the whole event, and each one surfaces as a plain retryable error.
+ *
+ * If ticket volume ever heads past ~50,000, raise both lengths to 7 rather
+ * than reintroducing letters: it is a one-character change here and drops
+ * the retry rate tenfold.
+ *
+ * Leading zeros are kept (`REQ-004821` is valid) — dropping them would
+ * throw away a tenth of the space for no readability gain.
  */
-export const ID_CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-/* The year is gone from the request prefix. Every ticket in this database is
- * a 2026 ticket, so `REQ-2026-` carried no information and was simply four
- * more characters for someone to read off a printed stub and re-type. */
 export const REQUEST_NUMBER_PREFIX = 'REQ-';
 export const TICKET_NUMBER_PREFIX = 'TKT-';
 
-export const REQUEST_NUMBER_LENGTH = 5;
-export const TICKET_NUMBER_LENGTH = 5;
+export const REQUEST_NUMBER_LENGTH = 6;
+export const TICKET_NUMBER_LENGTH = 6;
 
 export const REQUEST_NUMBER_REGEX = new RegExp(
-  `^REQ-[${ID_CHARSET}]{${REQUEST_NUMBER_LENGTH}}$`,
+  `^REQ-[0-9]{${REQUEST_NUMBER_LENGTH}}$`,
 );
 export const TICKET_NUMBER_REGEX = new RegExp(
-  `^TKT-[${ID_CHARSET}]{${TICKET_NUMBER_LENGTH}}$`,
+  `^TKT-[0-9]{${TICKET_NUMBER_LENGTH}}$`,
 );
 
 export function isRequestNumber(value: string): boolean {
