@@ -741,22 +741,40 @@ export async function findTicketById(
   return rows[0] ?? null;
 }
 
+/** Why a reissue was refused, so the caller can say something useful. */
+export type ReissueFailure = 'TICKET_REVOKED' | 'ALREADY_ENTERED' | 'NOT_FOUND';
+
+export interface ReissueOutcome {
+  ok: boolean;
+  failure?: ReissueFailure;
+  /** Guests already admitted on this ticket — set on ALREADY_ENTERED. */
+  scannedCount?: number;
+  /** Codes this reissue invalidated — set on success. */
+  revokedCount?: number;
+}
+
 /**
- * Revoke every existing code on a ticket and issue a fresh set, in ONE
- * transaction.
+ * Revoke a ticket's UNUSED codes and issue a fresh set, in one transaction.
  *
- * Why the old codes must die: §4.4 stores only `sha256(payload)`, so the
- * original QR values are unrecoverable and a reprint cannot reproduce them.
- * The pass has to carry new codes. If the old ones stayed ISSUED, a lost
- * ticket that later turns up would still scan — two people through one
- * gate on one ticket. Revoking is what makes reprinting safe rather than a
- * duplication hole.
+ * Only `ISSUED` codes are touched, and that is the load-bearing detail.
  *
- * The ticket row itself is untouched: same id, same request and ticket
- * number, same buyer, same tier, same seat count. Only the codes change.
+ *   - A SCANNED code is spent. Revoking it would violate
+ *     `qr_codes_scan_consistent` (a non-SCANNED row must have a NULL
+ *     scanned_at), and reissuing its slot would be far worse than a crash: a
+ *     ticket where two of four guests had already entered would come back
+ *     with four fresh working codes, letting those two in a second time.
+ *     Six people through a four-seat ticket, silently.
  *
- * Guarded on `t.status = 'ACTIVE'` — a revoked ticket must not be brought
- * back to life by reprinting it.
+ *   - So if ANY code has been scanned the reissue is refused outright rather
+ *     than partially applied. A partial reprint would render a pass with live
+ *     codes for some slots and dead ones for others, which at a gate is
+ *     indistinguishable from a working ticket until it fails.
+ *
+ * Old rows are revoked, never deleted: `scan_logs.qr_code_id` references
+ * them and the trail must outlive the code it describes. Migration 014
+ * scopes the uniqueness indexes to non-revoked rows so replacements can take
+ * the same slots — without it this INSERT collides and 500s, which is
+ * exactly what it did.
  */
 export async function reissueTicketCodes(
   ticketId: string,
@@ -765,29 +783,38 @@ export async function reissueTicketCodes(
     kind: QrCodeKind;
     guestIndex: number | null;
   }>,
-): Promise<boolean> {
+): Promise<ReissueOutcome> {
   return withTransaction(async (client) => {
-    const { rowCount } = await client.query(
-      `UPDATE qr_codes q
+    /* Lock the ticket for the duration, so a scan landing mid-reissue cannot
+     * consume a code we are about to revoke and slip past the check below. */
+    const { rows: ticket } = await client.query<{ status: string }>(
+      `SELECT status FROM tickets WHERE id = $1 FOR UPDATE`,
+      [ticketId],
+    );
+
+    if (ticket.length === 0) return { ok: false, failure: 'NOT_FOUND' };
+    if (ticket[0]!.status !== 'ACTIVE') {
+      return { ok: false, failure: 'TICKET_REVOKED' };
+    }
+
+    const { rows: scanned } = await client.query<{ count: number }>(
+      `SELECT COUNT(*)::INT AS count
+         FROM qr_codes
+        WHERE ticket_id = $1 AND status = 'SCANNED'`,
+      [ticketId],
+    );
+
+    const scannedCount = scanned[0]?.count ?? 0;
+    if (scannedCount > 0) {
+      return { ok: false, failure: 'ALREADY_ENTERED', scannedCount };
+    }
+
+    const { rowCount: revokedCount } = await client.query(
+      `UPDATE qr_codes
           SET status = 'REVOKED'
-         FROM tickets t
-        WHERE q.ticket_id = $1
-          AND t.id        = q.ticket_id
-          AND t.status    = 'ACTIVE'
-          AND q.status <> 'REVOKED'`,
+        WHERE ticket_id = $1 AND status = 'ISSUED'`,
       [ticketId],
     );
-
-    /* Zero revoked rows is not automatically a failure — a ticket could
-     * legitimately have had every code revoked by an earlier reissue. Check
-     * the ticket itself rather than inferring from the count. */
-    const { rows: alive } = await client.query<{ id: string }>(
-      `SELECT id FROM tickets WHERE id = $1 AND status = 'ACTIVE'`,
-      [ticketId],
-    );
-    if (alive.length === 0) return false;
-
-    void rowCount;
 
     const values: unknown[] = [ticketId];
     const tuples = codes.map((code, i) => {
@@ -802,6 +829,6 @@ export async function reissueTicketCodes(
       values,
     );
 
-    return true;
+    return { ok: true, revokedCount: revokedCount ?? 0 };
   });
 }

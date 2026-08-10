@@ -597,11 +597,29 @@ export const reissueTicket = handle(async (req, res) => {
     };
   });
 
-  const ok = await repo.reissueTicketCodes(
+  const outcome = await repo.reissueTicketCodes(
     ticketId,
     generated.map(({ hash, kind, guestIndex }) => ({ hash, kind, guestIndex })),
   );
-  if (!ok) throw conflict('That ticket is revoked and cannot be reprinted.');
+
+  if (!outcome.ok) {
+    if (outcome.failure === 'NOT_FOUND') throw notFound('No such ticket');
+
+    /* Say which of the two refusals it was, and how many guests entered.
+     * "Something went wrong" sends an organiser to a developer; "2 of 4
+     * guests have already entered" tells them what to do next. */
+    if (outcome.failure === 'ALREADY_ENTERED') {
+      const n = outcome.scannedCount ?? 0;
+      throw conflict(
+        `${n} guest${n === 1 ? ' has' : 's have'} already entered on this ` +
+          `ticket. Reprinting would issue fresh codes for every seat and let ` +
+          `them enter again, so it is blocked. Admit the remaining guests at ` +
+          `the gate instead.`,
+      );
+    }
+
+    throw conflict('That ticket is revoked and cannot be reprinted.');
+  }
 
   await repo.writeAudit({
     superuserId: actor,
@@ -613,6 +631,7 @@ export const reissueTicket = handle(async (req, res) => {
     metadata: {
       ticket_number: existing.ticket_number,
       codes_issued: generated.length,
+      codes_revoked: outcome.revokedCount ?? 0,
     },
     ip: req.ip ?? null,
   });
@@ -625,7 +644,7 @@ export const reissueTicket = handle(async (req, res) => {
       guest_index: g.guestIndex,
       payload: g.payload,
     })),
-    revokedCount: 0,
+    revokedCount: outcome.revokedCount ?? 0,
   };
 
   res.status(200).json(body);
