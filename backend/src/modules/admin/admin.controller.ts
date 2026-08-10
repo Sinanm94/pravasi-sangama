@@ -15,10 +15,13 @@ import {
   type AgentPasswordResetResponse,
   type AgentDirectoryResponse,
   type GateSummary,
+  type TicketReissueResponse,
+  qrCodePlanFor,
   type PendingAgent,
 } from '@pravasi/shared';
 import { hashSecret } from '../../lib/crypto.js';
 import { generateAgentPassword } from '../../lib/passwordGen.js';
+import { generateQrPayload, hashQrPayload } from '../../lib/identifiers.js';
 import { badRequest, conflict, notFound, unauthorized } from '../../lib/errors.js';
 import * as repo from './admin.repository.js';
 
@@ -538,6 +541,91 @@ export const listScanLog = handle(async (req, res) => {
     gates,
     truncated: totals.total > scans.length,
     limit: q.limit,
+  };
+
+  res.status(200).json(body);
+});
+
+/* ------------------------------------------------------------------ */
+/* GET  /api/admin/tickets/:id           — full detail                 */
+/* POST /api/admin/tickets/:id/reissue   — reprint a lost pass         */
+/* ------------------------------------------------------------------ */
+
+export const getTicket = handle(async (req, res) => {
+  const row = await repo.findTicketById(String(req.params.id));
+  if (!row) throw notFound('No such ticket');
+
+  res.status(200).json({ ticket: toAdminTicketRow(row) });
+});
+
+/**
+ * Reprint. Same ticket, same numbers, same buyer — new QR codes, and the
+ * previous set revoked.
+ *
+ * The codes MUST change: the database stores only sha256(payload) (§4.4), so
+ * the originals cannot be recovered to reprint. Revoking them is what makes
+ * this safe rather than a duplication hole — otherwise a "lost" ticket that
+ * turns up later would still scan alongside the reprint.
+ *
+ * The new payloads are returned exactly once, here, in the same shape the
+ * issuance response uses, so the frontend can hand them straight to
+ * TicketReceipt and print an identical-looking pass.
+ */
+export const reissueTicket = handle(async (req, res) => {
+  const actor = superuserId(req);
+  const ticketId = String(req.params.id);
+
+  const existing = await repo.findTicketById(ticketId);
+  if (!existing) throw notFound('No such ticket');
+
+  if (existing.status === 'REVOKED') {
+    throw conflict('That ticket is revoked and cannot be reprinted.');
+  }
+
+  /* The same shared plan issuance uses — NORMAL gets 1 guest code, premium
+   * gets 4 guest + 1 location. Re-deriving from the tier rather than
+   * counting the old rows means a reprint cannot inherit a fan-out that was
+   * wrong to begin with. */
+  const plan = qrCodePlanFor(existing.ticket_type);
+  const generated = plan.map((slot) => {
+    const payload = generateQrPayload();
+    return {
+      payload,
+      hash: hashQrPayload(payload),
+      kind: slot.kind,
+      guestIndex: slot.guestIndex,
+    };
+  });
+
+  const ok = await repo.reissueTicketCodes(
+    ticketId,
+    generated.map(({ hash, kind, guestIndex }) => ({ hash, kind, guestIndex })),
+  );
+  if (!ok) throw conflict('That ticket is revoked and cannot be reprinted.');
+
+  await repo.writeAudit({
+    superuserId: actor,
+    action: 'TICKET_REISSUED',
+    entityType: 'ticket',
+    entityId: ticketId,
+    // Never the payloads — audit_logs is read far more widely than a
+    // credential needs to be, and these admit people.
+    metadata: {
+      ticket_number: existing.ticket_number,
+      codes_issued: generated.length,
+    },
+    ip: req.ip ?? null,
+  });
+
+  const body: TicketReissueResponse = {
+    ticket: toAdminTicketRow(existing),
+    qrCodes: generated.map((g, i) => ({
+      id: `${ticketId}-${i}`,
+      kind: g.kind,
+      guest_index: g.guestIndex,
+      payload: g.payload,
+    })),
+    revokedCount: 0,
   };
 
   res.status(200).json(body);

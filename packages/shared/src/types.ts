@@ -625,6 +625,28 @@ export interface AdminScanLogResponse {
   limit: number;
 }
 
+/**
+ * POST /api/admin/tickets/:id/reissue — a reprint of a lost pass.
+ *
+ * The ticket keeps its identity: same id, same request and ticket number,
+ * same buyer, same tier, same seat count. What changes is the QR codes.
+ *
+ * That is not a shortcut — it is forced and it is the safe outcome. §4.4
+ * stores only `sha256(payload)`, so the original codes are unrecoverable and
+ * cannot be reprinted. Issuing fresh ones and REVOKING the old set is what
+ * stops a lost ticket that later resurfaces from also scanning: without the
+ * revoke, a reprint would put two working passes into circulation.
+ *
+ * `qrCodes` carries the raw payloads and, exactly as at issuance, this is
+ * the ONLY time they are readable.
+ */
+export interface TicketReissueResponse {
+  ticket: AdminTicketRow;
+  qrCodes: IssuedQrCodeWire[];
+  /** How many previously-valid codes this reprint invalidated. */
+  revokedCount: number;
+}
+
 /** Option lists for the ledger's dependent dropdowns. */
 export interface AdminFilterOptions {
   divisions: Array<{ id: string; name: string; code: string }>;

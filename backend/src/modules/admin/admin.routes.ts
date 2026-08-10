@@ -46,6 +46,9 @@ adminRoutes.post('/agents/:id/active', controller.setAgentActive);
 /* --- Master ticket ledger ---------------------------------------- */
 adminRoutes.get('/tickets', controller.listTicketLedger);
 adminRoutes.get('/tickets/export', controller.exportTicketLedger);
+/* :id AFTER /export, or Express matches "export" as an id. */
+adminRoutes.get('/tickets/:id', controller.getTicket);
+adminRoutes.post('/tickets/:id/reissue', controller.reissueTicket);
 adminRoutes.get('/filter-options', controller.listFilterOptions);
 
 /* --- Scan log — every scan attempt (§10.1) ----------------------- */

@@ -876,7 +876,24 @@ pravasi-sangama/
   upper/lower/digit mix `db:bulk-rotate-passwords` uses for its suffix.
   `email` is left `NULL`; nothing fabricates an address nobody supplied.
 
-**Not yet built:** divisions/units/agents CRUD, ticket revocation, real QR
+**Reprint (§4.4).** `POST /api/admin/tickets/:id/reissue` reprints a lost
+pass from `/admin/tickets`. Same ticket id, request number, ticket number,
+buyer and tier — **new QR codes, and the previous set revoked.** The codes
+cannot be preserved: only `sha256(payload)` is stored, so the originals are
+unrecoverable by design. Revoking them is what makes reprinting safe rather
+than a duplication hole — otherwise a "lost" ticket that resurfaced would
+scan alongside the reprint. A REVOKED ticket cannot be reprinted at all.
+
+**Scan log.** `GET /api/admin/scans` + `/admin/scans` records every scan
+ATTEMPT, not just admissions — a DUPLICATE burst at one gate is the
+signature of a copied ticket (§10.1). All joins are LEFT so `UNKNOWN_CODE`
+rows, which have no ticket by definition, stay visible. Timestamps go out as
+UTC ISO and render in `EVENT_TIME_ZONE` (`Asia/Riyadh`); a volunteer's phone
+is often still on their home timezone, and the gate's clock is the one that
+matters.
+
+**Not yet built:** divisions/units/agents CRUD, ticket revocation *from the
+UI* (the reissue path above revokes codes, not tickets), real QR
 encoding, `gate:offline` heartbeat, a superuser UI for editing zone coverage
 (direct SQL against `supervisor_unit_assignments` only — see §3.3), replacing
 the placeholder 10/10/10 zone split with the real geographic assignment, a way for a

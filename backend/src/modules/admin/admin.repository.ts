@@ -4,7 +4,7 @@ import type {
   TicketStatus,
   TicketType,
 } from '@pravasi/shared';
-import { query } from '../../db/index.js';
+import { query, withTransaction } from '../../db/index.js';
 
 /* ------------------------------------------------------------------ */
 /* Agent approval queue (spec §3)                                      */
@@ -714,4 +714,94 @@ export async function listScannedGates(): Promise<string[]> {
       ORDER BY gate_label`,
   );
   return rows.map((r) => r.gate_label);
+}
+
+/* ------------------------------------------------------------------ */
+/* Ticket reissue — reprint a lost pass                                */
+/* ------------------------------------------------------------------ */
+
+/** Everything an agent entered, for the detail view and the reprint. */
+export async function findTicketById(
+  ticketId: string,
+): Promise<AdminTicketLedgerRow | null> {
+  const { rows } = await query<AdminTicketLedgerRow>(
+    `SELECT t.id, t.request_number, t.ticket_number, t.ticket_type,
+            t.purchaser_name, t.purchaser_mobile, t.purchaser_email,
+            t.counted_persons, t.children_below_12, t.status, t.created_at,
+            t.agent_id, a.name AS agent_name,
+            t.unit_id, u.name AS unit_name, u.unit_code, u.sector AS unit_sector,
+            t.division_id, d.name AS division_name
+       FROM tickets t
+       JOIN agents a    ON a.id = t.agent_id
+       JOIN units u     ON u.id = t.unit_id
+       JOIN divisions d ON d.id = t.division_id
+      WHERE t.id = $1`,
+    [ticketId],
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Revoke every existing code on a ticket and issue a fresh set, in ONE
+ * transaction.
+ *
+ * Why the old codes must die: §4.4 stores only `sha256(payload)`, so the
+ * original QR values are unrecoverable and a reprint cannot reproduce them.
+ * The pass has to carry new codes. If the old ones stayed ISSUED, a lost
+ * ticket that later turns up would still scan — two people through one
+ * gate on one ticket. Revoking is what makes reprinting safe rather than a
+ * duplication hole.
+ *
+ * The ticket row itself is untouched: same id, same request and ticket
+ * number, same buyer, same tier, same seat count. Only the codes change.
+ *
+ * Guarded on `t.status = 'ACTIVE'` — a revoked ticket must not be brought
+ * back to life by reprinting it.
+ */
+export async function reissueTicketCodes(
+  ticketId: string,
+  codes: ReadonlyArray<{
+    hash: string;
+    kind: QrCodeKind;
+    guestIndex: number | null;
+  }>,
+): Promise<boolean> {
+  return withTransaction(async (client) => {
+    const { rowCount } = await client.query(
+      `UPDATE qr_codes q
+          SET status = 'REVOKED'
+         FROM tickets t
+        WHERE q.ticket_id = $1
+          AND t.id        = q.ticket_id
+          AND t.status    = 'ACTIVE'
+          AND q.status <> 'REVOKED'`,
+      [ticketId],
+    );
+
+    /* Zero revoked rows is not automatically a failure — a ticket could
+     * legitimately have had every code revoked by an earlier reissue. Check
+     * the ticket itself rather than inferring from the count. */
+    const { rows: alive } = await client.query<{ id: string }>(
+      `SELECT id FROM tickets WHERE id = $1 AND status = 'ACTIVE'`,
+      [ticketId],
+    );
+    if (alive.length === 0) return false;
+
+    void rowCount;
+
+    const values: unknown[] = [ticketId];
+    const tuples = codes.map((code, i) => {
+      const base = i * 3 + 2;
+      values.push(code.hash, code.kind, code.guestIndex);
+      return `($1, $${base}, $${base + 1}::qr_code_kind, $${base + 2}::SMALLINT)`;
+    });
+
+    await client.query(
+      `INSERT INTO qr_codes (ticket_id, qr_hash, code_kind, guest_index)
+       VALUES ${tuples.join(', ')}`,
+      values,
+    );
+
+    return true;
+  });
 }
