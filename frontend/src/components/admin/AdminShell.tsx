@@ -10,6 +10,7 @@ import {
   LogOut,
   ScanLine,
   Tickets,
+  UserRound,
   Users,
 } from 'lucide-react';
 import { apiPost } from '@/lib/apiClient';
@@ -36,6 +37,7 @@ const AMBER = '#FFA51F';
 const SECTIONS = [
   { href: '/dashboard', label: 'System Overview', icon: BarChart3 },
   { href: '/admin/directory', label: 'Agent Directory', icon: Users },
+  { href: '/admin/clients', label: 'Clients', icon: UserRound },
   { href: '/admin/tickets', label: 'Ticket Ledger', icon: Tickets },
   { href: '/admin/scans', label: 'Scan Log', icon: ScanLine },
   { href: '/admin/gates', label: 'Gate Management', icon: DoorOpen },

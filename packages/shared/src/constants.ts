@@ -191,6 +191,40 @@ export const TICKET_STATUSES = ['ACTIVE', 'REVOKED'] as const;
 export type TicketStatus = (typeof TICKET_STATUSES)[number];
 
 /* ------------------------------------------------------------------ */
+/* Premium client tracking (migration 015)                             */
+/* ------------------------------------------------------------------ */
+
+/** Where a premium conversation stands. Mirrors the `client_status` enum. */
+export const CLIENT_STATUSES = [
+  'PROSPECT',
+  'AWAITING_REPLY',
+  'CONFIRMED',
+  'TICKETED',
+  'DECLINED',
+] as const;
+export type ClientStatus = (typeof CLIENT_STATUSES)[number];
+
+export const CLIENT_STATUS_LABELS: Readonly<Record<ClientStatus, string>> = {
+  PROSPECT: 'Prospect',
+  AWAITING_REPLY: 'Awaiting reply',
+  CONFIRMED: 'Confirmed',
+  TICKETED: 'Ticketed',
+  DECLINED: 'Declined',
+} as const;
+
+/** What kind of exchange a timeline entry records. */
+export const CLIENT_INTERACTION_KINDS = ['NOTE', 'OUTREACH', 'RESPONSE'] as const;
+export type ClientInteractionKind = (typeof CLIENT_INTERACTION_KINDS)[number];
+
+export const CLIENT_INTERACTION_LABELS: Readonly<
+  Record<ClientInteractionKind, string>
+> = {
+  NOTE: 'Note',
+  OUTREACH: 'We asked',
+  RESPONSE: 'They replied',
+} as const;
+
+/* ------------------------------------------------------------------ */
 /* Numbering                                                           */
 /* ------------------------------------------------------------------ */
 

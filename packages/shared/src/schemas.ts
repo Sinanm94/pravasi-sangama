@@ -4,6 +4,8 @@ import {
   AGENT_PASSWORD_MIN_LENGTH,
   GATE_PIN_MAX_LENGTH,
   GATE_PIN_MIN_LENGTH,
+  CLIENT_INTERACTION_KINDS,
+  CLIENT_STATUSES,
   MOBILE_NUMBER_REGEX,
   SCAN_RESULTS,
   TICKET_STATUSES,
@@ -511,3 +513,75 @@ export const UnitAdminTicketQuerySchema = z.object({
 });
 
 export type UnitAdminTicketQuery = z.infer<typeof UnitAdminTicketQuerySchema>;
+
+/* ------------------------------------------------------------------ */
+/* Premium client tracking (migration 015)                             */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Only `name` is required. These records are created mid-conversation —
+ * often the superuser has a name and nothing else yet — and demanding a
+ * mobile or a tier up front would push people into typing placeholders,
+ * which is worse than an empty column.
+ *
+ * `mobile` is NOT MOBILE_NUMBER_REGEX-validated: a premium guest may be
+ * reached on an international number, unlike an agent whose 10-digit mobile
+ * is their login identity.
+ */
+export const CreateClientSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Enter a name').max(120),
+    mobile: z.string().trim().max(32).optional(),
+    email: z.string().trim().toLowerCase().max(180).optional(),
+    organisation: z.string().trim().max(160).optional(),
+    intended_tier: z.enum(TICKET_TYPES).optional(),
+    status: z.enum(CLIENT_STATUSES).default('PROSPECT'),
+    /** ISO date, no time — "chase them on this day". */
+    follow_up_on: z.string().date().optional(),
+  })
+  .strict();
+
+export type CreateClientInput = z.infer<typeof CreateClientSchema>;
+
+/** Every field optional — this patches one record, it does not replace it. */
+export const UpdateClientSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    mobile: z.string().trim().max(32).nullable().optional(),
+    email: z.string().trim().toLowerCase().max(180).nullable().optional(),
+    organisation: z.string().trim().max(160).nullable().optional(),
+    intended_tier: z.enum(TICKET_TYPES).nullable().optional(),
+    status: z.enum(CLIENT_STATUSES).optional(),
+    follow_up_on: z.string().date().nullable().optional(),
+    ticket_id: z.string().uuid().nullable().optional(),
+  })
+  .strict();
+
+export type UpdateClientInput = z.infer<typeof UpdateClientSchema>;
+
+/**
+ * One entry on the timeline.
+ *
+ * `occurred_at` is optional and defaults server-side to now: a call taken on
+ * Sunday is often logged on Monday, and forcing a date on every entry would
+ * make the common case slower for the sake of the rare one.
+ */
+export const CreateClientInteractionSchema = z
+  .object({
+    kind: z.enum(CLIENT_INTERACTION_KINDS).default('NOTE'),
+    body: z.string().trim().min(1, 'Say what happened').max(4000),
+    occurred_at: z.string().datetime().optional(),
+  })
+  .strict();
+
+export type CreateClientInteractionInput = z.infer<
+  typeof CreateClientInteractionSchema
+>;
+
+export const ClientQuerySchema = z.object({
+  status: z.enum(CLIENT_STATUSES).optional(),
+  search: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().positive().max(500).default(200),
+});
+
+export type ClientQuery = z.infer<typeof ClientQuerySchema>;

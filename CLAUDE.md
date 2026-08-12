@@ -909,6 +909,27 @@ unrecoverable by design. Revoking them is what makes reprinting safe rather
 than a duplication hole — otherwise a "lost" ticket that resurfaced would
 scan alongside the reprint. A REVOKED ticket cannot be reprinted at all.
 
+**Premium client tracking (migration 015).** `/admin/clients` +
+`backend/src/modules/clients/`. A record per premium guest with a running
+**interaction timeline** — what was asked, what came back, who said it and
+when. Purchaser details already live on `tickets`; this holds the thing a
+ticket cannot, which is history over time *before* and around a sale, so
+records are created by hand and `ticket_id` is an optional link for once
+they buy.
+
+Two tables, not a notes column: the question is "what did they say when, and
+who spoke to them", which needs rows with their own timestamps and authors
+or it degrades into one blob nobody can filter. Each interaction stores the
+author's **name at write time** — the same reasoning `audit_logs` uses for
+carrying no FK on `actor_id`: the log is read months later, possibly after
+that account has been deactivated.
+
+**Shared across all three superusers, not owned by one.** On event day a
+colleague must be able to pick up a client whose usual contact is
+unreachable; attribution lives on the rows instead of in a scope filter.
+`PATCH` is a genuine patch — only supplied keys are written — so two
+superusers editing different fields cannot clobber each other.
+
 **Scan log.** `GET /api/admin/scans` + `/admin/scans` records every scan
 ATTEMPT, not just admissions — a DUPLICATE burst at one gate is the
 signature of a copied ticket (§10.1). All joins are LEFT so `UNKNOWN_CODE`

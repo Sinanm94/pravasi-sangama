@@ -76,6 +76,15 @@ export const apiGet = <T>(path: string) => request<T>(path, { method: 'GET' });
 export const apiPost = <T = unknown>(path: string, body?: unknown) =>
   request<T>(path, { method: 'POST', body });
 
+/** PATCH sends only the fields the caller means to change — see the client
+ *  update endpoint, where a full replace would let one editor silently undo
+ *  another's change to a field they never touched. */
+export const apiPatch = <T = unknown>(path: string, body?: unknown) =>
+  request<T>(path, { method: 'PATCH', body });
+
+export const apiDelete = <T = unknown>(path: string) =>
+  request<T>(path, { method: 'DELETE' });
+
 /**
  * For an endpoint that returns a file (CSV, ...) rather than JSON —
  * `request()`/`apiGet` always call `res.json()`, which would throw on a CSV

@@ -1,6 +1,8 @@
 import type {
   ApprovalStatus,
   AuthRole,
+  ClientInteractionKind,
+  ClientStatus,
   QrCodeKind,
   QrCodeStatus,
   ScanReason,
@@ -645,6 +647,57 @@ export interface TicketReissueResponse {
   qrCodes: IssuedQrCodeWire[];
   /** How many previously-valid codes this reprint invalidated. */
   revokedCount: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Premium client tracking (migration 015)                             */
+/* ------------------------------------------------------------------ */
+
+export interface ClientInteraction {
+  id: string;
+  kind: ClientInteractionKind;
+  body: string;
+  /** Captured at write time, so the timeline still names someone after an
+   *  account is retired. */
+  authorName: string | null;
+  /** When the exchange happened — not necessarily when it was typed. */
+  occurredAt: string;
+}
+
+export interface ClientRecord {
+  id: string;
+  name: string;
+  mobile: string | null;
+  email: string | null;
+  organisation: string | null;
+  /** The tier under discussion; `ticketNumber` is the authority once sold. */
+  intendedTier: TicketType | null;
+  status: ClientStatus;
+  /** ISO date (no time) — when to chase next. */
+  followUpOn: string | null;
+  ticketId: string | null;
+  ticketNumber: string | null;
+  createdAt: string;
+  updatedAt: string;
+  /** Count only, for the list. The full timeline comes from the detail call. */
+  interactionCount: number;
+  /** Most recent entry, so the list can show where things stand at a glance. */
+  lastInteractionAt: string | null;
+}
+
+export interface ClientListResponse {
+  clients: ClientRecord[];
+  totals: {
+    total: number;
+    awaitingReply: number;
+    /** follow_up_on is today or earlier and the client is not settled. */
+    overdue: number;
+  };
+}
+
+export interface ClientDetailResponse {
+  client: ClientRecord;
+  interactions: ClientInteraction[];
 }
 
 /** Option lists for the ledger's dependent dropdowns. */

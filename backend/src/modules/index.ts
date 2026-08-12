@@ -5,6 +5,7 @@ import { authRoutes } from './auth/auth.routes.js';
 import { adminRoutes } from './admin/admin.routes.js';
 import { unitAdminRoutes } from './unit-admin/unit-admin.routes.js';
 import { ticketRoutes } from './tickets/tickets.routes.js';
+import { clientRoutes } from './clients/clients.routes.js';
 import { scanRoutes } from './scanning/scanning.routes.js';
 import { analyticsRoutes } from './analytics/analytics.routes.js';
 
@@ -29,6 +30,7 @@ apiRouter.use('/admin', adminRoutes);
 apiRouter.use('/unit-admin', unitAdminRoutes);
 apiRouter.use('/tickets', ticketRoutes);
 apiRouter.use('/scan', scanRoutes);
+apiRouter.use('/clients', clientRoutes);
 apiRouter.use('/analytics', analyticsRoutes);
 
 apiRouter.get('/health', async (_req, res) => {
