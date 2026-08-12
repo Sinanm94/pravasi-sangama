@@ -28,6 +28,10 @@ export const ticketRoutes: Router = Router();
 /** The agent's own ledger. Scoped to the token's agentId in the query. */
 ticketRoutes.get('/mine', requireAgent, controller.myTickets);
 
+/* An agent reprints one of their OWN tickets. Scoped by agent_id inside the
+ * query, not by a caller-supplied parameter — see the controller. */
+ticketRoutes.post('/:id/reissue', requireAgent, controller.reissueMyTicket);
+
 ticketRoutes.post(
   '/issue',
   requireAgent,

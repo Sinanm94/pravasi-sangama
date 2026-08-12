@@ -87,10 +87,18 @@ export const apiPost = <T = unknown>(path: string, body?: unknown) =>
  * the file is called. `fallbackFilename` only covers a response that is
  * missing the header entirely, which should not happen against this API.
  */
+/** How the file reached the user, so the caller can say something true. */
+export interface DownloadOutcome {
+  filename: string;
+  /** `share` — handed to the OS share sheet. `download` — written to the
+   *  browser's download location. `cancelled` — user dismissed the sheet. */
+  via: 'share' | 'download' | 'cancelled';
+}
+
 export async function apiDownload(
   path: string,
   fallbackFilename: string,
-): Promise<void> {
+): Promise<DownloadOutcome> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
@@ -114,9 +122,44 @@ export async function apiDownload(
   const disposition = res.headers.get('Content-Disposition') ?? '';
   const filename = /filename="?([^"; ]+)"?/i.exec(disposition)?.[1] ?? fallbackFilename;
 
-  // The standard trick for a JS-triggered download: an off-DOM anchor with
-  // `download` set, clicked programmatically, then torn down immediately.
-  // No React state involved — this element never renders.
+  /* On a phone, an anchor download drops the file somewhere the user cannot
+   * easily reach — Android Chrome writes it to /Download with a system
+   * notification that is gone the moment it is dismissed, and iOS buries it
+   * in Files. The Web Share sheet instead lets them put it where they
+   * actually want it: Drive, WhatsApp, Mail, Files.
+   *
+   * `canShare({ files })` is checked rather than assumed — desktop Chrome
+   * exposes `navigator.share` but refuses file payloads, so testing only for
+   * `share` would throw there. */
+  const file = new File([blob], filename, {
+    type: blob.type || 'text/csv',
+  });
+
+  if (
+    typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' &&
+    navigator.canShare({ files: [file] }) &&
+    typeof navigator.share === 'function'
+  ) {
+    try {
+      await navigator.share({
+        files: [file],
+        title: filename,
+        text: 'Pravasi Sangama ticket report',
+      });
+      return { filename, via: 'share' };
+    } catch (err) {
+      /* AbortError means the user dismissed the sheet — that is a decision,
+       * not a failure, and must NOT silently fall through to a hidden
+       * download they did not ask for. Anything else (no target app, a
+       * platform quirk) falls back so the export is never simply lost. */
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return { filename, via: 'cancelled' };
+      }
+    }
+  }
+
+  // Fallback: an off-DOM anchor with `download`, clicked programmatically.
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = objectUrl;
@@ -125,6 +168,8 @@ export async function apiDownload(
   link.click();
   link.remove();
   URL.revokeObjectURL(objectUrl);
+
+  return { filename, via: 'download' };
 }
 
 /** Message for a toast. Never assume the caller checked the type. */

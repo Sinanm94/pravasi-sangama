@@ -7,16 +7,21 @@ import {
   AlertCircle,
   Baby,
   LogOut,
+  Loader2,
   Plus,
+  Printer,
   RefreshCw,
   Search,
   Ticket,
   Users,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import {
+  EVENT_DATE_LABEL,
   TICKET_TYPE_LABELS,
   type AgentTicketListResponse,
   type AgentTicketSummary,
+  type IssuedQrCodeWire,
 } from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import { Logo } from '@/components/ui/Logo';
@@ -24,6 +29,11 @@ import BrandBackdrop from '@/components/ui/BrandBackdrop';
 import { apiGet, apiPost, errorMessage } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
+import TicketReceipt, {
+  type TicketData,
+} from '@/components/ticket/TicketReceipt';
+import { printTicket } from '@/lib/printTicket';
+import { useDismissOnBack } from '@/lib/useDismissOnBack';
 
 const VIOLET = '#5E17EB';
 const VIOLET_DEEP = '#37098C';
@@ -47,6 +57,35 @@ function LedgerScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [search, setSearch] = useState('');
+
+  /* --- Reprint one of my own tickets -------------------------------- *
+   * Server-scoped: POST /api/tickets/:id/reissue filters on agent_id from
+   * the token, so this can only ever act on a ticket this agent issued.
+   * The fresh payloads come back once and are held only long enough to
+   * render and print. */
+  const [reissuing, setReissuing] = useState<string | null>(null);
+  const [reprint, setReprint] = useState<{
+    ticket: AgentTicketSummary;
+    qrCodes: IssuedQrCodeWire[];
+  } | null>(null);
+
+  const doReprint = async (ticket: AgentTicketSummary) => {
+    if (reissuing) return;
+    setReissuing(ticket.id);
+    try {
+      const result = await apiPost<{ qrCodes: IssuedQrCodeWire[] }>(
+        `/tickets/${ticket.id}/reissue`,
+      );
+      setReprint({ ticket, qrCodes: result.qrCodes });
+      toast.success('New codes issued', {
+        description: 'The previous QR codes no longer scan.',
+      });
+    } catch (err) {
+      toast.error('Could not reprint', { description: errorMessage(err) });
+    } finally {
+      setReissuing(null);
+    }
+  };
 
   const load = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -242,11 +281,17 @@ function LedgerScreen() {
                     <Th numeric>Guests</Th>
                     <Th numeric>Children</Th>
                     <Th numeric>Issued</Th>
+                    <Th numeric>Reprint</Th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-900/[0.05]">
                   {visible.map((t) => (
-                    <Row key={t.id} ticket={t} />
+                    <Row
+                      key={t.id}
+                      ticket={t}
+                      busy={reissuing === t.id}
+                      onReprint={() => void doReprint(t)}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -262,13 +307,113 @@ function LedgerScreen() {
           </p>
         )}
       </main>
+
+      {reprint && (
+        <AgentReprintSheet
+          ticket={reprint.ticket}
+          qrCodes={reprint.qrCodes}
+          onClose={() => setReprint(null)}
+        />
+      )}
     </div>
   );
 }
 
 /* ================================================================== */
 
-function Row({ ticket }: { ticket: AgentTicketSummary }) {
+/**
+ * A reprint of one of this agent's own tickets.
+ *
+ * Same rules as the superuser's: same numbers and buyer, NEW QR codes, old
+ * ones revoked — the payloads are unrecoverable (§4.4), so identical codes
+ * are impossible, and revoking is what stops a lost pass that resurfaces
+ * from scanning alongside the reprint.
+ */
+function AgentReprintSheet({
+  ticket,
+  qrCodes,
+  onClose,
+}: {
+  ticket: AgentTicketSummary;
+  qrCodes: IssuedQrCodeWire[];
+  onClose: () => void;
+}) {
+  useDismissOnBack(true, onClose);
+
+  const data: TicketData = {
+    requestNumber: ticket.requestNumber,
+    ticketNumber: ticket.ticketNumber,
+    ticketType: ticket.ticketType,
+    purchaserName: ticket.purchaserName,
+    mobile: ticket.purchaserMobile,
+    email: ticket.purchaserEmail,
+    childrenBelow12: ticket.childrenBelow12,
+    eventDate: EVENT_DATE_LABEL,
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Reprint ticket"
+      className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/30 backdrop-blur-[2px]"
+    >
+      <div className="flex min-h-full flex-col items-center gap-4 p-4 sm:p-8">
+        <div
+          data-print-hide
+          className="flex w-full max-w-3xl flex-wrap items-center justify-between gap-3 rounded-2xl bg-white px-5 py-4 shadow-[0_8px_30px_rgb(0,0,0,0.10)]"
+        >
+          <div className="min-w-0">
+            <p className="text-[15px] font-semibold text-gray-900">
+              {ticket.ticketNumber} — reissued
+            </p>
+            <p className="mt-0.5 text-[12px] leading-snug text-gray-500">
+              Same ticket and buyer. The old QR codes no longer scan.
+            </p>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                void printTicket({
+                  ticketNumber: ticket.ticketNumber,
+                  purchaserName: ticket.purchaserName,
+                })
+              }
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.97]"
+              style={{ backgroundColor: VIOLET }}
+            >
+              <Printer className="h-4 w-4" strokeWidth={2.25} />
+              Print
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-full bg-gray-100 px-4 py-2 text-[13px] font-medium text-gray-600 transition-colors hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+
+        <div className="w-full max-w-full overflow-x-auto print:overflow-visible">
+          <TicketReceipt ticket={data} qrPayloads={qrCodes} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({
+  ticket,
+  busy,
+  onReprint,
+}: {
+  ticket: AgentTicketSummary;
+  busy: boolean;
+  onReprint: () => void;
+}) {
   const revoked = ticket.status === 'REVOKED';
 
   return (
@@ -328,6 +473,29 @@ function Row({ ticket }: { ticket: AgentTicketSummary }) {
 
       <td className="px-5 py-4 text-right text-[13px] tabular-nums text-gray-500 sm:px-6">
         {formatWhen(ticket.createdAt)}
+      </td>
+
+      <td className="px-5 py-4 text-right sm:px-6">
+        {/* Revoked tickets are not reprintable — that would put a working
+            pass back into circulation for a cancelled booking. */}
+        <button
+          type="button"
+          onClick={onReprint}
+          disabled={busy || revoked}
+          title={
+            revoked
+              ? 'Revoked tickets cannot be reprinted'
+              : 'Issue new QR codes and print this ticket again'
+          }
+          className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3 py-1.5 text-[11px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Printer className="h-3.5 w-3.5" strokeWidth={2.25} />
+          )}
+          Reprint
+        </button>
       </td>
     </motion.tr>
   );

@@ -216,3 +216,33 @@ export async function listTicketsByAgent(
   );
   return rows;
 }
+
+/* ------------------------------------------------------------------ */
+/* Reissue — shared by the superuser reprint and the agent's own       */
+/* ------------------------------------------------------------------ */
+
+/**
+ * The agent's own ticket, or null.
+ *
+ * `agent_id = $2` is the whole authorization story, and it is in the WHERE
+ * clause rather than checked afterwards — a ticket belonging to another
+ * agent matches zero rows, so "not found" and "not yours" are the same
+ * answer and neither can be probed for.
+ */
+export async function findTicketForAgent(
+  ticketId: string,
+  agentId: string,
+): Promise<{ id: string; ticket_number: string; ticket_type: TicketType; status: 'ACTIVE' | 'REVOKED' } | null> {
+  const { rows } = await query<{
+    id: string;
+    ticket_number: string;
+    ticket_type: TicketType;
+    status: 'ACTIVE' | 'REVOKED';
+  }>(
+    `SELECT id, ticket_number, ticket_type, status
+       FROM tickets
+      WHERE id = $1 AND agent_id = $2`,
+    [ticketId, agentId],
+  );
+  return rows[0] ?? null;
+}

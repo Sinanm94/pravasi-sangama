@@ -198,9 +198,25 @@ export default function GateScanner({
         instance = new Html5Qrcode(QR_REGION_ID);
         scannerRef.current = instance;
 
+        /* NO `aspectRatio`, and NO fixed `qrbox` — both broke Android.
+         *
+         * `aspectRatio: 1` is a getUserMedia constraint. iOS Safari treats it
+         * as a hint and still hands back a stream that fills the viewport;
+         * Android Chrome honours it literally and returns a SQUARE stream, so
+         * the video occupied a square band at the top of the screen with dead
+         * black underneath, and the reticle no longer sat over the picture.
+         * Dropping it lets each device pick its native sensor ratio, and the
+         * CSS below crops it to fill.
+         *
+         * `qrbox` made it worse and is also redundant: the library draws its
+         * own shaded scan-region on top, which on Android landed
+         * out of register with the square video AND duplicated the reticle
+         * this component already renders. Without it html5-qrcode decodes the
+         * whole frame, which is both simpler and more forgiving for a
+         * volunteer aiming a phone at a pass in a moving queue. */
         await instance.start(
           { facingMode: 'environment' },
-          { fps: 10, qrbox: { width: 260, height: 260 }, aspectRatio: 1 },
+          { fps: 10 },
           (text) => void handleScan(text),
           // Per-frame decode misses are normal; swallow them.
           () => {},
@@ -314,7 +330,7 @@ export default function GateScanner({
 
       {/* Camera */}
       <div className="relative flex flex-1 items-center justify-center overflow-hidden">
-        <div id={QR_REGION_ID} className="h-full w-full [&_video]:object-cover" />
+        <div id={QR_REGION_ID} className="scanner-viewport" />
 
         {/* Reticle */}
         {!cameraError && (

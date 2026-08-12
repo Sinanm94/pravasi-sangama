@@ -33,6 +33,7 @@ import TicketReceipt, {
   type TicketData,
 } from '@/components/ticket/TicketReceipt';
 import { printTicket } from '@/lib/printTicket';
+import { useDismissOnBack } from '@/lib/useDismissOnBack';
 import { springSurface } from '@/lib/motion';
 
 const VIOLET = '#5E17EB';
@@ -169,10 +170,23 @@ function LedgerScreen() {
   const downloadReport = async () => {
     setExporting(true);
     try {
-      await apiDownload(
+      const outcome = await apiDownload(
         `/admin/tickets/export${buildQueryString(filters, committedSearch)}`,
         'pravasi-tickets-report.csv',
       );
+
+      /* Say where the file went. A silent download is the complaint this
+       * fixes: on a phone the browser writes it somewhere the user then has
+       * to go hunting for, with no hint of the name to search. */
+      if (outcome.via === 'download') {
+        toast.success('Report downloaded', {
+          description: `${outcome.filename} — check your browser's Downloads.`,
+          duration: 8000,
+        });
+      } else if (outcome.via === 'share') {
+        toast.success('Report ready', { description: outcome.filename });
+      }
+      // 'cancelled' — the user dismissed the share sheet. Say nothing.
     } catch (err) {
       toast.error('Could not download the report', {
         description: errorMessage(err),
@@ -516,6 +530,7 @@ function ReprintSheet({
   data: TicketReissueResponse;
   onClose: () => void;
 }) {
+  useDismissOnBack(true, onClose);
   const t = data.ticket;
 
   const ticket: TicketData = {

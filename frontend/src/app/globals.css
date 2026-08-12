@@ -30,6 +30,46 @@
     -webkit-user-select: none;
     user-select: none;
   }
+
+  /*
+   * The gate camera viewport.
+   *
+   * html5-qrcode injects a <video> (and sometimes its own overlay elements)
+   * into this container and sets inline width/height on them from the
+   * stream's dimensions. Those inline styles beat utility classes, which is
+   * why the Android video sat in a band at the top of the screen instead of
+   * filling it — the element was literally sized to a square stream.
+   *
+   * Pinning the video absolutely and forcing object-fit: cover overrides
+   * that: the stream is cropped to the viewport rather than letterboxed,
+   * whatever ratio the device's sensor produced. `!important` is load-bearing
+   * here precisely because the library writes inline styles.
+   */
+  .scanner-viewport {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .scanner-viewport video {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
+  }
+
+  /* The library's own scan-region shading and its "loading" image. This
+     component draws its own reticle, so both are duplicates — and on Android
+     the shaded region was drawn against the square stream's geometry, so it
+     did not line up with anything. */
+  .scanner-viewport #qr-shaded-region,
+  .scanner-viewport img {
+    display: none !important;
+  }
 }
 
 /**

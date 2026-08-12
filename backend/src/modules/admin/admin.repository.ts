@@ -293,8 +293,10 @@ export async function setGateActive(
 
 export async function writeAudit(params: {
   superuserId: string;
-  /** Defaults to SUPERUSER — every existing call site in this file is one. */
-  actorRole?: 'SUPERUSER' | 'UNIT_ADMIN';
+  /** Defaults to SUPERUSER — every call site in THIS file is one. AGENT is
+   *  used by the agent's own reprint, which shares this writer rather than
+   *  opening a second audit path. */
+  actorRole?: 'SUPERUSER' | 'UNIT_ADMIN' | 'AGENT';
   action: string;
   entityType: string;
   entityId: string;

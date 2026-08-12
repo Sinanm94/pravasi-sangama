@@ -887,8 +887,22 @@ pravasi-sangama/
   upper/lower/digit mix `db:bulk-rotate-passwords` uses for its suffix.
   `email` is left `NULL`; nothing fabricates an address nobody supplied.
 
+**Back navigation.** Overlays are React state, not routes, so Android's
+hardware Back used to leave the page and lose whatever the agent was doing.
+`lib/useDismissOnBack.ts` pushes one history entry when an overlay opens and
+closes the overlay on `popstate`; closing by button pops that entry back off
+so the stack cannot accumulate dead entries. Wired into the share sheet and
+both reprint sheets. `AdminShell` also renders a **back-to-overview**
+control on every section except `/dashboard` — the nav rail moves sideways
+but offered no way up, and on a phone it scrolls out of view.
+
 **Reprint (§4.4).** `POST /api/admin/tickets/:id/reissue` reprints a lost
-pass from `/admin/tickets`. Same ticket id, request number, ticket number,
+pass from `/admin/tickets`, and `POST /api/tickets/:id/reissue` lets an
+**agent reprint their own** from `/agent/dashboard` — scoped by `agent_id`
+inside the query (`findTicketForAgent`), so another agent's ticket matches
+zero rows and "not found" and "not yours" are the same answer. Both share
+one `reissueTicketCodes` implementation rather than duplicating the rules
+that make a reprint safe. Same ticket id, request number, ticket number,
 buyer and tier — **new QR codes, and the previous set revoked.** The codes
 cannot be preserved: only `sha256(payload)` is stored, so the originals are
 unrecoverable by design. Revoking them is what makes reprinting safe rather

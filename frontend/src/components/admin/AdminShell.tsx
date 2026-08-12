@@ -3,7 +3,15 @@
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { BarChart3, DoorOpen, LogOut, ScanLine, Tickets, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  BarChart3,
+  DoorOpen,
+  LogOut,
+  ScanLine,
+  Tickets,
+  Users,
+} from 'lucide-react';
 import { apiPost } from '@/lib/apiClient';
 import { useAuthStore } from '@/store/useAuthStore';
 import { springSurface } from '@/lib/motion';
@@ -59,6 +67,9 @@ export default function AdminShell({
   const pathname = usePathname();
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
+
+  /** The overview IS the top of this section — nothing to go back to. */
+  const isOverview = pathname === '/dashboard';
 
   const signOut = async () => {
     await apiPost('/auth/logout').catch(() => {});
@@ -161,6 +172,20 @@ export default function AdminShell({
       <main className={`relative z-10 mx-auto ${SHELL_WIDTH} px-5 py-8 sm:px-8 sm:py-10`}>
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
+            {/* Every section except the overview gets a way UP.
+                The nav rail moves sideways between sections but offers no
+                "done here" — on a phone the rail scrolls out of view, and
+                there was nothing left to tap but the browser's own Back. */}
+            {!isOverview && (
+              <button
+                type="button"
+                onClick={() => router.push('/dashboard')}
+                className="-ml-2 mb-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-[12px] font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900 active:scale-[0.97]"
+              >
+                <ArrowLeft className="h-3.5 w-3.5" strokeWidth={2.5} />
+                System Overview
+              </button>
+            )}
             <h1 className="text-[26px] font-semibold leading-tight tracking-[-0.02em] text-gray-900">
               {title}
             </h1>

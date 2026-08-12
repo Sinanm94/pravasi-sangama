@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { printTicket } from '@/lib/printTicket';
+import { useDismissOnBack } from '@/lib/useDismissOnBack';
 import { shareTicketBlob, ticketFileName, whatsappTextUrl } from '@/lib/shareTicket';
 import {
   backdropVariants,
@@ -56,6 +57,8 @@ export default function ShareTicketModal({
   onClose,
   onDone,
 }: ShareTicketModalProps) {
+  // Android Back closes the sheet rather than leaving the ticket screen.
+  useDismissOnBack(open, onClose);
   const [busy, setBusy] = useState<Action>(null);
 
   const [emailOpen, setEmailOpen] = useState(false);
