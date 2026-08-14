@@ -886,6 +886,18 @@ pravasi-sangama/
   `generateSecurePassword()` — the same unambiguous alphabet and guaranteed
   upper/lower/digit mix `db:bulk-rotate-passwords` uses for its suffix.
   `email` is left `NULL`; nothing fabricates an address nobody supplied.
+- `backend/src/db/provision-demo-agent.ts` — a **temporary** unit + agent
+  (`DEMO01` / PIN `2026`, agent `0000000001` / `demo1234`) for recording a
+  demo video, and `--destroy` to remove them again. Its own unit and its own
+  `sector = 'DEMO'` on purpose: tickets filmed on camera are real rows, so a
+  demo on a *real* unit would land in that unit's ledger and its sector's
+  analytics as genuine sales and have to be unpicked by hand. `--destroy`
+  deletes rather than revokes — a demo ticket was never a sale that got
+  cancelled, and REVOKED rows would footnote the revenue totals forever — in
+  FK order (scan_logs → tickets → sessions → agents → unit), since every one
+  of those FKs is `ON DELETE RESTRICT`. The `audit_logs` rows recording both
+  halves are deliberately kept. **Run `--destroy` once filming is done**; the
+  invite PIN is published to anyone who watches the recording.
 
 **Back navigation.** Overlays are React state, not routes, so Android's
 hardware Back used to leave the page and lose whatever the agent was doing.
