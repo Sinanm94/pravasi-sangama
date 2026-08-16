@@ -182,14 +182,31 @@ export type UnitGatewayInput = z.infer<typeof UnitGatewaySchema>;
 /* Password reset (spec §3)                                            */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Keyed on MOBILE NUMBER, not email — this is the whole reason the flow
+ * could be restored at all.
+ *
+ * The original version took an email address, and migration 013 retired it
+ * for a concrete reason: `agents.email` stopped being unique (field agents
+ * share their unit head's inbox), so looking an agent up by address returns
+ * an ARBITRARY one of them, and the reset link could be minted for someone
+ * other than the person who asked.
+ *
+ * `mobile_number` is still UNIQUE and is the documented Agent ID (§2), so
+ * it resolves exactly one agent. The link is then sent to whatever address
+ * sits on THAT agent's row.
+ *
+ * What this does NOT solve, and cannot: if several agents share an inbox,
+ * any of them can open the link once it arrives. That residual risk is
+ * bounded by a short expiry and single use, and is why the admin-driven
+ * reset (§3.4) remains the recommended path for a shared address.
+ */
 export const ForgotPasswordSchema = z
   .object({
-    email: z
+    mobile_number: z
       .string()
       .trim()
-      .toLowerCase()
-      .email('Enter a valid email address')
-      .max(180),
+      .regex(MOBILE_NUMBER_REGEX, 'Enter a valid 10-digit mobile number'),
   })
   .strict();
 

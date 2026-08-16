@@ -203,12 +203,33 @@ it — neither is optional, and re-introducing either reopens a real hole:
 
 - **Login is mobile-only.** It used to accept `mobile OR email`; with a
   shared address that `LIMIT 1` returns an arbitrary agent.
-- **Self-service email password reset is GONE.** It looked the agent up by
-  address, so the link could be minted for a *different* agent than the one
-  who asked, and anyone on the shared inbox — the unit head, every other
-  agent on it — could claim it. `/login`'s "Forgot?" tab is now a screen
-  telling the agent to ask their unit head. `password_reset_tokens` remains
-  for history; nothing writes to it.
+- **Self-service reset is keyed on MOBILE NUMBER, never on email.** The
+  email-keyed version was removed here and later restored in this narrower
+  shape; the difference is the whole point. Looking an agent up *by address*
+  returns an arbitrary one of the agents sharing it, so the link could be
+  minted for a **different** agent than the one who asked. `mobile_number`
+  is UNIQUE and is the Agent ID (§2), so it resolves exactly one agent, and
+  the link goes to whatever address sits on *that* agent's row.
+  `POST /api/auth/forgot-password` → `POST /api/auth/reset-password`,
+  landing on `/login/reset?token=…`.
+
+  > **What this does NOT fix:** if several agents genuinely share one inbox,
+  > any of them can open the link once it arrives. Keying on mobile fixes
+  > *who the token is minted for*; it cannot fix who reaches the mailbox.
+  > Bounded by a 30-minute expiry, single use (`consumed_at IS NULL`), one
+  > live token per agent, and an `AGENT_PASSWORD_RESET_REQUESTED` audit row.
+  > For a genuinely shared address the admin-driven reset below is still the
+  > better path, and it is the *only* path for an agent with no email at all
+  > — which is why `/login`'s "Forgot?" tab keeps "ask your unit head"
+  > visible next to the form rather than replacing it.
+
+  `forgot-password` always answers **202** with the same body whether or not
+  the number exists, so it cannot be used to enumerate the agent roster —
+  the same reasoning that hides approval state behind a correct password
+  (§3.2). It carries `signupLimiter` (10/hour/IP), not `loginLimiter`,
+  because it sends mail to a third party on an unauthenticated request. No
+  session is issued on success: the agent signs in with the new password, so
+  a stolen link cannot also hand over a live session.
 
 **Passwords.** The signup password is **optional**: an agent who types one
 gets the old behaviour, and an agent who leaves it blank gets a generated
@@ -246,8 +267,12 @@ What changed:
 - **Unit Admin is hidden from `/management`.** The login endpoint,
   `unit_admins` rows and `/unit/dashboard` are untouched; only the way in
   from the portal is gone. `?role=unit-admin` no longer resolves either.
-- **Recovery is the superuser's.** `POST /api/admin/agents/:id/reset-password`
-  rotates any agent's password and reveals it once, on `/admin/directory`.
+- **Recovery is the superuser's, or the agent's own.**
+  `POST /api/admin/agents/:id/reset-password` rotates any agent's password
+  and reveals it once, on `/admin/directory`. Alongside it, an agent can
+  self-serve by mobile number and receive an emailed link (§3.2.1) — both
+  exist deliberately: a volunteer at 9pm cannot always reach an admin, and
+  an agent with no email of their own has only the admin path.
 
 > ⚠ **The invite PIN is now the ONLY barrier to minting a ticket issuer.**
 > Approval and the PIN used to be two independent checks; auto-approval
@@ -834,7 +859,8 @@ pravasi-sangama/
 - `frontend/src/middleware.ts` + `components/auth/ProtectedRoute.tsx` — the two
   routing layers. **Neither is an authorization boundary** — see §11.
 - `frontend/src/app/` — `/login` (public: Unit Gateway → agent login /
-  first-time setup, **nothing administrative**), `/management` (Super User
+  first-time setup, **nothing administrative**), `/login/reset` (public —
+  where the emailed reset link lands, §3.2.1), `/management` (Super User
   and Unit Admin sign-in, plus a link to the gate scanner — see §11),
   `/dashboard`, `/ticketing`, `/scanner`, `/agent/dashboard` (agent ledger),
   `/admin/directory`, `/admin/tickets` (master ledger), `/admin/gates`,

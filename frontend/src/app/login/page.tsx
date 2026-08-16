@@ -204,7 +204,7 @@ function LoginFlow() {
               {tab === 'signup' && (
                 <SignupForm unit={gatewayUnit} onBack={() => setTab('login')} />
               )}
-              {tab === 'help' && <ForgotHelp onBack={() => setTab('login')} />}
+              {tab === 'help' && <ForgotForm onBack={() => setTab('login')} />}
             </motion.div>
           </AnimatePresence>
         </>
@@ -658,27 +658,89 @@ function SignupForm({
 /* ================================================================== */
 
 /**
- * Not a form. Self-service email reset was retired (migration 013): agents
- * share email addresses — typically their unit head's — so a reset link
- * could be minted for the wrong agent, and anyone with access to that
- * shared inbox could claim it.
+ * Self-service reset, asking for the MOBILE NUMBER — never the email.
  *
- * Recovery is now a person: the unit admin rotates the password from their
- * own dashboard and reads the new one out. This screen exists so an agent
- * who taps "Forgot?" is told exactly that, rather than finding the tab gone
- * and assuming the app is broken.
+ * The email-keyed version of this screen was retired (migration 013)
+ * because agents share addresses, so a lookup by address returned an
+ * arbitrary agent and the link could be minted for the wrong person.
+ * Mobile number is the Agent ID (§2) and is still unique, so it resolves
+ * exactly one agent; the link is then sent to whatever address is on that
+ * agent's own row.
+ *
+ * The "ask your unit head" route is kept as a visible second option rather
+ * than replaced. It is the better answer for a genuinely shared inbox —
+ * where anyone reading it can open the link — and the only answer for an
+ * agent with no email on file at all.
  */
-function ForgotHelp({ onBack }: { onBack: () => void }) {
+function ForgotForm({ onBack }: { onBack: () => void }) {
+  const [mobile, setMobile] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+
+    try {
+      await apiPost('/api/auth/forgot-password', { mobile_number: mobile });
+      /* The server answers identically whether or not that number exists,
+       * so this screen must not claim an email was definitely sent. */
+      setSent(true);
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="mt-6">
+        <AuthOutcome
+          icon={CheckCircle2}
+          tone="success"
+          title="Check your email"
+          body="If that mobile number belongs to an agent with an email on file, a reset link is on its way. It expires in 30 minutes and can be used once. No email? Ask your unit head to reset it for you."
+          actionLabel="Back to Sign In"
+          onAction={onBack}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="mt-6">
-      <AuthOutcome
-        icon={Building2}
-        tone="info"
-        title="Ask your unit head"
-        body="Passwords are reset by your unit admin, not by email. Ask them to open their dashboard and reset yours — they can give you a new one straight away."
-        actionLabel="Back to Sign In"
-        onAction={onBack}
+    <form onSubmit={submit} className="mt-6 space-y-4">
+      <p className="text-[13px] leading-5 text-gray-500">
+        Enter your mobile number and we&apos;ll email a reset link to the
+        address on your account.
+      </p>
+
+      <Field
+        label="Mobile Number"
+        value={mobile}
+        onChange={setMobile}
+        placeholder="9876543210"
+        inputMode="numeric"
+        maxLength={10}
+        autoComplete="tel"
+        required
       />
-    </div>
+
+      <Submit busy={busy}>Email me a reset link</Submit>
+
+      {/* Deliberately kept alongside the form, not behind it. A shared
+          inbox makes the emailed link the weaker option, and an agent with
+          no address of their own has no other route at all. */}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-[12px] leading-5 text-gray-400">
+          Sharing an email with other agents, or don&apos;t have one? Ask your
+          unit head — they can reset your password and give you a new one
+          straight away.
+        </p>
+      </div>
+
+      <SubtleButton onClick={onBack}>Back to Sign In</SubtleButton>
+    </form>
   );
 }

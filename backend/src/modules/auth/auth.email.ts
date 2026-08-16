@@ -1,100 +1,133 @@
 import { EVENT_NAME, ORGANISATION_NAME } from '@pravasi/shared';
 import { env } from '../../config/env.js';
-import { sendMail } from '../../lib/mailer.js';
 
 /**
- * Password-reset email.
+ * The password-reset email.
  *
- * Table layout and inline styles only, same reasoning as the ticket email:
- * Gmail and Outlook strip `<style>` blocks, and a reset link an agent cannot
- * find is a support call on event day.
+ * Same constraints as the ticket email: table layout, inline styles only,
+ * no external CSS. Gmail and Outlook strip <style> blocks.
+ *
+ * Brand violet rather than the navy/gold in tickets.email.ts — that file
+ * predates the palette change (§5.3) and is a separate cleanup; nothing new
+ * should be written in the retired colours.
  */
 
-const NAVY = '#062B59';
-const GOLD = '#D4AF37';
+const VIOLET = '#5E17EB';
+const VIOLET_DEEP = '#37098C';
 
-export async function sendPasswordResetEmail(params: {
-  to: string;
-  name: string;
+export interface PasswordResetEmailData {
+  agentName: string;
   token: string;
-}): Promise<void> {
-  const link = `${env.APP_URL.replace(/\/$/, '')}/login/reset?token=${encodeURIComponent(params.token)}`;
-
-  await sendMail({
-    to: params.to,
-    subject: `Reset your ${EVENT_NAME} agent password`,
-    text: [
-      `${params.name},`,
-      '',
-      `Use this link to set a new password for your ${EVENT_NAME} agent account:`,
-      link,
-      '',
-      'The link expires in 60 minutes and can be used once.',
-      'If you did not request this, ignore this email — nothing has changed.',
-      '',
-      ORGANISATION_NAME,
-    ].join('\n'),
-    html: `<!doctype html>
-<html>
-  <body style="margin:0;padding:0;background:#f9fafb;">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f9fafb;padding:28px 12px;">
-      <tr><td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;">
-          <tr>
-            <td style="background:${NAVY};padding:24px 28px;">
-              <p style="margin:0;font:600 10px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;letter-spacing:2.6px;text-transform:uppercase;color:${GOLD};">
-                ${escapeHtml(ORGANISATION_NAME)}
-              </p>
-              <h1 style="margin:6px 0 0;font:700 21px/1.2 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#ffffff;text-transform:uppercase;letter-spacing:-0.3px;">
-                ${escapeHtml(EVENT_NAME)}
-              </h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:28px;">
-              <p style="margin:0;font:600 16px/1.4 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#111827;">
-                ${escapeHtml(params.name)}, reset your password
-              </p>
-              <p style="margin:8px 0 0;font:400 14px/1.55 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#6b7280;">
-                Tap the button to choose a new password for your agent account.
-              </p>
-
-              <table role="presentation" cellpadding="0" cellspacing="0" style="margin:22px 0 0;">
-                <tr><td style="border-radius:14px;background:${NAVY};">
-                  <a href="${link}"
-                     style="display:inline-block;padding:14px 26px;font:600 14px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#ffffff;text-decoration:none;letter-spacing:0.06em;text-transform:uppercase;">
-                    Set New Password
-                  </a>
-                </td></tr>
-              </table>
-
-              <p style="margin:20px 0 0;font:400 12px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#9ca3af;word-break:break-all;">
-                Or paste this into your browser:<br />${link}
-              </p>
-
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
-                <tr><td style="border-left:3px solid ${GOLD};background:rgba(212,175,55,0.08);border-radius:10px;padding:12px 14px;">
-                  <p style="margin:0;font:400 12px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#4b5563;">
-                    This link expires in 60 minutes and works once. If you did
-                    not request it, ignore this email — nothing has changed.
-                  </p>
-                </td></tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td></tr>
-    </table>
-  </body>
-</html>`,
-  });
+  expiresAt: Date;
 }
 
-function escapeHtml(value: string): string {
-  return value
+/** The link the agent clicks. `/login/reset` reads `?token=`. */
+function resetUrl(token: string): string {
+  return `${env.APP_URL}/login/reset?token=${encodeURIComponent(token)}`;
+}
+
+/**
+ * Minutes remaining, rounded. Shown rather than a timestamp: a volunteer
+ * reading this may be in a different timezone from the server, and "expires
+ * in 30 minutes" needs no conversion to act on.
+ */
+function minutesUntil(expiresAt: Date): number {
+  return Math.max(1, Math.round((expiresAt.getTime() - Date.now()) / 60_000));
+}
+
+export function passwordResetSubject(): string {
+  return `Reset your ${EVENT_NAME} agent password`;
+}
+
+export function passwordResetText(data: PasswordResetEmailData): string {
+  return [
+    `${data.agentName},`,
+    '',
+    'Someone asked to reset the password for your agent account.',
+    '',
+    'Open this link to choose a new one:',
+    resetUrl(data.token),
+    '',
+    `The link expires in ${minutesUntil(data.expiresAt)} minutes and can be`,
+    'used only once.',
+    '',
+    'If you did not ask for this, ignore this email — your password will',
+    'not change. If this inbox is shared with other agents, tell your unit',
+    'head, who can reset your password directly instead.',
+    '',
+    ORGANISATION_NAME,
+  ].join('\n');
+}
+
+export function passwordResetHtml(data: PasswordResetEmailData): string {
+  const url = resetUrl(data.token);
+  const minutes = minutesUntil(data.expiresAt);
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f5f5f7;font-family:Helvetica,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f7;padding:24px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="background:${VIOLET_DEEP};padding:24px 28px;">
+                <div style="color:#ffffff;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;">${ORGANISATION_NAME}</div>
+                <div style="color:#ffffff;font-size:20px;font-weight:bold;padding-top:6px;">${EVENT_NAME}</div>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:28px;">
+                <p style="margin:0 0 16px;font-size:15px;line-height:22px;color:#111111;">
+                  ${escapeHtml(data.agentName)},
+                </p>
+                <p style="margin:0 0 20px;font-size:15px;line-height:22px;color:#333333;">
+                  Someone asked to reset the password for your agent account.
+                  Choose a new one using the button below.
+                </p>
+
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
+                  <tr>
+                    <td style="background:${VIOLET};border-radius:12px;">
+                      <a href="${url}"
+                         style="display:inline-block;padding:13px 26px;color:#ffffff;font-size:15px;font-weight:bold;text-decoration:none;">
+                        Set a new password
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:0 0 20px;font-size:13px;line-height:20px;color:#666666;">
+                  This link expires in <strong>${minutes} minutes</strong> and can be used only once.
+                  If the button does not work, copy this address into your browser:
+                </p>
+                <p style="margin:0 0 24px;font-size:12px;line-height:18px;color:${VIOLET};word-break:break-all;">
+                  ${url}
+                </p>
+
+                <div style="border-top:1px solid #e6e6e6;padding-top:18px;">
+                  <p style="margin:0;font-size:12px;line-height:19px;color:#888888;">
+                    If you did not ask for this, ignore this email — your password will not change.
+                    <br /><br />
+                    <strong>Sharing this inbox with other agents?</strong> Anyone who can read it can
+                    open this link. Ask your unit head to reset your password directly instead.
+                  </p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+/** The agent's name is user-supplied at signup and lands in HTML. */
+function escapeHtml(s: string): string {
+  return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+    .replace(/"/g, '&quot;');
 }

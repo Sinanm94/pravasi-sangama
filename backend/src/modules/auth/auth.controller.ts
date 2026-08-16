@@ -2,7 +2,9 @@ import type { Request, RequestHandler, Response } from 'express';
 import {
   AgentLoginSchema,
   AgentSignupSchema,
+  ForgotPasswordSchema,
   GateLoginSchema,
+  ResetPasswordSchema,
   SESSION_COOKIE_NAME,
   SuperuserLoginSchema,
   UnitAdminLoginSchema,
@@ -95,8 +97,46 @@ export const unitGateway = handle(async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
-/* Password reset — retired for agents; see auth.service.ts            */
+/* POST /api/auth/forgot-password                                      */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Always 202, whether or not that mobile number exists, and whether or not
+ * the agent has an email on file.
+ *
+ * Anything else turns this into a membership oracle for the agent roster:
+ * an unauthenticated caller could enumerate which mobile numbers are
+ * registered simply by watching for a different response. Same reasoning
+ * that keeps agent-login from revealing approval state before the password
+ * is verified (§3.2).
+ *
+ * 202 Accepted rather than 200 is the honest code — the request was
+ * accepted for processing, and the server is deliberately not telling the
+ * caller whether an email went anywhere.
+ */
+export const forgotPassword = handle(async (req, res) => {
+  const input = ForgotPasswordSchema.parse(req.body);
+  await service.requestPasswordReset(input, contextOf(req));
+
+  res.status(202).json({
+    message:
+      'If that mobile number belongs to an agent with an email on file, ' +
+      'a reset link is on its way.',
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* POST /api/auth/reset-password                                       */
+/* ------------------------------------------------------------------ */
+
+export const resetPassword = handle(async (req, res) => {
+  const input = ResetPasswordSchema.parse(req.body);
+  await service.resetPassword(input, contextOf(req));
+
+  /* No session is issued. The agent signs in with the new password, so a
+   * stolen link cannot also hand over a live session. */
+  res.status(200).json({ message: 'Your password has been changed.' });
+});
 
 /* ------------------------------------------------------------------ */
 /* POST /api/auth/gate-login — scanner (spec §2, Option A)             */

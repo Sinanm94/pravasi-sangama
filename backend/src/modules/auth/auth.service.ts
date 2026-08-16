@@ -3,7 +3,9 @@ import type {
   AgentLoginInput,
   AgentSignupInput,
   AgentSignupResponse,
+  ForgotPasswordInput,
   GateLoginInput,
+  ResetPasswordInput,
   PublicGate,
   PublicUnit,
   ScannerClaims,
@@ -34,6 +36,12 @@ import {
   unauthorized,
 } from '../../lib/errors.js';
 import { generateAgentPassword } from '../../lib/passwordGen.js';
+import { sendMail } from '../../lib/mailer.js';
+import {
+  passwordResetHtml,
+  passwordResetSubject,
+  passwordResetText,
+} from './auth.email.js';
 import * as repo from './auth.repository.js';
 
 interface RequestContext {
@@ -462,33 +470,133 @@ export async function verifyUnitGateway(
 }
 
 /* =================================================================== */
-/* Password reset — RETIRED for agents (§3.3)                          */
+/* Password reset — self-service, keyed on MOBILE NUMBER               */
 /* =================================================================== */
 
 /*
- * `requestPasswordReset` / `resetPassword` and the token table they used are
- * gone for agents, deliberately.
+ * HISTORY, because this flow was removed once and restored once, and the
+ * difference between the two versions is the entire point:
  *
- * They resolved the account with `findAgentByEmail(...)`. Migration 013
- * lets agents share one address — typically their unit head's, because many
- * field agents have no personal email — and that turns this flow into an
- * account-takeover path in two ways at once:
+ * The ORIGINAL resolved the account with `findAgentByEmail(...)`. Migration
+ * 013 let agents share one address — typically their unit head's, since
+ * many field agents have no personal email — which made that lookup return
+ * an ARBITRARY one of the agents on that address. The link could be minted
+ * for someone other than the person who asked. That flow was retired, and
+ * `findAgentByEmail` deleted; do not reintroduce either.
  *
- *   - the lookup returns an ARBITRARY one of the agents on that address, so
- *     the link may be minted for someone other than the person who asked;
- *   - everyone with access to the shared inbox (the unit head, and every
- *     other agent on it) can open the link and set that password.
+ * THIS version keys on `mobile_number`, which is still UNIQUE and is the
+ * documented Agent ID (§2). It resolves exactly one agent, and the link
+ * goes to whatever address is on that agent's own row. The agent names
+ * themselves; the address is only a delivery destination.
  *
- * Neither is fixable while the address is the identifier, so recovery moved
- * to where the authority actually is: a unit admin rotates the agent's
- * password from their dashboard and reads the new one out
- * (`POST /api/unit-admin/agents/:id/reset-password`). That is scoped by the
- * same OR-predicate as every other unit-admin action, and is attributable in
- * `audit_logs`, which an emailed link never was.
+ * ── The residual risk, stated rather than hidden ──────────────────────
  *
- * `password_reset_tokens` is left on the table — dropping it would discard
- * history — but nothing writes to it any more.
+ * If several agents genuinely share one inbox, any of them can open the
+ * link once it lands. Keying on mobile fixes WHO the token is minted for;
+ * it cannot fix who reaches the mailbox. That is bounded by:
+ *
+ *   - a short expiry (RESET_TOKEN_TTL_MINUTES below),
+ *   - single use — `consumeResetToken`'s `consumed_at IS NULL` guard,
+ *   - one live token per agent, so requesting again kills the previous,
+ *   - an `AGENT_PASSWORD_RESET_REQUESTED` audit row.
+ *
+ * For a genuinely shared address the admin-driven reset remains the better
+ * path and is still there, unchanged:
+ * `POST /api/admin/agents/:id/reset-password` (§3.4). Both exist because a
+ * volunteer at 9pm cannot always reach an admin, and an agent who cannot
+ * sign in cannot issue tickets.
  */
+
+/** Deliberately short. A reset link is used within minutes or not at all. */
+const RESET_TOKEN_TTL_MINUTES = 30;
+
+/**
+ * Requests a reset link.
+ *
+ * ALWAYS resolves the same way, whether or not the mobile number exists and
+ * whether or not the agent has an email on file. Reporting "no such agent"
+ * would turn this into a membership oracle for the agent roster — the same
+ * reasoning that keeps `agent-login` from revealing approval state before
+ * the password is verified (§3.2).
+ */
+export async function requestPasswordReset(
+  input: ForgotPasswordInput,
+  ctx: RequestContext,
+): Promise<void> {
+  const agent = await repo.findAgentByMobile(input.mobile_number);
+
+  /* No agent, no email on file, or a deactivated account: return silently.
+   * An agent with no address must use the admin path — there is nowhere to
+   * send a link, and inventing one is not an option. */
+  if (!agent || !agent.email || !agent.is_active) {
+    if (agent && !agent.email) {
+      console.warn(
+        `[reset] ${agent.mobile_number} has no email on file — ` +
+          `recovery for this agent must go through an admin.`,
+      );
+    }
+    return;
+  }
+
+  /* The raw token goes in the link and is never stored; only its SHA-256
+   * lands in the table, exactly as QR payloads are handled (§4.4). A
+   * database leak therefore yields no usable links. */
+  const token = newResetToken();
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_TTL_MINUTES * 60_000);
+
+  await repo.createPasswordResetToken({
+    agentId: agent.id,
+    tokenHash: hashToken(token),
+    expiresAt,
+  });
+
+  await sendMail({
+    to: agent.email,
+    subject: passwordResetSubject(),
+    text: passwordResetText({ agentName: agent.name, token, expiresAt }),
+    html: passwordResetHtml({ agentName: agent.name, token, expiresAt }),
+  });
+
+  await repo.writeAudit({
+    actorRole: 'AGENT',
+    actorId: agent.id,
+    action: 'AGENT_PASSWORD_RESET_REQUESTED',
+    // Never the token, not even hashed.
+    metadata: { mobile_number: agent.mobile_number },
+    ip: ctx.ip ?? null,
+  });
+}
+
+/**
+ * Consumes a token and sets the new password.
+ *
+ * The token/password swap is one statement in the repository — see
+ * `consumeResetToken`. A link double-clicked, or replayed out of a
+ * forwarded email, matches zero rows the second time.
+ */
+export async function resetPassword(
+  input: ResetPasswordInput,
+  ctx: RequestContext,
+): Promise<void> {
+  const result = await repo.consumeResetToken({
+    tokenHash: hashToken(input.token),
+    passwordHash: await hashSecret(input.password),
+  });
+
+  if (!result) {
+    throw badRequest(
+      'This reset link has expired or has already been used. Request a new one.',
+    );
+  }
+
+  await repo.writeAudit({
+    actorRole: 'AGENT',
+    actorId: result.agent_id,
+    action: 'AGENT_PASSWORD_RESET',
+    metadata: { via: 'self_service_email' },
+    ip: ctx.ip ?? null,
+  });
+}
 
 /* =================================================================== */
 /* Gate scanner login (spec §2, Option A)                              */
