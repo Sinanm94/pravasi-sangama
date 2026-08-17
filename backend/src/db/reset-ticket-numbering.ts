@@ -4,8 +4,9 @@ import { closePool, withTransaction } from './index.js';
  * Deletes the TEST tickets accumulated during development, keeps the real
  * ones, and restarts numbering so the next ticket issued is TKT-0001.
  *
- *   npm run db:reset-ticket-numbers -w @pravasi/backend            # dry run
- *   npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes   # apply
+ *   npm run db:reset-ticket-numbers -w @pravasi/backend                     # dry run
+ *   npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes            # apply
+ *   npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes --wipe-all # apply, keeping nothing
  *
  * ─────────────────────────────────────────────────────────────────────
  *  DESTRUCTIVE, AND THERE IS NO UNDO. Read this before running it.
@@ -46,17 +47,20 @@ import { closePool, withTransaction } from './index.js';
  * Tickets to PRESERVE, by purchaser mobile number.
  *
  * Mobile rather than name: names collide and are re-typed inconsistently
- * ('Nizam' appears on four different numbers in this database), whereas the
- * mobile is what actually identifies a buyer.
+ * ('Nizam' appeared on four different numbers), whereas the mobile is what
+ * actually identifies a buyer.
  *
- * ⚠ Confirmed against `db:inspect-scans` output on 2026-08-17: both of
- * these have ZERO scanned QR codes, so preserving them removes nothing
- * from the scan history being discarded.
+ * DELIBERATELY EMPTY — on 2026-08-17 the project owner confirmed that every
+ * ticket then in the database, including the Ashraf / Hamza / Maryam rows
+ * that had looked genuine, was test data from pre-event development. An
+ * empty list means a full wipe, which is why `--wipe-all` is required
+ * separately below: an allowlist that silently became empty through a typo
+ * must never be indistinguishable from one that is empty on purpose.
+ *
+ * If a real ticket ever needs preserving, add its mobile here and the
+ * `--wipe-all` requirement disappears on its own.
  */
-const KEEP_MOBILES: readonly string[] = [
-  '0538445667', // Ashraf
-  '0535448664', // Hamza
-] as const;
+const KEEP_MOBILES: readonly string[] = [] as const;
 
 interface TicketSummary {
   ticket_number: string;
@@ -139,9 +143,8 @@ interface Applied {
 
 async function apply(): Promise<Applied> {
   return withTransaction(async (client) => {
-    /* Guard: refuse if the allowlist matches nothing. An empty or mistyped
-     * KEEP_MOBILES would silently mean "delete everything", which is
-     * exactly the accident this script must not have. */
+    /* Two distinct guards, because "nothing will be kept" has two very
+     * different causes and only one of them is intended. */
     const { rows: keepRows } = await client.query<{ n: string }>(
       `SELECT COUNT(*)::TEXT AS n FROM tickets
         WHERE purchaser_mobile = ANY($1::text[])`,
@@ -149,11 +152,25 @@ async function apply(): Promise<Applied> {
     );
     const keptCount = Number(keepRows[0]?.n ?? 0);
 
+    /* (a) The list names numbers, but none of them exist. That is a typo,
+     * and running would delete the very tickets the list was written to
+     * protect. Always refuse. */
     if (KEEP_MOBILES.length > 0 && keptCount === 0) {
       throw new Error(
         `KEEP_MOBILES lists ${KEEP_MOBILES.length} number(s) but none match ` +
-          `any ticket. Refusing to run — this would delete everything. ` +
-          `Check the numbers against db:inspect-scans.`,
+          `any ticket. Refusing to run — this would delete everything the ` +
+          `list was meant to protect. Check them against db:inspect-scans.`,
+      );
+    }
+
+    /* (b) The list is empty, meaning a deliberate full wipe. Allowed, but
+     * only when said out loud on the command line — an allowlist that
+     * became empty by accident must not be able to wipe the ledger just
+     * because --yes was passed. */
+    if (KEEP_MOBILES.length === 0 && !wipeAll) {
+      throw new Error(
+        `KEEP_MOBILES is empty, so EVERY ticket would be deleted. If that ` +
+          `is intended, re-run with --yes --wipe-all.`,
       );
     }
 
@@ -235,7 +252,9 @@ async function apply(): Promise<Applied> {
 
 /* ------------------------------------------------------------------ */
 
-const confirmed = process.argv.slice(2).includes('--yes');
+const argv = process.argv.slice(2);
+const confirmed = argv.includes('--yes');
+const wipeAll = argv.includes('--wipe-all');
 const LINE = '─'.repeat(66);
 
 async function main(): Promise<void> {
@@ -248,7 +267,11 @@ async function main(): Promise<void> {
 
     console.log(`\n  KEEPING ${plan.keep.length} ticket(s):\n`);
     if (plan.keep.length === 0) {
-      console.log('    (none — check KEEP_MOBILES!)');
+      console.log(
+        KEEP_MOBILES.length === 0
+          ? '    (none — KEEP_MOBILES is empty, this is a FULL WIPE)'
+          : '    (none — KEEP_MOBILES names numbers that match nothing!)',
+      );
     }
     for (const t of plan.keep) {
       console.log(
@@ -271,13 +294,15 @@ async function main(): Promise<void> {
     console.log(`    scan logs ....... ${plan.scanLogsToRemove}`);
     console.log(`    of which SCANNED  ${plan.scannedToDiscard}`);
     console.log(`\n  Client records unlinked (kept): ${plan.clientLinks}`);
-    console.log(
-      `\n  Kept tickets RETAIN their current numbers.` +
-        `\n  Next NEW ticket will be REQ-0001 / TKT-0001.`,
-    );
+    if (plan.keep.length > 0) {
+      console.log(`\n  Kept tickets RETAIN their current numbers.`);
+    }
+    console.log(`  Next NEW ticket will be REQ-0001 / TKT-0001.`);
+
     console.log(`\n  To apply:`);
     console.log(
-      `    npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes`,
+      `    npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes` +
+        (KEEP_MOBILES.length === 0 ? ' --wipe-all' : ''),
     );
     console.log(`\n${LINE}\n`);
     return;
