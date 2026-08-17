@@ -1029,6 +1029,16 @@ so "no unit" is a real permanent state, not missing data. The sector is
 **not** copied onto the row; it is one join away through `units.sector`, and
 a second copy would drift exactly the way Known debt 8 describes.
 
+**Delete is in the detail sheet, behind a two-step confirm** — never on a
+board card or list row. Deleting a client cascades its whole
+`client_interactions` timeline, which is the part that took months to
+accumulate and cannot be reconstructed; a one-tap control beside "advance
+stage" would be a misclick waiting to happen. The confirm names the record
+and its update count, because "are you sure?" is a question nobody reads.
+Deleting a client is right where revoking a ticket would be wrong: a client
+record is our own working note about a conversation, not an issued
+credential someone is holding, and `tickets` is untouched by it.
+
 **Shared across all three superusers, not owned by one.** On event day a
 colleague must be able to pick up a client whose usual contact is
 unreachable; attribution lives on the rows instead of in a scope filter.

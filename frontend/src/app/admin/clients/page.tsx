@@ -40,7 +40,13 @@ import {
 } from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
-import { apiGet, apiPost, apiPatch, errorMessage } from '@/lib/apiClient';
+import {
+  apiDelete,
+  apiGet,
+  apiPatch,
+  apiPost,
+  errorMessage,
+} from '@/lib/apiClient';
 import { useDismissOnBack } from '@/lib/useDismissOnBack';
 import { springSurface } from '@/lib/motion';
 
@@ -1186,9 +1192,121 @@ function ClientDetailSheet({
               ))}
             </ul>
           )}
+
+          <DeleteClientZone
+            client={client}
+            interactionCount={detail.interactions.length}
+            onDeleted={() => {
+              onChanged();
+              onClose();
+            }}
+          />
         </div>
       )}
     </Sheet>
+  );
+}
+
+/**
+ * Delete, behind a two-step confirm.
+ *
+ * Deliberately at the BOTTOM of the detail sheet rather than on the card or
+ * the list row: deleting a client destroys its entire timeline
+ * (`client_interactions` cascades), which is the part that took months to
+ * accumulate and cannot be reconstructed. A one-tap control next to
+ * "advance stage" on a board card would be a misclick waiting to happen.
+ *
+ * The confirm step names the record and its update count, because "are you
+ * sure?" is a question nobody reads — "delete vgh and 4 updates?" is one
+ * they do.
+ *
+ * A CLIENT is not a TICKET. Deleting here is right where revoking would be
+ * wrong (§ ticket revocation): a client record is our own working note
+ * about a conversation, not an issued credential someone is holding. If
+ * they bought, `tickets` is the authority and is untouched by this —
+ * `clients.ticket_id` is `ON DELETE SET NULL` in the other direction, and
+ * nothing here deletes a ticket.
+ */
+function DeleteClientZone({
+  client,
+  interactionCount,
+  onDeleted,
+}: {
+  client: ClientRecord;
+  interactionCount: number;
+  onDeleted: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  async function remove() {
+    setBusy(true);
+    try {
+      await apiDelete(`/clients/${client.id}`);
+      toast.success(`${client.name} deleted`);
+      onDeleted();
+    } catch (err) {
+      toast.error('Could not delete', { description: errorMessage(err) });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mt-8 border-t border-gray-100 pt-5">
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="inline-flex items-center gap-2 rounded-full px-3.5 py-2 text-[13px] font-medium text-gray-500 transition-all duration-200 hover:bg-red-50 hover:text-red-600 active:scale-[0.97]"
+        >
+          <Trash2 className="h-4 w-4" strokeWidth={2.25} />
+          Delete client
+        </button>
+      ) : (
+        <div className="rounded-2xl border border-red-200/70 bg-red-50/60 p-4">
+          <p className="text-[13px] leading-snug text-red-800">
+            Delete <strong>{client.name}</strong>
+            {interactionCount > 0 && (
+              <>
+                {' '}
+                and {interactionCount} update
+                {interactionCount === 1 ? '' : 's'}
+              </>
+            )}
+            ? This cannot be undone.
+          </p>
+
+          {client.ticketNumber && (
+            /* Reassurance, not a warning: people hesitate here precisely
+               because they cannot tell whether the sale goes too. */
+            <p className="mt-1.5 text-[12px] text-red-700/80">
+              Ticket {client.ticketNumber} is not affected — only this record
+              and its history are removed.
+            </p>
+          )}
+
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={remove}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-full bg-red-600 px-4 py-2 text-[13px] font-semibold text-white transition-all duration-200 hover:bg-red-700 active:scale-[0.97] disabled:opacity-60"
+            >
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+              Delete permanently
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              disabled={busy}
+              className="rounded-full bg-white px-4 py-2 text-[13px] font-medium text-gray-600 transition-colors hover:bg-gray-100 active:scale-[0.97] disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
