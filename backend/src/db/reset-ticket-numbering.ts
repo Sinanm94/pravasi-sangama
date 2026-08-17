@@ -1,130 +1,211 @@
 import { closePool, withTransaction } from './index.js';
 
 /**
- * Deletes ALL tickets and restarts the numbering sequences at 1, so the
- * first ticket issued afterwards is REQ-0001 / TKT-0001.
+ * Deletes the TEST tickets accumulated during development, keeps the real
+ * ones, and restarts numbering so the next ticket issued is TKT-0001.
  *
- *   npm run db:reset-ticket-numbers -w @pravasi/backend -- --dry-run
- *   npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes
+ *   npm run db:reset-ticket-numbers -w @pravasi/backend            # dry run
+ *   npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes   # apply
  *
  * ─────────────────────────────────────────────────────────────────────
  *  DESTRUCTIVE, AND THERE IS NO UNDO. Read this before running it.
  * ─────────────────────────────────────────────────────────────────────
  *
- * This exists for exactly one situation: a database still holding TEST
- * tickets from before the event, where the numbering should start clean.
- * Migration 016 deliberately starts each sequence ABOVE the highest number
- * already present, so those test rows push real tickets to
- * TKT-687223-and-up. Clearing them is the only way to get TKT-0001.
+ * Why it exists: migration 016 starts each sequence ABOVE the highest
+ * number already in the table, so a database full of test tickets pushes
+ * real ones to TKT-687223-and-up. Clearing the test rows is the only way
+ * to get a clean TKT-0001.
  *
- * ⚠ Running this after real tickets have been sold destroys the ledger,
- *   the revenue totals, and every QR code that would have admitted a
- *   paying guest. `--dry-run` is the default for that reason: it reports
- *   what WOULD go and changes nothing. `--yes` is required to actually
- *   delete, and it refuses if any ticket has ever been scanned — a scanned
- *   ticket means the gate is live, and at that point this script is
- *   categorically the wrong tool.
+ * ── KEEP is an allowlist, and that direction is deliberate ────────────
  *
- * Deletion order follows the FKs, all in one transaction — the same
- * reasoning as provision-demo-agent.ts's teardown:
+ * Everything NOT named in KEEP_MOBILES is deleted. The alternative — a
+ * denylist of test rows — fails dangerously: a real ticket someone forgot
+ * to add to the list gets destroyed silently. With an allowlist the
+ * failure mode is inverted and harmless: a real ticket someone forgot
+ * survives as an extra row, which is noticed and fixed, not lost.
  *
- *   scan_logs.ticket_id     → SET NULL  (deleted anyway; they are test noise)
- *   qr_codes.ticket_id      → CASCADE   (goes with the ticket)
- *   clients.ticket_id       → SET NULL  (a premium client record SURVIVES;
- *                                        the conversation is not the sale)
- *   tickets                 → the target
+ * The kept tickets RETAIN THEIR EXISTING NUMBERS. They are not renumbered
+ * into the new series, because a pass already handed to a guest prints the
+ * old number and reprinting it is a real-world errand. So the ledger will
+ * hold two or three 6-digit numbers alongside the clean 0001, 0002 series.
+ * That is the intended trade.
  *
- * The sequences are reset with `setval(…, 1, FALSE)` — "1, not yet used" —
- * so the very next nextval() returns 1 rather than 2.
+ * ── FK order, one transaction ─────────────────────────────────────────
+ *
+ *   scan_logs.ticket_id  → SET NULL, but deleted anyway for removed tickets
+ *   qr_codes.ticket_id   → CASCADE from tickets
+ *   clients.ticket_id    → SET NULL; the client RECORD survives, since the
+ *                          conversation with a VIP is not the sale
+ *   tickets              → the target
+ *
+ * Sequences are reset with `setval(…, 1, FALSE)` — "1, not yet used" — so
+ * the next nextval() returns 1 itself rather than 2.
  */
 
-interface Counts {
-  tickets: number;
-  qrCodes: number;
-  scanLogs: number;
-  scannedCodes: number;
+/**
+ * Tickets to PRESERVE, by purchaser mobile number.
+ *
+ * Mobile rather than name: names collide and are re-typed inconsistently
+ * ('Nizam' appears on four different numbers in this database), whereas the
+ * mobile is what actually identifies a buyer.
+ *
+ * ⚠ Confirmed against `db:inspect-scans` output on 2026-08-17: both of
+ * these have ZERO scanned QR codes, so preserving them removes nothing
+ * from the scan history being discarded.
+ */
+const KEEP_MOBILES: readonly string[] = [
+  '0538445667', // Ashraf
+  '0535448664', // Hamza
+] as const;
+
+interface TicketSummary {
+  ticket_number: string;
+  purchaser_name: string;
+  purchaser_mobile: string;
+  scanned: number;
+}
+
+interface Plan {
+  keep: TicketSummary[];
+  remove: TicketSummary[];
+  qrCodesToRemove: number;
+  scanLogsToRemove: number;
+  scannedToDiscard: number;
   clientLinks: number;
 }
 
-async function survey(): Promise<Counts> {
+async function buildPlan(): Promise<Plan> {
   return withTransaction(async (client) => {
+    const { rows } = await client.query<TicketSummary & { keep: boolean }>(
+      `SELECT t.ticket_number, t.purchaser_name, t.purchaser_mobile,
+              COUNT(q.id) FILTER (WHERE q.status = 'SCANNED')::INT AS scanned,
+              (t.purchaser_mobile = ANY($1::text[]))               AS keep
+         FROM tickets t
+         LEFT JOIN qr_codes q ON q.ticket_id = t.id
+        GROUP BY t.id, t.ticket_number, t.purchaser_name, t.purchaser_mobile
+        ORDER BY keep DESC, t.created_at ASC`,
+      [KEEP_MOBILES],
+    );
+
     const one = async (sql: string): Promise<number> => {
-      const { rows } = await client.query<{ n: string }>(sql);
-      return Number(rows[0]?.n ?? 0);
+      const { rows: r } = await client.query<{ n: string }>(sql, [
+        KEEP_MOBILES,
+      ]);
+      return Number(r[0]?.n ?? 0);
     };
 
     return {
-      tickets: await one(`SELECT COUNT(*)::TEXT AS n FROM tickets`),
-      qrCodes: await one(`SELECT COUNT(*)::TEXT AS n FROM qr_codes`),
-      scanLogs: await one(`SELECT COUNT(*)::TEXT AS n FROM scan_logs`),
-      // The safety interlock: has anything actually been admitted?
-      scannedCodes: await one(
-        `SELECT COUNT(*)::TEXT AS n FROM qr_codes WHERE status = 'SCANNED'`,
+      keep: rows.filter((r) => r.keep),
+      remove: rows.filter((r) => !r.keep),
+      qrCodesToRemove: await one(
+        `SELECT COUNT(*)::TEXT AS n
+           FROM qr_codes q JOIN tickets t ON t.id = q.ticket_id
+          WHERE NOT (t.purchaser_mobile = ANY($1::text[]))`,
+      ),
+      scanLogsToRemove: await one(
+        `SELECT COUNT(*)::TEXT AS n
+           FROM scan_logs s
+           LEFT JOIN tickets t ON t.id = s.ticket_id
+          WHERE t.id IS NULL
+             OR NOT (t.purchaser_mobile = ANY($1::text[]))`,
+      ),
+      scannedToDiscard: await one(
+        `SELECT COUNT(*)::TEXT AS n
+           FROM qr_codes q JOIN tickets t ON t.id = q.ticket_id
+          WHERE q.status = 'SCANNED'
+            AND NOT (t.purchaser_mobile = ANY($1::text[]))`,
       ),
       clientLinks: await one(
-        `SELECT COUNT(*)::TEXT AS n FROM clients WHERE ticket_id IS NOT NULL`,
+        `SELECT COUNT(*)::TEXT AS n FROM clients c
+          WHERE c.ticket_id IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM tickets t
+               WHERE t.id = c.ticket_id
+                 AND t.purchaser_mobile = ANY($1::text[])
+            )`,
       ),
     };
   });
 }
 
-async function wipe(forceScanned: boolean): Promise<Counts> {
+interface Applied {
+  tickets: number;
+  qrCodes: number;
+  scanLogs: number;
+  clientLinks: number;
+  kept: number;
+  seqStart: number;
+}
+
+async function apply(): Promise<Applied> {
   return withTransaction(async (client) => {
-    const removed = {
-      tickets: 0,
-      qrCodes: 0,
-      scanLogs: 0,
-      scannedCodes: 0,
-      clientLinks: 0,
-    };
-
-    const { rows: qrRows } = await client.query<{ n: string }>(
-      `SELECT COUNT(*)::TEXT AS n FROM qr_codes`,
+    /* Guard: refuse if the allowlist matches nothing. An empty or mistyped
+     * KEEP_MOBILES would silently mean "delete everything", which is
+     * exactly the accident this script must not have. */
+    const { rows: keepRows } = await client.query<{ n: string }>(
+      `SELECT COUNT(*)::TEXT AS n FROM tickets
+        WHERE purchaser_mobile = ANY($1::text[])`,
+      [KEEP_MOBILES],
     );
-    removed.qrCodes = Number(qrRows[0]?.n ?? 0);
+    const keptCount = Number(keepRows[0]?.n ?? 0);
 
-    /* Re-checked INSIDE the transaction, not just in the survey above: a
-     * scan could land between the two, and admitting a guest is exactly
-     * the event that must stop this.
-     *
-     * `--force-scanned` exists because "some codes are scanned" is ALSO the
-     * normal state of a database someone has been testing the gate against,
-     * which is exactly when this script is wanted. The override is a
-     * separate, explicit flag rather than a weakening of the check: the
-     * default still refuses, and choosing to proceed is a deliberate act
-     * recorded in the audit row below. Confirm with db:inspect-scans that
-     * every purchaser is test data before reaching for it. */
-    const { rows: scanned } = await client.query<{ n: string }>(
-      `SELECT COUNT(*)::TEXT AS n FROM qr_codes WHERE status = 'SCANNED'`,
-    );
-    const scannedCount = Number(scanned[0]?.n ?? 0);
-    removed.scannedCodes = scannedCount;
-
-    if (scannedCount > 0 && !forceScanned) {
+    if (KEEP_MOBILES.length > 0 && keptCount === 0) {
       throw new Error(
-        `${scannedCount} QR code(s) have been SCANNED — the gate may be live. ` +
-          `Refusing to delete tickets. Run db:inspect-scans to see what they ` +
-          `are; if they are all test scans, re-run with --yes --force-scanned.`,
+        `KEEP_MOBILES lists ${KEEP_MOBILES.length} number(s) but none match ` +
+          `any ticket. Refusing to run — this would delete everything. ` +
+          `Check the numbers against db:inspect-scans.`,
       );
     }
 
-    const scanLogs = await client.query(`DELETE FROM scan_logs`);
-    removed.scanLogs = scanLogs.rowCount ?? 0;
-
-    /* Unlink premium client records rather than letting them go. The
-     * conversation with a VIP is not the same object as the ticket they
-     * eventually bought, and it has its own timeline worth keeping. */
-    const unlinked = await client.query(
-      `UPDATE clients SET ticket_id = NULL WHERE ticket_id IS NOT NULL`,
+    const { rows: qrRows } = await client.query<{ n: string }>(
+      `SELECT COUNT(*)::TEXT AS n
+         FROM qr_codes q JOIN tickets t ON t.id = q.ticket_id
+        WHERE NOT (t.purchaser_mobile = ANY($1::text[]))`,
+      [KEEP_MOBILES],
     );
-    removed.clientLinks = unlinked.rowCount ?? 0;
+    const qrCodes = Number(qrRows[0]?.n ?? 0);
+
+    /* scan_logs first. Its FKs are SET NULL, so rows for deleted tickets
+     * would otherwise survive as orphans cluttering /admin/scans. Rows with
+     * no ticket at all (UNKNOWN_CODE) go too — they are test noise by
+     * definition here. */
+    /* NOT a `USING (kept) … WHERE s.ticket_id <> kept.id` join: with two
+     * kept tickets that pairs every scan row against each of them, so a
+     * row belonging to kept ticket A still matches the B pairing and the
+     * predicate is true for almost everything. NOT IN / NOT EXISTS states
+     * the intent directly and is immune to the row count of the subquery. */
+    const scanLogs = await client.query(
+      `DELETE FROM scan_logs s
+        WHERE s.ticket_id IS NULL
+           OR NOT EXISTS (
+                SELECT 1 FROM tickets t
+                 WHERE t.id = s.ticket_id
+                   AND t.purchaser_mobile = ANY($1::text[])
+              )`,
+      [KEEP_MOBILES],
+    );
+
+    const unlinked = await client.query(
+      `UPDATE clients SET ticket_id = NULL
+        WHERE ticket_id IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM tickets t
+             WHERE t.id = clients.ticket_id
+               AND t.purchaser_mobile = ANY($1::text[])
+          )`,
+      [KEEP_MOBILES],
+    );
 
     // qr_codes cascade from tickets.
-    const tickets = await client.query(`DELETE FROM tickets`);
-    removed.tickets = tickets.rowCount ?? 0;
+    const tickets = await client.query(
+      `DELETE FROM tickets WHERE NOT (purchaser_mobile = ANY($1::text[]))`,
+      [KEEP_MOBILES],
+    );
 
-    /* `false` = "not yet called", so the next nextval() returns 1 itself.
-     * Passing true would make the first ticket 0002. */
+    /* Restart at 1. The kept tickets keep their existing (6-digit) numbers
+     * and are NOT renumbered, so there is no risk of the new series
+     * colliding with them — TKT-0001 and TKT-742901 are different strings.
+     * The unique constraint is the backstop if that ever stops being true. */
     await client.query(`SELECT setval('request_number_seq', 1, FALSE)`);
     await client.query(`SELECT setval('ticket_number_seq', 1, FALSE)`);
 
@@ -133,74 +214,86 @@ async function wipe(forceScanned: boolean): Promise<Counts> {
             VALUES ('SUPERUSER', 'TICKET_NUMBERING_RESET', $1)`,
       [
         JSON.stringify({
-          tickets_deleted: removed.tickets,
-          qr_codes_deleted: removed.qrCodes,
-          // Recorded so a later reader can tell this was overridden, not
-          // that the database merely happened to have no scans.
-          scanned_codes_discarded: removed.scannedCodes,
-          forced: forceScanned,
+          tickets_deleted: tickets.rowCount ?? 0,
+          qr_codes_deleted: qrCodes,
+          tickets_kept: keptCount,
+          kept_mobiles: KEEP_MOBILES,
         }),
       ],
     );
 
-    return removed;
+    return {
+      tickets: tickets.rowCount ?? 0,
+      qrCodes,
+      scanLogs: scanLogs.rowCount ?? 0,
+      clientLinks: unlinked.rowCount ?? 0,
+      kept: keptCount,
+      seqStart: 1,
+    };
   });
 }
 
 /* ------------------------------------------------------------------ */
 
-const args = process.argv.slice(2);
-const confirmed = args.includes('--yes');
-const forceScanned = args.includes('--force-scanned');
+const confirmed = process.argv.slice(2).includes('--yes');
+const LINE = '─'.repeat(66);
 
 async function main(): Promise<void> {
-  const line = '─'.repeat(60);
-
   if (!confirmed) {
-    const counts = await survey();
-    console.log(`\n${line}`);
-    console.log('  DRY RUN — nothing has been changed');
-    console.log(line);
-    console.log(`\n  Would DELETE:\n`);
-    console.log(`    tickets ......... ${counts.tickets}`);
-    console.log(`    qr codes ........ ${counts.qrCodes}`);
-    console.log(`    scan logs ....... ${counts.scanLogs}`);
-    console.log(`\n  Would KEEP (unlinked, not deleted):\n`);
-    console.log(`    client records .. ${counts.clientLinks} linked to a ticket`);
-    console.log(`\n  Then restart numbering at REQ-0001 / TKT-0001.`);
+    const plan = await buildPlan();
 
-    if (counts.scannedCodes > 0) {
-      console.log(
-        `\n  ⛔ BLOCKED: ${counts.scannedCodes} QR code(s) are already SCANNED.` +
-          `\n\n     That is either a live gate, or your own testing.` +
-          `\n     Check which, before deciding:` +
-          `\n       npm run db:inspect-scans -w @pravasi/backend` +
-          `\n\n     If every purchaser listed there is test data:` +
-          `\n       npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes --force-scanned`,
-      );
-    } else {
-      console.log(`\n  To apply, re-run with --yes`);
+    console.log(`\n${LINE}`);
+    console.log('  DRY RUN — nothing has been changed');
+    console.log(LINE);
+
+    console.log(`\n  KEEPING ${plan.keep.length} ticket(s):\n`);
+    if (plan.keep.length === 0) {
+      console.log('    (none — check KEEP_MOBILES!)');
     }
-    console.log(`\n${line}\n`);
+    for (const t of plan.keep) {
+      console.log(
+        `    ${t.ticket_number.padEnd(14)} ${t.purchaser_name.padEnd(20)} ` +
+          `${t.purchaser_mobile}`,
+      );
+    }
+
+    console.log(`\n  DELETING ${plan.remove.length} ticket(s):\n`);
+    for (const t of plan.remove) {
+      const mark = t.scanned > 0 ? ` (${t.scanned} scanned)` : '';
+      console.log(
+        `    ${t.ticket_number.padEnd(14)} ${t.purchaser_name.padEnd(20)} ` +
+          `${t.purchaser_mobile}${mark}`,
+      );
+    }
+
+    console.log(`\n  Also removing:\n`);
+    console.log(`    qr codes ........ ${plan.qrCodesToRemove}`);
+    console.log(`    scan logs ....... ${plan.scanLogsToRemove}`);
+    console.log(`    of which SCANNED  ${plan.scannedToDiscard}`);
+    console.log(`\n  Client records unlinked (kept): ${plan.clientLinks}`);
+    console.log(
+      `\n  Kept tickets RETAIN their current numbers.` +
+        `\n  Next NEW ticket will be REQ-0001 / TKT-0001.`,
+    );
+    console.log(`\n  To apply:`);
+    console.log(
+      `    npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes`,
+    );
+    console.log(`\n${LINE}\n`);
     return;
   }
 
-  const counts = await wipe(forceScanned);
-  console.log(`\n${line}`);
+  const r = await apply();
+  console.log(`\n${LINE}`);
   console.log('  TICKET NUMBERING RESET');
-  console.log(line);
-  console.log(`\n  tickets deleted ..... ${counts.tickets}`);
-  console.log(`  qr codes deleted .... ${counts.qrCodes}`);
-  console.log(`  scan logs deleted ... ${counts.scanLogs}`);
-  console.log(`  client records kept . ${counts.clientLinks} (ticket link cleared)`);
-  if (counts.scannedCodes > 0) {
-    console.log(
-      `\n  ⚠ ${counts.scannedCodes} SCANNED code(s) were discarded via ` +
-        `--force-scanned.\n    Recorded in audit_logs as a forced reset.`,
-    );
-  }
+  console.log(LINE);
+  console.log(`\n  tickets kept ........ ${r.kept}`);
+  console.log(`  tickets deleted ..... ${r.tickets}`);
+  console.log(`  qr codes deleted .... ${r.qrCodes}`);
+  console.log(`  scan logs deleted ... ${r.scanLogs}`);
+  console.log(`  client links cleared  ${r.clientLinks}`);
   console.log(`\n  The next ticket issued will be REQ-0001 / TKT-0001.`);
-  console.log(`\n${line}\n`);
+  console.log(`\n${LINE}\n`);
 }
 
 main()
