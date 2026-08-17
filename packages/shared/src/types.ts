@@ -1,4 +1,5 @@
 import type {
+  ActivityPriority,
   ApprovalStatus,
   AuthRole,
   ClientInteractionKind,
@@ -728,5 +729,37 @@ export interface AgentDirectoryResponse {
     agents: number;
     ticketsIssued: number;
     seatsIssued: number;
+  };
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Activities — the organiser's own task list (migration 018)          */
+/* ------------------------------------------------------------------ */
+
+export interface ActivityRecord {
+  id: string;
+  title: string;
+  notes: string | null;
+  priority: ActivityPriority;
+  /** ISO date, no time — a task is due on a DAY. Null = no deadline. */
+  dueOn: string | null;
+  /** Null = still open. Non-null = done, and when. */
+  doneAt: string | null;
+  createdByName: string | null;
+  assignedTo: string | null;
+  assignedToName: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ActivityListResponse {
+  activities: ActivityRecord[];
+  totals: {
+    open: number;
+    /** due_on is today or earlier and still open. */
+    overdue: number;
+    /** Closed within the last 7 days — "what did we get through". */
+    doneRecently: number;
   };
 }

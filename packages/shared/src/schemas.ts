@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  ACTIVITY_PRIORITIES,
   AGENT_INVITE_PIN_LENGTH,
   AGENT_PASSWORD_MIN_LENGTH,
   GATE_PIN_MAX_LENGTH,
@@ -606,3 +607,54 @@ export const ClientQuerySchema = z.object({
 });
 
 export type ClientQuery = z.infer<typeof ClientQuerySchema>;
+
+/* ------------------------------------------------------------------ */
+/* Activities — the organiser's own task list (migration 018)          */
+/* ------------------------------------------------------------------ */
+
+export const CreateActivitySchema = z
+  .object({
+    title: z.string().trim().min(2, 'Say what needs doing').max(200),
+    notes: z.string().trim().max(4000).optional(),
+    priority: z.enum(ACTIVITY_PRIORITIES).default('NORMAL'),
+    /** ISO date, no time — a task is due on a DAY, not at an instant. */
+    due_on: z.string().date().optional(),
+    assigned_to: z.string().uuid().optional(),
+  })
+  .strict();
+
+export type CreateActivityInput = z.infer<typeof CreateActivitySchema>;
+
+/**
+ * Every field optional — a patch, not a replace, for the same reason as
+ * UpdateClientSchema: three superusers share this list, and a full-row
+ * update would let one silently revert another's change to a field it
+ * never touched.
+ *
+ * `done` is a BOOLEAN on the wire but a TIMESTAMP in the table. The client
+ * says "tick this off"; the server decides what time that was. Letting the
+ * client post its own `done_at` would import whatever its clock says, and
+ * these are shared phones (§3.2).
+ */
+export const UpdateActivitySchema = z
+  .object({
+    title: z.string().trim().min(2).max(200).optional(),
+    notes: z.string().trim().max(4000).nullable().optional(),
+    priority: z.enum(ACTIVITY_PRIORITIES).optional(),
+    due_on: z.string().date().nullable().optional(),
+    assigned_to: z.string().uuid().nullable().optional(),
+    done: z.boolean().optional(),
+  })
+  .strict();
+
+export type UpdateActivityInput = z.infer<typeof UpdateActivitySchema>;
+
+export const ActivityQuerySchema = z.object({
+  /** open = not done; done = done; omitted = everything. */
+  state: z.enum(['open', 'done']).optional(),
+  assigned_to: z.string().uuid().optional(),
+  search: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().positive().max(500).default(200),
+});
+
+export type ActivityQuery = z.infer<typeof ActivityQuerySchema>;

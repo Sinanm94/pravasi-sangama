@@ -1045,6 +1045,29 @@ unreachable; attribution lives on the rows instead of in a scope filter.
 `PATCH` is a genuine patch — only supplied keys are written — so two
 superusers editing different fields cannot clobber each other.
 
+**Activities (migration 018).** `/admin/activities` +
+`backend/src/modules/activities/`. The organiser's OWN task list — "confirm
+catering headcount", "call the printer" — with a title, notes, priority, due
+date, assignee and a done state.
+
+Deliberately its own table rather than a generalisation of anything nearby:
+`audit_logs` records what the SYSTEM did automatically and is append-only
+evidence (nobody ticks off an audit row), and `client_interactions` (015) is
+what was said to a specific premium guest, whereas most tasks belong to no
+client at all. Merging them would give one table two owners, two lifecycles
+and two meanings for "done".
+
+**`done_at` is a nullable timestamp, not an `is_done` boolean.** A boolean
+answers "is it finished" but not "when", and "what did we close out last
+week" is a question this list gets asked. One column answers both and has no
+partner to drift out of sync with. The client sends `done: true/false`; the
+server stamps `NOW()` — accepting a client-supplied timestamp would import
+whatever a shared phone's clock says.
+
+Shared across all three superusers with the owner on the row, same reasoning
+as premium clients. Totals on the cards are computed over the UNFILTERED
+set, so "3 overdue" means the same thing whichever tab is selected.
+
 **Scan log.** `GET /api/admin/scans` + `/admin/scans` records every scan
 ATTEMPT, not just admissions — a DUPLICATE burst at one gate is the
 signature of a copied ticket (§10.1). All joins are LEFT so `UNKNOWN_CODE`

@@ -212,6 +212,21 @@ export const CLIENT_STATUS_LABELS: Readonly<Record<ClientStatus, string>> = {
   DECLINED: 'Declined',
 } as const;
 
+/* ------------------------------------------------------------------ */
+/* Activities — the organiser's own task list (migration 018)          */
+/* ------------------------------------------------------------------ */
+
+export const ACTIVITY_PRIORITIES = ['LOW', 'NORMAL', 'HIGH'] as const;
+export type ActivityPriority = (typeof ACTIVITY_PRIORITIES)[number];
+
+export const ACTIVITY_PRIORITY_LABELS: Readonly<
+  Record<ActivityPriority, string>
+> = {
+  LOW: 'Low',
+  NORMAL: 'Normal',
+  HIGH: 'High',
+} as const;
+
 /** What kind of exchange a timeline entry records. */
 export const CLIENT_INTERACTION_KINDS = ['NOTE', 'OUTREACH', 'RESPONSE'] as const;
 export type ClientInteractionKind = (typeof CLIENT_INTERACTION_KINDS)[number];
