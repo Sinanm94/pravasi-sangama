@@ -68,7 +68,7 @@ async function survey(): Promise<Counts> {
   });
 }
 
-async function wipe(): Promise<Counts> {
+async function wipe(forceScanned: boolean): Promise<Counts> {
   return withTransaction(async (client) => {
     const removed = {
       tickets: 0,
@@ -85,14 +85,26 @@ async function wipe(): Promise<Counts> {
 
     /* Re-checked INSIDE the transaction, not just in the survey above: a
      * scan could land between the two, and admitting a guest is exactly
-     * the event that must stop this. */
+     * the event that must stop this.
+     *
+     * `--force-scanned` exists because "some codes are scanned" is ALSO the
+     * normal state of a database someone has been testing the gate against,
+     * which is exactly when this script is wanted. The override is a
+     * separate, explicit flag rather than a weakening of the check: the
+     * default still refuses, and choosing to proceed is a deliberate act
+     * recorded in the audit row below. Confirm with db:inspect-scans that
+     * every purchaser is test data before reaching for it. */
     const { rows: scanned } = await client.query<{ n: string }>(
       `SELECT COUNT(*)::TEXT AS n FROM qr_codes WHERE status = 'SCANNED'`,
     );
-    if (Number(scanned[0]?.n ?? 0) > 0) {
+    const scannedCount = Number(scanned[0]?.n ?? 0);
+    removed.scannedCodes = scannedCount;
+
+    if (scannedCount > 0 && !forceScanned) {
       throw new Error(
-        `${scanned[0]?.n} QR code(s) have been SCANNED — the gate is live. ` +
-          `Refusing to delete tickets.`,
+        `${scannedCount} QR code(s) have been SCANNED — the gate may be live. ` +
+          `Refusing to delete tickets. Run db:inspect-scans to see what they ` +
+          `are; if they are all test scans, re-run with --yes --force-scanned.`,
       );
     }
 
@@ -123,6 +135,10 @@ async function wipe(): Promise<Counts> {
         JSON.stringify({
           tickets_deleted: removed.tickets,
           qr_codes_deleted: removed.qrCodes,
+          // Recorded so a later reader can tell this was overridden, not
+          // that the database merely happened to have no scans.
+          scanned_codes_discarded: removed.scannedCodes,
+          forced: forceScanned,
         }),
       ],
     );
@@ -135,6 +151,7 @@ async function wipe(): Promise<Counts> {
 
 const args = process.argv.slice(2);
 const confirmed = args.includes('--yes');
+const forceScanned = args.includes('--force-scanned');
 
 async function main(): Promise<void> {
   const line = '─'.repeat(60);
@@ -154,8 +171,12 @@ async function main(): Promise<void> {
 
     if (counts.scannedCodes > 0) {
       console.log(
-        `\n  ⛔ BLOCKED: ${counts.scannedCodes} QR code(s) are already ` +
-          `SCANNED.\n     The gate is live. This script will refuse to run.`,
+        `\n  ⛔ BLOCKED: ${counts.scannedCodes} QR code(s) are already SCANNED.` +
+          `\n\n     That is either a live gate, or your own testing.` +
+          `\n     Check which, before deciding:` +
+          `\n       npm run db:inspect-scans -w @pravasi/backend` +
+          `\n\n     If every purchaser listed there is test data:` +
+          `\n       npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes --force-scanned`,
       );
     } else {
       console.log(`\n  To apply, re-run with --yes`);
@@ -164,7 +185,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const counts = await wipe();
+  const counts = await wipe(forceScanned);
   console.log(`\n${line}`);
   console.log('  TICKET NUMBERING RESET');
   console.log(line);
@@ -172,6 +193,12 @@ async function main(): Promise<void> {
   console.log(`  qr codes deleted .... ${counts.qrCodes}`);
   console.log(`  scan logs deleted ... ${counts.scanLogs}`);
   console.log(`  client records kept . ${counts.clientLinks} (ticket link cleared)`);
+  if (counts.scannedCodes > 0) {
+    console.log(
+      `\n  ⚠ ${counts.scannedCodes} SCANNED code(s) were discarded via ` +
+        `--force-scanned.\n    Recorded in audit_logs as a forced reset.`,
+    );
+  }
   console.log(`\n  The next ticket issued will be REQ-0001 / TKT-0001.`);
   console.log(`\n${line}\n`);
 }
