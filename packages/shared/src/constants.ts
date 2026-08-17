@@ -262,41 +262,52 @@ export const VENUE_INFO_URL =
   'https://maps.app.goo.gl/QpuirTEdGJGnZyED9?g_st=ic';
 
 /**
- * Numbers are crypto-random, not sequential — a sequential ticket number
- * leaks total sales volume to anyone holding one ticket, and lets an attacker
- * enumerate the range.
+ * Numbers are SEQUENTIAL, allocated from a Postgres sequence
+ * (migration 016): TKT-0001, TKT-0002, TKT-0003 …
  *
- * Generation is server-side only (`backend/src/lib/identifiers.ts`); these are
- * the shared format contracts for validation and display.
+ *   REQ-0001   (4 digits — 9,999 tickets)
+ *   TKT-0001   (4 digits — 9,999 tickets)
  *
- *   REQ-403827   (6 digits — 1,000,000 space)
- *   TKT-719564   (6 digits — 1,000,000 space)
+ * ⚠ This reverses an earlier decision, on explicit instruction, and the
+ *   tradeoff should stay visible rather than be quietly forgotten:
+ *
+ *   Numbers used to be crypto-random precisely BECAUSE a sequential number
+ *   leaks total sales volume to anyone holding a single ticket (the holder
+ *   of TKT-0350 knows 350 have been sold) and makes the range enumerable
+ *   instead of sparse.
+ *
+ *   What makes that acceptable here: NEITHER NUMBER IS AN ADMISSION
+ *   CREDENTIAL. The QR payload is a full UUID and is the only thing that
+ *   admits anyone (§4.3, §10.1). A guessed or enumerated number buys a
+ *   searchable label, not entry — the exposure is commercial, not a gate
+ *   breach.
  *
  * DIGITS ONLY. These are read off a printed stub and re-typed, often on a
  * phone's numeric keypad by staff coming off paper systems — a letter/digit
  * mix means switching keyboards and second-guessing an O against a 0.
  *
- * Six, not five, and that is not padding. A digit carries 3.32 bits where
- * the old 32-character alphabet carried 5, so going numeric costs length to
- * hold the same collision safety. At five digits the space is 100,000, and
- * with ~50,000 tickets issued three quarters of every issuance would collide
- * and ONE IN FOUR would exhaust all five retries in tickets.service and fail
- * outright at the registration desk. Six digits puts that at roughly 1 in
- * 113,000 issuances across the same volume — under one expected failure for
- * the whole event, and each one surfaces as a plain retryable error.
+ * FOUR digits, sized to the event rather than to collision math. Sequential
+ * allocation has no collisions to absorb — the sequence never hands out the
+ * same value twice — so length only has to cover volume, where the random
+ * scheme needed a sparse space many times larger than the ticket count.
+ * 9,999 is roughly 20x the expected attendance.
  *
- * If ticket volume ever heads past ~50,000, raise both lengths to 7 rather
- * than reintroducing letters: it is a one-character change here and drops
- * the retry rate tenfold.
+ * If volume ever approaches 9,999, raise both lengths here. Nothing else
+ * needs to change: LPAD in `nextTicketNumbers` reads these constants, and a
+ * number that outgrows the width simply prints wider rather than breaking.
  *
- * Leading zeros are kept (`REQ-004821` is valid) — dropping them would
- * throw away a tenth of the space for no readability gain.
+ * Leading zeros are significant — ticket 41 is `TKT-0041`, never `TKT-41`.
+ *
+ * Tickets issued under every older format (12/10 hex, 6 alphanumeric, and
+ * the 6-digit random scheme) keep their original numbers and stay
+ * searchable. The regexes below have no runtime callers that would reject
+ * one, so nothing re-validates an existing ticket.
  */
 export const REQUEST_NUMBER_PREFIX = 'REQ-';
 export const TICKET_NUMBER_PREFIX = 'TKT-';
 
-export const REQUEST_NUMBER_LENGTH = 6;
-export const TICKET_NUMBER_LENGTH = 6;
+export const REQUEST_NUMBER_LENGTH = 4;
+export const TICKET_NUMBER_LENGTH = 4;
 
 export const REQUEST_NUMBER_REGEX = new RegExp(
   `^REQ-[0-9]{${REQUEST_NUMBER_LENGTH}}$`,

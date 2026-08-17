@@ -532,31 +532,53 @@ agent ledger at `/agent/dashboard`. Printed even when zero — a gate reading
 
 ### 4.4 Numbering and QR secrecy
 
-Request and ticket numbers are **crypto-random, not sequential** —
-`REQ-2026-K4H8QR`, `TKT-Q7X4M2`. A sequential number leaks total sales
-volume to anyone holding one ticket and lets an attacker enumerate the range.
-Collisions are absorbed by the unique constraint plus a bounded retry of the
-whole transaction; never SELECT-then-INSERT, which races.
+Request and ticket numbers are **sequential** (migration 016) —
+`REQ-0001`, `TKT-0001`, then `0002`, `0003`… **4 digits, no letters**, one
+global counter each, shared across every unit.
 
-Both are **6 digits, no letters** — `REQ-403827`, `TKT-719564`. Staff read
-these off a printed stub and re-type them, usually on a phone's numeric
-keypad, and a letter/digit mix means switching keyboards and second-guessing
-an `O` against a `0`.
+> ⚠ **This reverses the original design, on explicit instruction.** They
+> used to be crypto-random precisely because a sequential number **leaks
+> total sales volume** to anyone holding one ticket (the holder of
+> `TKT-0350` knows 350 have been sold) and makes the range **enumerable**
+> rather than sparse. That cost is real and was accepted knowingly.
+>
+> What makes it acceptable: **neither number is an admission credential**
+> (see below). The exposure is commercial, not a gate breach.
 
-Six digits, not five, and the extra one is load-bearing. A digit carries
-3.32 bits where the previous 32-character alphabet carried 5, so going
-numeric costs length to hold the same collision safety. Five digits is a
-100,000 space: at ~50,000 tickets three quarters of issuances would collide
-and **one in four would exhaust all five retries and fail outright at the
-desk**. Six digits puts that at ~1 in 113,000 — under one expected failure
-across the whole event. Past ~50,000 tickets, raise both lengths to 7 rather
-than reintroducing letters.
+**Allocation is a Postgres sequence, never application-side.**
+`request_number_seq` / `ticket_number_seq` — which existed unused in the
+baseline schema for exactly this purpose — are drawn via
+`tickets.repository.nextTicketNumbers()` inside the issuing transaction.
+`nextval` never hands the same value to two callers, so concurrent agents
+cannot collide; `SELECT MAX(...)+1` would race, the same way a read-then-
+write races at the gate (§10.2). There is deliberately **no** generator in
+`lib/identifiers.ts` any more — a second source of truth for a value only
+the sequence can make unique.
 
-Leading zeros are valid (`REQ-004821`); dropping them would discard a tenth
-of the space for no readability gain. Tickets issued under the older formats
-(12/10 hex, then 6 alphanumeric) keep their numbers and stay searchable —
-only newly generated ones use this shape, and the format regexes have no
-runtime callers that would reject an old one.
+**Sequences do not roll back.** An issuance that fails after drawing a
+number leaves a gap (`…0041, 0043…`). That is correct: a gap is invisible
+to everyone except someone reconciling counts, whereas a reused number
+means two tickets share an identifier. **Do not count tickets by reading
+the last number** — the ledger aggregates properly.
+
+Four digits is sized to the **event**, not to collision math: sequential
+allocation has no collisions to absorb, so the width only has to cover
+volume. 9,999 is roughly 20x expected attendance. If volume ever
+approaches that, raise `REQUEST_NUMBER_LENGTH` / `TICKET_NUMBER_LENGTH` in
+`packages/shared` — `LPAD` reads them, and a number that outgrows the width
+prints wider rather than breaking.
+
+Leading zeros are significant — ticket 41 is `TKT-0041`, never `TKT-41`.
+Tickets issued under every older format (12/10 hex, 6 alphanumeric, and the
+6-digit random scheme) keep their numbers and stay searchable; the format
+regexes have no runtime callers that would reject one.
+
+> **Migration 016 starts each sequence ABOVE the highest existing numeric
+> number**, so it can never re-issue one already in the table. Consequence:
+> on a database that already holds a 6-digit random ticket like
+> `TKT-598054`, the first new ticket is `TKT-598055`, **not** `TKT-0001`.
+> To genuinely start at `0001`, delete those test rows first —
+> `db:demo-agent -- --destroy` does exactly that for the demo fixture.
 
 **Not an admission credential.** Neither number gates entry — the QR payload
 does that, is a full UUID, and is never shortened. Being short and
@@ -1056,8 +1078,9 @@ let the web tier mint tokens, which is a worse trade than an empty shell.
    land with division admins. No `gate:offline` heartbeat yet — "active gate"
    is inferred from recent scan activity.
 4. `request_number_seq` / `ticket_number_seq` in the baseline schema are now
-   unused — numbers are crypto-random, not sequential (§4.4). Drop in a later
-   migration.
+   **now in use again** — migration 016 allocates numbers from them (§4.4).
+   No longer debt; the entry is kept so the earlier "drop these" note is not
+   acted on by mistake.
 5. The seed creates no tickets, so there is nothing to scan yet.
 6. Premium `LOCATION` rows in `qr_codes` are issued but never printed (§4.1),
    so `LOCATION_INFO` is unreachable at the gate. Inert, not harmful.
