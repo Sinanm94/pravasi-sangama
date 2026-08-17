@@ -1,5 +1,13 @@
 import type { PoolClient } from 'pg';
-import type { QrCodeKind, TicketStatus, TicketType } from '@pravasi/shared';
+import {
+  REQUEST_NUMBER_LENGTH,
+  REQUEST_NUMBER_PREFIX,
+  TICKET_NUMBER_LENGTH,
+  TICKET_NUMBER_PREFIX,
+  type QrCodeKind,
+  type TicketStatus,
+  type TicketType,
+} from '@pravasi/shared';
 import { query } from '../../db/index.js';
 
 export interface TicketRow {
@@ -24,6 +32,49 @@ export interface QrCodeRow {
   code_kind: QrCodeKind;
   guest_index: number | null;
   status: 'ISSUED' | 'SCANNED' | 'REVOKED';
+}
+
+/**
+ * Draws the next request/ticket number pair from the sequences
+ * (migration 016).
+ *
+ * Both come from ONE round trip, and both are drawn inside the caller's
+ * transaction. `nextval` is safe under concurrency by construction — two
+ * agents issuing simultaneously can never receive the same value — which is
+ * why this is a sequence rather than `SELECT MAX(...) + 1`, a pattern that
+ * races exactly the way §10.2 warns about for admission.
+ *
+ * Sequences deliberately do not roll back: if the surrounding transaction
+ * aborts, the drawn numbers are simply never used and the series has a gap.
+ * A gap is harmless; a reused number is two tickets with one identity.
+ *
+ * LPAD to REQUEST/TICKET_NUMBER_LENGTH keeps the printed width fixed —
+ * leading zeros are significant (§4.4), so ticket 41 prints TKT-0041.
+ */
+export async function nextTicketNumbers(
+  client: PoolClient,
+): Promise<{ requestNumber: string; ticketNumber: string }> {
+  const { rows } = await client.query<{
+    request_number: string;
+    ticket_number: string;
+  }>(
+    `SELECT $1::text || LPAD(nextval('request_number_seq')::text, $2, '0')
+              AS request_number,
+            $3::text || LPAD(nextval('ticket_number_seq')::text, $4, '0')
+              AS ticket_number`,
+    [
+      REQUEST_NUMBER_PREFIX,
+      REQUEST_NUMBER_LENGTH,
+      TICKET_NUMBER_PREFIX,
+      TICKET_NUMBER_LENGTH,
+    ],
+  );
+
+  const row = rows[0]!;
+  return {
+    requestNumber: row.request_number,
+    ticketNumber: row.ticket_number,
+  };
 }
 
 export async function insertTicket(

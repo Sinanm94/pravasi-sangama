@@ -10,12 +10,7 @@ import {
   qrCodePlanFor,
 } from '@pravasi/shared';
 import { withTransaction } from '../../db/index.js';
-import {
-  generateQrPayload,
-  generateRequestNumber,
-  generateTicketNumber,
-  hashQrPayload,
-} from '../../lib/identifiers.js';
+import { generateQrPayload, hashQrPayload } from '../../lib/identifiers.js';
 import { AppError } from '../../lib/errors.js';
 import * as repo from './tickets.repository.js';
 
@@ -81,9 +76,17 @@ export async function issueTicket(
   // ever wrong.
   const countedPersons = SEATS_PER_TIER[input.ticket_type];
 
-  // Numbers are random, so a collision is possible-but-rare. Retry the whole
-  // transaction rather than pre-checking for existence — a SELECT-then-INSERT
-  // would race, the unique constraint does not.
+  /* Numbers now come from a sequence (migration 016), which never hands the
+   * same value to two callers — so the ordinary collision this loop was
+   * built for cannot happen any more.
+   *
+   * It is kept, narrowed to its remaining job: a database that still holds
+   * tickets from an older numbering scheme could contain a number the
+   * sequence is about to reach. Migration 016 starts the sequence above the
+   * highest existing NUMERIC number precisely to avoid that, but it cannot
+   * see legacy hex/alphanumeric numbers, and a hand-inserted row could
+   * collide too. Retrying simply draws the next value, which steps past the
+   * obstruction — so this is now a cheap guard rather than a hot path. */
   for (let attempt = 1; attempt <= NUMBER_COLLISION_RETRIES; attempt += 1) {
     try {
       return await issueOnce(input, scope, countedPersons, ctx);
@@ -116,9 +119,14 @@ async function issueOnce(
    * partial set of QR codes admits the wrong number of people, which is the
    * single worst failure this system can produce. */
   return withTransaction(async (client) => {
+    /* Drawn inside the transaction, from the sequences. Two agents issuing
+     * in the same millisecond receive different values by construction —
+     * the same "never read-then-write" rule §10.2 applies to admission. */
+    const numbers = await repo.nextTicketNumbers(client);
+
     const ticket = await repo.insertTicket(client, {
-      requestNumber: generateRequestNumber(),
-      ticketNumber: generateTicketNumber(),
+      requestNumber: numbers.requestNumber,
+      ticketNumber: numbers.ticketNumber,
       ticketType: input.ticket_type,
 
       // Scope comes from the JWT, never from the request body.

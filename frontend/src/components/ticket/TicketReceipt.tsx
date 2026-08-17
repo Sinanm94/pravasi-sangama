@@ -86,7 +86,7 @@ interface TicketReceiptProps {
 }
 
 const MOCK_TICKET: TicketData = {
-  requestNumber: 'REQ-2026-000092',
+  requestNumber: 'REQ-0092',
   ticketNumber: 'TKT-0092',
   ticketType: 'SVIP',
   purchaserName: 'Anand Kumar',
