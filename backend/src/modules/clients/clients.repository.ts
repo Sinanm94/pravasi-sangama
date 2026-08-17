@@ -30,6 +30,10 @@ export interface ClientRow {
   follow_up_on: string | null;
   ticket_id: string | null;
   ticket_number: string | null;
+  unit_id: string | null;
+  unit_code: string | null;
+  unit_name: string | null;
+  sector: string | null;
   created_at: Date;
   updated_at: Date;
   interaction_count: number;
@@ -47,6 +51,8 @@ export interface ClientInteractionRow {
 export interface ClientFilters {
   status?: ClientStatus | undefined;
   search?: string | undefined;
+  unitId?: string | undefined;
+  sector?: string | undefined;
 }
 
 /**
@@ -63,6 +69,12 @@ function clientWhere(f: ClientFilters): { sql: string; params: unknown[] } {
   };
 
   if (f.status) add((i) => `c.status = $${i}::client_status`, f.status);
+
+  if (f.unitId) add((i) => `c.unit_id = $${i}::uuid`, f.unitId);
+
+  /* Sector lives on `units`, never copied onto `clients` (migration 017), so
+   * it filters through the join rather than off a duplicated column. */
+  if (f.sector) add((i) => `u.sector = $${i}`, f.sector);
 
   if (f.search) {
     // % and _ are ILIKE wildcards; escaping them keeps a literal search for
@@ -105,10 +117,12 @@ export async function listClients(
             c.intended_tier, c.status,
             to_char(c.follow_up_on, 'YYYY-MM-DD') AS follow_up_on,
             c.ticket_id, t.ticket_number,
+            c.unit_id, u.unit_code, u.name AS unit_name, u.sector,
             c.created_at, c.updated_at,
             i.interaction_count, i.last_interaction_at
        FROM clients c
        LEFT JOIN tickets t ON t.id = c.ticket_id
+       LEFT JOIN units   u ON u.id = c.unit_id
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::INT      AS interaction_count,
                 MAX(ci.occurred_at) AS last_interaction_at
@@ -150,6 +164,7 @@ export async function summariseClients(
                 AND c.status NOT IN ('TICKETED', 'DECLINED')
             )::INT AS overdue
        FROM clients c
+       LEFT JOIN units u ON u.id = c.unit_id
        ${sql}`,
     params,
   );
@@ -171,10 +186,12 @@ export async function findClientById(id: string): Promise<ClientRow | null> {
             c.intended_tier, c.status,
             to_char(c.follow_up_on, 'YYYY-MM-DD') AS follow_up_on,
             c.ticket_id, t.ticket_number,
+            c.unit_id, u.unit_code, u.name AS unit_name, u.sector,
             c.created_at, c.updated_at,
             i.interaction_count, i.last_interaction_at
        FROM clients c
        LEFT JOIN tickets t ON t.id = c.ticket_id
+       LEFT JOIN units   u ON u.id = c.unit_id
        LEFT JOIN LATERAL (
          SELECT COUNT(*)::INT      AS interaction_count,
                 MAX(ci.occurred_at) AS last_interaction_at
@@ -209,13 +226,15 @@ export async function createClient(params: {
   intendedTier: TicketType | null;
   status: ClientStatus;
   followUpOn: string | null;
+  unitId: string | null;
   createdBy: string;
 }): Promise<{ id: string }> {
   const { rows } = await query<{ id: string }>(
     `INSERT INTO clients
        (name, mobile, email, organisation, intended_tier, status,
-        follow_up_on, created_by)
-     VALUES ($1, $2, $3, $4, $5::ticket_type, $6::client_status, $7::DATE, $8)
+        follow_up_on, unit_id, created_by)
+     VALUES ($1, $2, $3, $4, $5::ticket_type, $6::client_status, $7::DATE,
+             $8::uuid, $9)
      RETURNING id`,
     [
       params.name,
@@ -225,6 +244,7 @@ export async function createClient(params: {
       params.intendedTier,
       params.status,
       params.followUpOn,
+      params.unitId,
       params.createdBy,
     ],
   );
@@ -251,6 +271,7 @@ export async function updateClient(
     status: '::client_status',
     follow_up_on: '::DATE',
     ticket_id: '::uuid',
+    unit_id: '::uuid',
   };
 
   const sets: string[] = [];

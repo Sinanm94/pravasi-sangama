@@ -555,6 +555,7 @@ export const CreateClientSchema = z
     status: z.enum(CLIENT_STATUSES).default('PROSPECT'),
     /** ISO date, no time — "chase them on this day". */
     follow_up_on: z.string().date().optional(),
+    unit_id: z.string().uuid().optional(),
   })
   .strict();
 
@@ -571,6 +572,7 @@ export const UpdateClientSchema = z
     status: z.enum(CLIENT_STATUSES).optional(),
     follow_up_on: z.string().date().nullable().optional(),
     ticket_id: z.string().uuid().nullable().optional(),
+    unit_id: z.string().uuid().nullable().optional(),
   })
   .strict();
 
@@ -598,6 +600,8 @@ export type CreateClientInteractionInput = z.infer<
 export const ClientQuerySchema = z.object({
   status: z.enum(CLIENT_STATUSES).optional(),
   search: z.string().trim().max(120).optional(),
+  unit_id: z.string().uuid().optional(),
+  sector: z.string().trim().max(60).optional(),
   limit: z.coerce.number().int().positive().max(500).default(200),
 });
 

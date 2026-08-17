@@ -35,6 +35,10 @@ const toClient = (r: repo.ClientRow): ClientRecord => ({
   followUpOn: r.follow_up_on,
   ticketId: r.ticket_id,
   ticketNumber: r.ticket_number,
+  unitId: r.unit_id,
+  unitCode: r.unit_code,
+  unitName: r.unit_name,
+  sector: r.sector,
   createdAt: r.created_at.toISOString(),
   updatedAt: r.updated_at.toISOString(),
   interactionCount: r.interaction_count,
@@ -55,7 +59,12 @@ const toInteraction = (r: repo.ClientInteractionRow): ClientInteraction => ({
 
 export const listClients = handle(async (req, res) => {
   const q = ClientQuerySchema.parse(req.query);
-  const filters = { status: q.status, search: q.search };
+  const filters = {
+    status: q.status,
+    search: q.search,
+    unitId: q.unit_id,
+    sector: q.sector,
+  };
 
   const [rows, totals] = await Promise.all([
     repo.listClients(filters, q.limit),
@@ -110,6 +119,7 @@ export const createClient = handle(async (req, res) => {
     intendedTier: input.intended_tier ?? null,
     status: input.status,
     followUpOn: input.follow_up_on ?? null,
+    unitId: input.unit_id ?? null,
     createdBy: actor,
   });
 
@@ -138,6 +148,7 @@ export const updateClient = handle(async (req, res) => {
     status: input.status,
     follow_up_on: input.follow_up_on,
     ticket_id: input.ticket_id,
+    unit_id: input.unit_id,
   };
 
   const ok = await repo.updateClient(id, patch);

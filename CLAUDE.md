@@ -1003,6 +1003,32 @@ author's **name at write time** — the same reasoning `audit_logs` uses for
 carrying no FK on `actor_id`: the log is read months later, possibly after
 that account has been deactivated.
 
+**Two views of the same data, board by default.** The five statuses
+(`PROSPECT → AWAITING_REPLY → CONFIRMED → TICKETED`, plus `DECLINED`) are
+already a pipeline, so they *are* the kanban columns — no separate
+board-column concept was invented, and moving a card is exactly a `status`
+PATCH. That keeps the board a **view**, not a parallel model that could
+disagree with the list. The list view stays for scanning many rows and
+reading contact details, which columns are bad at.
+
+> **Movement is explicit arrow controls, not drag-and-drop.** HTML5 drag
+> events do not fire on touch, and this is used on phones as much as a
+> desktop — a drag-only board would simply be broken there. The arrows also
+> announce themselves to a screen reader, which `draggable` divs do not.
+> They step one stage at a time; a jump straight from Prospect to Ticketed
+> is done in the detail sheet, where it is deliberate rather than a stray
+> tap.
+
+**`clients.unit_id`** (migration 017) — a real FK, unlike `units.sector`'s
+free text (Known debt 7): a unit is an existing row with an id, so a client
+pointing at one that does not exist is simply wrong. `ON DELETE SET NULL`,
+because retiring a unit must neither be blocked by nor destroy the record of
+conversations held while it existed. **Nullable with no backfill** — a
+premium guest is often a superuser's own contact rather than a unit's lead,
+so "no unit" is a real permanent state, not missing data. The sector is
+**not** copied onto the row; it is one join away through `units.sector`, and
+a second copy would drift exactly the way Known debt 8 describes.
+
 **Shared across all three superusers, not owned by one.** On event day a
 colleague must be able to pick up a client whose usual contact is
 unreachable; attribution lives on the rows instead of in a scope filter.

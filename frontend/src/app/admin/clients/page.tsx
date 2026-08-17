@@ -1,17 +1,21 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
   CalendarClock,
   ChevronDown,
   Clock,
+  Columns3,
   Loader2,
   MessageSquarePlus,
   Plus,
   RefreshCw,
+  Rows3,
   Search,
   Trash2,
   UserRound,
@@ -31,6 +35,7 @@ import {
   type ClientListResponse,
   type ClientRecord,
   type ClientStatus,
+  type AdminFilterOptions,
   type TicketType,
 } from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
@@ -75,6 +80,19 @@ function ClientsScreen() {
   const [status, setStatus] = useState<ClientStatus | ''>('');
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
+  const [unitId, setUnitId] = useState('');
+
+  /* Board is the default: the five statuses are a pipeline, and the
+   * question this screen exists to answer ("who is stuck where, who needs
+   * chasing") is a shape question that columns answer at a glance. The list
+   * stays for scanning many rows and reading contact details, which columns
+   * are bad at. */
+  const [view, setView] = useState<'board' | 'list'>('board');
+
+  /* Units for the picker and the filter. Reuses the superuser ledger's
+   * existing options endpoint rather than adding a second one — it already
+   * returns every unit with its sector. */
+  const [units, setUnits] = useState<AdminFilterOptions['units']>([]);
 
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -85,12 +103,18 @@ function ClientsScreen() {
   }, [search]);
 
   const load = useCallback(
-    async (s: ClientStatus | '', term: string, isRefresh = false) => {
+    async (
+      s: ClientStatus | '',
+      term: string,
+      unit: string,
+      isRefresh = false,
+    ) => {
       if (isRefresh) setRefreshing(true);
 
       const params = new URLSearchParams();
       if (s) params.set('status', s);
       if (term) params.set('search', term);
+      if (unit) params.set('unit_id', unit);
 
       try {
         const qs = params.toString();
@@ -106,12 +130,27 @@ function ClientsScreen() {
   );
 
   useEffect(() => {
-    void load(status, committedSearch);
-  }, [load, status, committedSearch]);
+    void load(status, committedSearch, unitId);
+  }, [load, status, committedSearch, unitId]);
 
-  const reload = () => void load(status, committedSearch, true);
+  /* Loaded once. The unit roster does not change during a session, and
+   * re-fetching it on every filter change would be 30 rows of waste. */
+  useEffect(() => {
+    void (async () => {
+      try {
+        const opts = await apiGet<AdminFilterOptions>('/admin/filter-options');
+        setUnits(opts.units);
+      } catch {
+        /* Non-fatal: the picker degrades to "no unit", and every other part
+         * of this screen still works. Not worth a toast on page load. */
+      }
+    })();
+  }, []);
+
+  const reload = () => void load(status, committedSearch, unitId, true);
   const totals = data?.totals;
-  const filtered = Boolean(status) || committedSearch.length > 0;
+  const filtered =
+    Boolean(status) || committedSearch.length > 0 || Boolean(unitId);
 
   return (
     <AdminShell
@@ -123,6 +162,7 @@ function ClientsScreen() {
       }
       actions={
         <div className="flex shrink-0 items-center gap-2">
+          <ViewToggle view={view} onChange={setView} />
           <button
             type="button"
             onClick={reload}
@@ -176,21 +216,50 @@ function ClientsScreen() {
       </div>
 
       <div className="mt-6 rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          {/* Status filter is hidden on the board: the columns ARE the
+              status breakdown, and filtering to one status would collapse
+              the board to a single column — a worse list. */}
+          {view === 'list' && (
+            <label className="block">
+              <span className="mb-2 block text-[13px] font-medium text-gray-700">
+                Status
+              </span>
+              <div className="relative">
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as ClientStatus | '')}
+                  className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
+                >
+                  <option value="">All statuses</option>
+                  {CLIENT_STATUSES.map((s) => (
+                    <option key={s} value={s}>
+                      {CLIENT_STATUS_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="pointer-events-none absolute right-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400"
+                  strokeWidth={2.25}
+                />
+              </div>
+            </label>
+          )}
+
           <label className="block">
             <span className="mb-2 block text-[13px] font-medium text-gray-700">
-              Status
+              Unit
             </span>
             <div className="relative">
               <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ClientStatus | '')}
+                value={unitId}
+                onChange={(e) => setUnitId(e.target.value)}
                 className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
               >
-                <option value="">All statuses</option>
-                {CLIENT_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {CLIENT_STATUS_LABELS[s]}
+                <option value="">All units</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.sector} · {u.name} ({u.unitCode})
                   </option>
                 ))}
               </select>
@@ -232,6 +301,7 @@ function ClientsScreen() {
               onClick={() => {
                 setStatus('');
                 setSearch('');
+                setUnitId('');
               }}
               className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
             >
@@ -243,10 +313,12 @@ function ClientsScreen() {
       </div>
 
       <div className="mt-4">
-        <Card>
-          {data === null ? (
+        {data === null ? (
+          <Card>
             <ListSkeleton />
-          ) : data.clients.length === 0 ? (
+          </Card>
+        ) : data.clients.length === 0 ? (
+          <Card>
             <EmptyState
               icon={UserRound}
               title={filtered ? 'No matching clients' : 'No clients yet'}
@@ -256,18 +328,27 @@ function ClientsScreen() {
                   : 'Add a client to start tracking what you asked and what they said.'
               }
             />
-          ) : (
+          </Card>
+        ) : view === 'board' ? (
+          <ClientBoard
+            clients={data.clients}
+            onOpen={setOpenId}
+            onMoved={reload}
+          />
+        ) : (
+          <Card>
             <ul className="divide-y divide-gray-900/[0.05]">
               {data.clients.map((c) => (
                 <ClientRow key={c.id} client={c} onOpen={() => setOpenId(c.id)} />
               ))}
             </ul>
-          )}
-        </Card>
+          </Card>
+        )}
       </div>
 
       {adding && (
         <AddClientSheet
+          units={units}
           onClose={() => setAdding(false)}
           onCreated={() => {
             setAdding(false);
@@ -278,12 +359,338 @@ function ClientsScreen() {
 
       {openId && (
         <ClientDetailSheet
+          units={units}
           clientId={openId}
           onClose={() => setOpenId(null)}
           onChanged={reload}
         />
       )}
     </AdminShell>
+  );
+}
+
+/* ================================================================== */
+/* View toggle                                                         */
+/* ================================================================== */
+
+function ViewToggle({
+  view,
+  onChange,
+}: {
+  view: 'board' | 'list';
+  onChange: (v: 'board' | 'list') => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label="View"
+      className="flex items-center gap-0.5 rounded-full bg-gray-100 p-0.5"
+    >
+      {(
+        [
+          ['board', 'Board', Columns3],
+          ['list', 'List', Rows3],
+        ] as const
+      ).map(([value, label, Icon]) => {
+        const active = view === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onChange(value)}
+            aria-pressed={active}
+            title={label}
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-semibold transition-all duration-200 active:scale-[0.97] ${
+              active
+                ? 'bg-white text-gray-900 shadow-[0_1px_3px_rgb(0,0,0,0.08)]'
+                : 'text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
+            <span className="hidden sm:inline">{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Kanban board                                                        */
+/* ================================================================== */
+
+/**
+ * The five statuses ARE the pipeline, so they are the columns — no separate
+ * board-column concept was invented, and moving a card is exactly a status
+ * PATCH. That keeps the board a VIEW of the same data the list shows rather
+ * than a parallel model that could disagree with it.
+ *
+ * DECLINED sits last and is styled down: it is a real outcome that must stay
+ * visible (so nobody re-chases someone who already said no) but it is not
+ * work in progress.
+ *
+ * Movement is by an explicit control on the card, not drag-and-drop. HTML5
+ * drag events do not fire on touch, and this is used on phones and tablets
+ * as much as a desktop; a drag-only board would simply be broken there. The
+ * arrows also read as buttons to a screen reader, which a div-with-draggable
+ * does not.
+ */
+function ClientBoard({
+  clients,
+  onOpen,
+  onMoved,
+}: {
+  clients: ClientRecord[];
+  onOpen: (id: string) => void;
+  onMoved: () => void;
+}) {
+  /* Which card is mid-PATCH, so its own control can show a spinner without
+   * freezing the whole board. */
+  const [moving, setMoving] = useState<string | null>(null);
+
+  const byStatus = useMemo(() => {
+    const map = new Map<ClientStatus, ClientRecord[]>();
+    for (const s of CLIENT_STATUSES) map.set(s, []);
+    for (const c of clients) map.get(c.status)?.push(c);
+    return map;
+  }, [clients]);
+
+  async function move(client: ClientRecord, to: ClientStatus) {
+    setMoving(client.id);
+    try {
+      await apiPatch(`/clients/${client.id}`, { status: to });
+      toast.success(`${client.name} → ${CLIENT_STATUS_LABELS[to]}`);
+      onMoved();
+    } catch (err) {
+      toast.error(errorMessage(err));
+    } finally {
+      setMoving(null);
+    }
+  }
+
+  return (
+    /* Horizontal scroll on the CONTAINER, never the page (§ responsive).
+       Five columns do not fit a phone, and squeezing them to fit would make
+       every card unreadable. */
+    <div className="-mx-1 overflow-x-auto px-1 pb-2">
+      <div className="flex min-w-max gap-3">
+        {CLIENT_STATUSES.map((s) => (
+          <BoardColumn
+            key={s}
+            status={s}
+            clients={byStatus.get(s) ?? []}
+            movingId={moving}
+            onOpen={onOpen}
+            onMove={move}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Column accent — matches STATUS_TONE so the two views agree visually. */
+const COLUMN_ACCENT: Record<ClientStatus, string> = {
+  PROSPECT: 'bg-gray-300',
+  AWAITING_REPLY: 'bg-amber-400',
+  CONFIRMED: 'bg-emerald-400',
+  TICKETED: 'bg-emerald-600',
+  DECLINED: 'bg-red-300',
+};
+
+function BoardColumn({
+  status,
+  clients,
+  movingId,
+  onOpen,
+  onMove,
+}: {
+  status: ClientStatus;
+  clients: ClientRecord[];
+  movingId: string | null;
+  onOpen: (id: string) => void;
+  onMove: (client: ClientRecord, to: ClientStatus) => void;
+}) {
+  const overdue = clients.filter(isOverdue).length;
+
+  return (
+    <section className="flex w-[272px] shrink-0 flex-col rounded-3xl bg-white p-3 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
+      <header className="flex items-center gap-2 px-2 pb-3 pt-1">
+        <span
+          className={`h-2 w-2 shrink-0 rounded-full ${COLUMN_ACCENT[status]}`}
+        />
+        <h3 className="flex-1 truncate text-[13px] font-semibold text-gray-900">
+          {CLIENT_STATUS_LABELS[status]}
+        </h3>
+        {overdue > 0 && (
+          <span
+            className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-bold text-red-600"
+            title={`${overdue} overdue`}
+          >
+            {overdue}
+          </span>
+        )}
+        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-semibold text-gray-500">
+          {clients.length}
+        </span>
+      </header>
+
+      <div className="flex flex-col gap-2">
+        {clients.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-gray-200 px-3 py-6 text-center text-[12px] text-gray-400">
+            Nothing here
+          </p>
+        ) : (
+          clients.map((c) => (
+            <BoardCard
+              key={c.id}
+              client={c}
+              busy={movingId === c.id}
+              onOpen={() => onOpen(c.id)}
+              onMove={(to) => onMove(c, to)}
+            />
+          ))
+        )}
+      </div>
+    </section>
+  );
+}
+
+function BoardCard({
+  client,
+  busy,
+  onOpen,
+  onMove,
+}: {
+  client: ClientRecord;
+  busy: boolean;
+  onOpen: () => void;
+  onMove: (to: ClientStatus) => void;
+}) {
+  const overdue = isOverdue(client);
+  const i = CLIENT_STATUSES.indexOf(client.status);
+  const prev = i > 0 ? CLIENT_STATUSES[i - 1] : undefined;
+  const next = i < CLIENT_STATUSES.length - 1 ? CLIENT_STATUSES[i + 1] : undefined;
+
+  return (
+    <article
+      className={`rounded-2xl border border-gray-200/80 bg-white p-3 transition-all duration-200 ${
+        busy ? 'opacity-60' : 'hover:border-gray-300'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        className="block w-full text-left"
+        disabled={busy}
+      >
+        <div className="flex items-start gap-2">
+          <p className="min-w-0 flex-1 truncate text-[14px] font-medium text-gray-900">
+            {client.name}
+          </p>
+          {client.intendedTier && (
+            <span className="shrink-0 rounded-full bg-gray-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] text-gray-600">
+              {TICKET_TYPE_LABELS[client.intendedTier]}
+            </span>
+          )}
+        </div>
+
+        {(client.organisation || client.mobile) && (
+          <p className="mt-1 truncate text-[11px] text-gray-500">
+            {[client.organisation, client.mobile].filter(Boolean).join(' · ')}
+          </p>
+        )}
+
+        {client.unitCode && (
+          <p className="mt-1 truncate text-[10px] uppercase tracking-[0.06em] text-gray-400">
+            {client.sector} · {client.unitCode}
+          </p>
+        )}
+
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {client.followUpOn && (
+            <span
+              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                overdue ? 'bg-red-50 text-red-600' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {overdue ? 'Chase' : 'Follow up'}{' '}
+              {formatDateOnly(client.followUpOn)}
+            </span>
+          )}
+          <span className="text-[10px] text-gray-400">
+            {client.interactionCount === 0
+              ? 'No updates'
+              : `${client.interactionCount} update${client.interactionCount === 1 ? '' : 's'}`}
+          </span>
+        </div>
+      </button>
+
+      {/* Move controls. Adjacent statuses only — a card advances or steps
+          back one stage, which is how this pipeline actually moves. Jumping
+          straight from Prospect to Ticketed is done in the detail sheet,
+          where the change is deliberate rather than a stray tap. */}
+      <div className="mt-2.5 flex items-center gap-1 border-t border-gray-100 pt-2">
+        <MoveButton
+          direction="back"
+          to={prev}
+          busy={busy}
+          onMove={onMove}
+        />
+        <MoveButton
+          direction="forward"
+          to={next}
+          busy={busy}
+          onMove={onMove}
+        />
+        {busy && (
+          <Loader2
+            className="ml-auto h-3.5 w-3.5 animate-spin text-gray-400"
+            strokeWidth={2.5}
+          />
+        )}
+      </div>
+    </article>
+  );
+}
+
+function MoveButton({
+  direction,
+  to,
+  busy,
+  onMove,
+}: {
+  direction: 'back' | 'forward';
+  to: ClientStatus | undefined;
+  busy: boolean;
+  onMove: (to: ClientStatus) => void;
+}) {
+  const Icon = direction === 'back' ? ArrowLeft : ArrowRight;
+
+  /* Rendered disabled rather than omitted at the ends of the pipeline, so
+   * the two controls do not shift position from card to card. */
+  if (!to) {
+    return (
+      <span
+        aria-hidden
+        className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-gray-200"
+      >
+        <Icon className="h-3.5 w-3.5" strokeWidth={2.5} />
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onMove(to)}
+      disabled={busy}
+      title={`Move to ${CLIENT_STATUS_LABELS[to]}`}
+      aria-label={`Move to ${CLIENT_STATUS_LABELS[to]}`}
+      className="inline-flex h-6 w-6 items-center justify-center rounded-lg text-gray-400 transition-all duration-200 hover:bg-gray-100 hover:text-gray-900 active:scale-[0.92] disabled:opacity-40"
+    >
+      <Icon className="h-3.5 w-3.5" strokeWidth={2.5} />
+    </button>
   );
 }
 
@@ -361,9 +768,11 @@ function ClientRow({
 function AddClientSheet({
   onClose,
   onCreated,
+  units,
 }: {
   onClose: () => void;
   onCreated: () => void;
+  units: AdminFilterOptions['units'];
 }) {
   useDismissOnBack(true, onClose);
 
@@ -374,6 +783,7 @@ function AddClientSheet({
   const [tier, setTier] = useState<TicketType | ''>('');
   const [status, setStatus] = useState<ClientStatus>('PROSPECT');
   const [followUp, setFollowUp] = useState('');
+  const [unitId, setUnitId] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -394,6 +804,7 @@ function AddClientSheet({
         ...(tier ? { intended_tier: tier } : {}),
         status,
         ...(followUp ? { follow_up_on: followUp } : {}),
+        ...(unitId ? { unit_id: unitId } : {}),
       });
       toast.success('Client added');
       onCreated();
@@ -480,14 +891,39 @@ function AddClientSheet({
           </SheetField>
         </div>
 
-        <SheetField label="Follow up on" hint="Leave blank if nothing is pending">
-          <input
-            type="date"
-            value={followUp}
-            onChange={(e) => setFollowUp(e.target.value)}
-            className={inputCls}
-          />
-        </SheetField>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <SheetField
+            label="Unit"
+            hint="Who is working this client"
+          >
+            <select
+              value={unitId}
+              onChange={(e) => setUnitId(e.target.value)}
+              className={inputCls}
+            >
+              {/* "No unit" is a real, permanent state — a premium guest is
+                  often a superuser's own contact, not a unit's lead. */}
+              <option value="">No unit</option>
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.sector} · {u.name} ({u.unitCode})
+                </option>
+              ))}
+            </select>
+          </SheetField>
+
+          <SheetField
+            label="Follow up on"
+            hint="Leave blank if nothing is pending"
+          >
+            <input
+              type="date"
+              value={followUp}
+              onChange={(e) => setFollowUp(e.target.value)}
+              className={inputCls}
+            />
+          </SheetField>
+        </div>
 
         {error && <p className="text-[13px] text-red-600">{error}</p>}
 
@@ -522,10 +958,12 @@ function ClientDetailSheet({
   clientId,
   onClose,
   onChanged,
+  units,
 }: {
   clientId: string;
   onClose: () => void;
   onChanged: () => void;
+  units: AdminFilterOptions['units'];
 }) {
   useDismissOnBack(true, onClose);
 
@@ -622,6 +1060,21 @@ function ClientDetailSheet({
                 }
                 className={inputCls}
               />
+            </SheetField>
+
+            <SheetField label="Unit" hint="Who is working this client">
+              <select
+                value={client.unitId ?? ''}
+                onChange={(e) => void patch({ unit_id: e.target.value || null })}
+                className={inputCls}
+              >
+                <option value="">No unit</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.sector} · {u.name} ({u.unitCode})
+                  </option>
+                ))}
+              </select>
             </SheetField>
           </div>
 

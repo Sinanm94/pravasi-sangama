@@ -677,6 +677,12 @@ export interface ClientRecord {
   followUpOn: string | null;
   ticketId: string | null;
   ticketNumber: string | null;
+  /** Which unit is working this client. Null is a real state — see 017. */
+  unitId: string | null;
+  unitCode: string | null;
+  unitName: string | null;
+  /** Read through the unit, never stored on the client (migration 017). */
+  sector: string | null;
   createdAt: string;
   updatedAt: string;
   /** Count only, for the list. The full timeline comes from the detail call. */
