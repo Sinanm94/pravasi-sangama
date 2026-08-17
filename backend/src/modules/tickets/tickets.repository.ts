@@ -48,26 +48,41 @@ export interface QrCodeRow {
  * aborts, the drawn numbers are simply never used and the series has a gap.
  * A gap is harmless; a reused number is two tickets with one identity.
  *
- * LPAD to REQUEST/TICKET_NUMBER_LENGTH keeps the printed width fixed —
- * leading zeros are significant (§4.4), so ticket 41 prints TKT-0041.
+ * Zero-padded to REQUEST/TICKET_NUMBER_LENGTH so the printed width is
+ * fixed — leading zeros are significant (§4.4), so ticket 41 is TKT-0041.
+ *
+ * ⚠ NOT `LPAD`. Postgres' LPAD TRUNCATES when the input is longer than the
+ * target width — `LPAD('687223', 4, '0')` returns `'6872'`, silently. That
+ * is catastrophic here rather than merely ugly: truncation is not
+ * injective, so two different sequence values can collapse to the same
+ * printed number and the uniqueness the sequence exists to guarantee is
+ * destroyed on the way out. It also made the numbers LOOK random, because
+ * the visible digits were the tail of a much larger counter.
+ *
+ * `to_char(n, 'FM0000')` pads to the width and, crucially, GROWS past it
+ * rather than cutting — 10000 renders as `10000`, not `0000`. The number
+ * gets one character wider and stays correct, which is the right failure
+ * direction for an identifier.
+ *
+ * The format string is built from the length constant rather than
+ * hardcoded, so raising REQUEST/TICKET_NUMBER_LENGTH in packages/shared
+ * remains the only edit needed (§4.5).
  */
 export async function nextTicketNumbers(
   client: PoolClient,
 ): Promise<{ requestNumber: string; ticketNumber: string }> {
+  const reqFormat = `FM${'0'.repeat(REQUEST_NUMBER_LENGTH)}`;
+  const tktFormat = `FM${'0'.repeat(TICKET_NUMBER_LENGTH)}`;
+
   const { rows } = await client.query<{
     request_number: string;
     ticket_number: string;
   }>(
-    `SELECT $1::text || LPAD(nextval('request_number_seq')::text, $2, '0')
+    `SELECT $1::text || to_char(nextval('request_number_seq'), $2)
               AS request_number,
-            $3::text || LPAD(nextval('ticket_number_seq')::text, $4, '0')
+            $3::text || to_char(nextval('ticket_number_seq'), $4)
               AS ticket_number`,
-    [
-      REQUEST_NUMBER_PREFIX,
-      REQUEST_NUMBER_LENGTH,
-      TICKET_NUMBER_PREFIX,
-      TICKET_NUMBER_LENGTH,
-    ],
+    [REQUEST_NUMBER_PREFIX, reqFormat, TICKET_NUMBER_PREFIX, tktFormat],
   );
 
   const row = rows[0]!;

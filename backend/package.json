@@ -15,6 +15,7 @@
     "db:provision-scanners": "tsx src/db/provision-scanners.ts",
     "db:provision-superusers": "tsx src/db/provision-superusers.ts",
     "db:demo-agent": "tsx src/db/provision-demo-agent.ts",
+    "db:reset-ticket-numbers": "tsx src/db/reset-ticket-numbering.ts",
     "db:rotate": "tsx src/db/rotate-credentials.ts",
     "db:bulk-rotate-passwords": "tsx src/db/bulk-rotate-passwords.ts",
     "db:reset": "npm run db:migrate && npm run db:seed",

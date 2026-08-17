@@ -577,8 +577,27 @@ regexes have no runtime callers that would reject one.
 > number**, so it can never re-issue one already in the table. Consequence:
 > on a database that already holds a 6-digit random ticket like
 > `TKT-598054`, the first new ticket is `TKT-598055`, **not** `TKT-0001`.
-> To genuinely start at `0001`, delete those test rows first —
-> `db:demo-agent -- --destroy` does exactly that for the demo fixture.
+> To genuinely start at `0001` on a database full of test tickets:
+>
+> ```bash
+> npm run db:reset-ticket-numbers -w @pravasi/backend            # dry run
+> npm run db:reset-ticket-numbers -w @pravasi/backend -- --yes   # apply
+> ```
+>
+> That deletes **every** ticket (and its QR codes and scan logs) and resets
+> both sequences to 1. It **refuses to run once any QR code is `SCANNED`** —
+> a scanned code means the gate is live, and at that point wiping the ledger
+> is categorically the wrong tool. Premium client records survive with
+> `ticket_id` cleared: the conversation with a VIP is not the sale.
+
+**Format with `to_char`, never `LPAD`.** Postgres' `LPAD` **truncates** when
+the value exceeds the width — `LPAD('687223', 4, '0')` is `'6872'`, silently.
+That is not cosmetic: truncation is not injective, so two sequence values can
+collapse to one printed number and destroy the uniqueness the sequence
+exists to provide. (It also makes sequential numbers *look* random, since
+the visible digits are the tail of a larger counter — this shipped once and
+was caught in testing.) `to_char(n, 'FM0000')` pads to the width and **grows**
+past it instead of cutting.
 
 **Not an admission credential.** Neither number gates entry — the QR payload
 does that, is a full UUID, and is never shortened. Being short and
