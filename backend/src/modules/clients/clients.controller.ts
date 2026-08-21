@@ -88,6 +88,27 @@ export const listClients = handle(async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* GET /api/clients/filter-options                                     */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Sectors and contact owners that actually appear in the data.
+ *
+ * Derived rather than hardcoded, same as the ticket ledger's sector list:
+ * the imported roster carries groupings ('Sponsors') that are not event
+ * sectors, and the owners are volunteer nicknames that exist nowhere else
+ * in the system.
+ */
+export const listClientFilterOptions = handle(async (_req, res) => {
+  const [sectors, owners] = await Promise.all([
+    repo.listClientSectors(),
+    repo.listClientOwners(),
+  ]);
+
+  res.status(200).json({ sectors, owners });
+});
+
+/* ------------------------------------------------------------------ */
 /* GET /api/clients/:id — record plus full timeline                    */
 /* ------------------------------------------------------------------ */
 
@@ -130,6 +151,7 @@ export const createClient = handle(async (req, res) => {
     unitId: input.unit_id ?? null,
     referredBy: blankToNull(input.referred_by),
     isMember: input.is_member ?? null,
+    sector: input.sector?.trim() ? input.sector.trim().toUpperCase() : null,
     source: input.source?.trim() || 'MANUAL',
     createdBy: actor,
   });
@@ -162,6 +184,7 @@ export const updateClient = handle(async (req, res) => {
     unit_id: input.unit_id,
     referred_by: input.referred_by,
     is_member: input.is_member,
+    sector: input.sector,
   };
 
   const ok = await repo.updateClient(id, patch);

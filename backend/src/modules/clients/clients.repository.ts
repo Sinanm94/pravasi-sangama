@@ -78,9 +78,16 @@ function clientWhere(f: ClientFilters): { sql: string; params: unknown[] } {
 
   if (f.unitId) add((i) => `c.unit_id = $${i}::uuid`, f.unitId);
 
-  /* Sector lives on `units`, never copied onto `clients` (migration 017), so
-   * it filters through the join rather than off a duplicated column. */
-  if (f.sector) add((i) => `u.sector = $${i}`, f.sector);
+  /* Matches the same COALESCE the SELECT returns, so the filter can never
+   * disagree with what the row displays. Compared case-insensitively and
+   * trimmed because `units.sector` is free text with no CHECK (Known debt
+   * 7) and the imported values are typed by hand. */
+  if (f.sector)
+    add(
+      (i) =>
+        `upper(trim(COALESCE(u.sector, c.sector))) = upper(trim($${i}))`,
+      f.sector,
+    );
 
   /* Matched case- and whitespace-insensitively, and indexed the same way
    * (019): these names are typed by hand off a WhatsApp list, so "Sabir"
@@ -137,7 +144,11 @@ export async function listClients(
             c.intended_tier, c.status,
             to_char(c.follow_up_on, 'YYYY-MM-DD') AS follow_up_on,
             c.ticket_id, t.ticket_number,
-            c.unit_id, u.unit_code, u.name AS unit_name, u.sector,
+            c.unit_id, u.unit_code, u.name AS unit_name,
+            /* The UNIT is authoritative whenever one is set; c.sector is
+             * the fallback for a client that has no unit (020). This is
+             * what keeps the two from drifting into disagreement. */
+            COALESCE(u.sector, c.sector) AS sector,
             c.referred_by, c.is_member, c.source,
             c.created_at, c.updated_at,
             i.interaction_count, i.last_interaction_at
@@ -207,7 +218,11 @@ export async function findClientById(id: string): Promise<ClientRow | null> {
             c.intended_tier, c.status,
             to_char(c.follow_up_on, 'YYYY-MM-DD') AS follow_up_on,
             c.ticket_id, t.ticket_number,
-            c.unit_id, u.unit_code, u.name AS unit_name, u.sector,
+            c.unit_id, u.unit_code, u.name AS unit_name,
+            /* The UNIT is authoritative whenever one is set; c.sector is
+             * the fallback for a client that has no unit (020). This is
+             * what keeps the two from drifting into disagreement. */
+            COALESCE(u.sector, c.sector) AS sector,
             c.referred_by, c.is_member, c.source,
             c.created_at, c.updated_at,
             i.interaction_count, i.last_interaction_at
@@ -251,15 +266,17 @@ export async function createClient(params: {
   unitId: string | null;
   referredBy: string | null;
   isMember: boolean | null;
+  sector: string | null;
   source: string;
   createdBy: string;
 }): Promise<{ id: string }> {
   const { rows } = await query<{ id: string }>(
     `INSERT INTO clients
        (name, mobile, email, organisation, intended_tier, status,
-        follow_up_on, unit_id, referred_by, is_member, source, created_by)
+        follow_up_on, unit_id, referred_by, is_member, sector, source,
+        created_by)
      VALUES ($1, $2, $3, $4, $5::ticket_type, $6::client_status, $7::DATE,
-             $8::uuid, $9, $10::boolean, $11, $12)
+             $8::uuid, $9, $10::boolean, $11, $12, $13)
      RETURNING id`,
     [
       params.name,
@@ -272,6 +289,7 @@ export async function createClient(params: {
       params.unitId,
       params.referredBy,
       params.isMember,
+      params.sector,
       params.source,
       params.createdBy,
     ],
@@ -375,4 +393,35 @@ export async function superuserDisplayName(
     [superuserId],
   );
   return rows[0]?.label ?? null;
+}
+
+/**
+ * Every sector that actually has clients, for the filter dropdown.
+ *
+ * Derived from the DATA rather than a fixed list, exactly as the ticket
+ * ledger derives its sector filter (Known debt 7): the imported list
+ * includes groupings like 'Sponsors' that are not event sectors at all, and
+ * a hardcoded list would silently hide them.
+ */
+export async function listClientSectors(): Promise<string[]> {
+  const { rows } = await query<{ sector: string }>(
+    `SELECT DISTINCT upper(trim(COALESCE(u.sector, c.sector))) AS sector
+       FROM clients c
+       LEFT JOIN units u ON u.id = c.unit_id
+      WHERE COALESCE(u.sector, c.sector) IS NOT NULL
+        AND trim(COALESCE(u.sector, c.sector)) <> ''
+      ORDER BY sector ASC`,
+  );
+  return rows.map((r) => r.sector);
+}
+
+/** Distinct contact owners, for the same reason. */
+export async function listClientOwners(): Promise<string[]> {
+  const { rows } = await query<{ owner: string }>(
+    `SELECT DISTINCT trim(referred_by) AS owner
+       FROM clients
+      WHERE referred_by IS NOT NULL AND trim(referred_by) <> ''
+      ORDER BY owner ASC`,
+  );
+  return rows.map((r) => r.owner);
 }

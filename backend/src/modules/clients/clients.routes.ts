@@ -14,6 +14,9 @@ export const clientRoutes: Router = Router();
 
 clientRoutes.use(requireSuperuser);
 
+/* Before /:id, or "filter-options" is parsed as a client id. */
+clientRoutes.get('/filter-options', controller.listClientFilterOptions);
+
 clientRoutes.get('/', controller.listClients);
 clientRoutes.post('/', controller.createClient);
 

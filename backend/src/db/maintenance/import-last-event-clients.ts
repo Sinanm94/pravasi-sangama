@@ -32,8 +32,13 @@ import { closePool, withTransaction } from '../index.js';
  * `unit_id` is deliberately left NULL. The source names SECTORS (Ghurnatha,
  * Shifa, Olaya...) and a sector is not a unit — each contains several. There
  * is no honest mapping from one to the other, and guessing a unit would put
- * a client under a specific unit head who never spoke to them. The sector is
- * recorded in the notes instead, and a real unit can be set in the UI.
+ * a client under a specific unit head who never spoke to them.
+ *
+ * The sector goes into `clients.sector` (020) so it is FILTERABLE. It was
+ * originally only written into the first timeline entry, which meant the
+ * sector filter returned nothing for every imported row — the information
+ * was present and unusable. Assigning a unit later overrides it, since the
+ * read is COALESCE(units.sector, clients.sector).
  *
  * Everyone lands as PROSPECT: last year's purchase is history, not a
  * commitment for this year, and the whole point is to ask them again.
@@ -278,11 +283,22 @@ async function apply(): Promise<{ inserted: number; skipped: number }> {
        * several units, so there is no honest mapping. */
       const { rows } = await client.query<{ id: string }>(
         `INSERT INTO clients
-           (name, intended_tier, status, is_member, referred_by, source,
-            created_by)
-         VALUES ($1, $2::ticket_type, 'PROSPECT', $3::boolean, $4, $5, NULL)
+           (name, intended_tier, status, is_member, referred_by, sector,
+            source, created_by)
+         VALUES ($1, $2::ticket_type, 'PROSPECT', $3::boolean, $4, $5, $6,
+                 NULL)
          RETURNING id`,
-        [c.name, c.tier, c.member, c.referredBy ?? null, SOURCE],
+        [
+          c.name,
+          c.tier,
+          c.member,
+          c.referredBy ?? null,
+          /* Stored on the row, not only in the timeline text (020): the
+           * sector filter has to be able to FIND these, and prose in a
+           * note is not queryable. Uppercased to match units.sector. */
+          c.sector.toUpperCase(),
+          SOURCE,
+        ],
       );
 
       await client.query(

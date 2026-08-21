@@ -88,6 +88,7 @@ function ClientsScreen() {
   const [committedSearch, setCommittedSearch] = useState('');
   const [unitId, setUnitId] = useState('');
   const [referredBy, setReferredBy] = useState('');
+  const [sector, setSector] = useState('');
 
   /* Board is the default: the five statuses are a pipeline, and the
    * question this screen exists to answer ("who is stuck where, who needs
@@ -100,6 +101,13 @@ function ClientsScreen() {
    * existing options endpoint rather than adding a second one — it already
    * returns every unit with its sector. */
   const [units, setUnits] = useState<AdminFilterOptions['units']>([]);
+
+  /* Sectors and owners come from the SERVER, over the whole table — not
+   * from the loaded rows. Deriving them client-side would shrink the
+   * dropdown as filters narrowed the result set, so the control that
+   * clears a filter would lose the option needed to clear it. */
+  const [sectorOptions, setSectorOptions] = useState<string[]>([]);
+  const [owners, setOwners] = useState<string[]>([]);
 
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -115,6 +123,7 @@ function ClientsScreen() {
       term: string,
       unit: string,
       owner: string,
+      sec: string,
       isRefresh = false,
     ) => {
       if (isRefresh) setRefreshing(true);
@@ -124,6 +133,7 @@ function ClientsScreen() {
       if (term) params.set('search', term);
       if (unit) params.set('unit_id', unit);
       if (owner) params.set('referred_by', owner);
+      if (sec) params.set('sector', sec);
 
       try {
         const qs = params.toString();
@@ -139,16 +149,23 @@ function ClientsScreen() {
   );
 
   useEffect(() => {
-    void load(status, committedSearch, unitId, referredBy);
-  }, [load, status, committedSearch, unitId, referredBy]);
+    void load(status, committedSearch, unitId, referredBy, sector);
+  }, [load, status, committedSearch, unitId, referredBy, sector]);
 
   /* Loaded once. The unit roster does not change during a session, and
    * re-fetching it on every filter change would be 30 rows of waste. */
   useEffect(() => {
     void (async () => {
       try {
-        const opts = await apiGet<AdminFilterOptions>('/admin/filter-options');
+        const [opts, clientOpts] = await Promise.all([
+          apiGet<AdminFilterOptions>('/admin/filter-options'),
+          apiGet<{ sectors: string[]; owners: string[] }>(
+            '/clients/filter-options',
+          ),
+        ]);
         setUnits(opts.units);
+        setSectorOptions(clientOpts.sectors);
+        setOwners(clientOpts.owners);
       } catch {
         /* Non-fatal: the picker degrades to "no unit", and every other part
          * of this screen still works. Not worth a toast on page load. */
@@ -156,25 +173,16 @@ function ClientsScreen() {
     })();
   }, []);
 
-  /* Owners come from the DATA, not a roster: these are volunteers named on
-   * a WhatsApp list, most of whom have no account in this system, so there
-   * is nowhere else to get the list from. */
-  const owners = useMemo(() => {
-    const set = new Set<string>();
-    for (const c of data?.clients ?? []) {
-      if (c.referredBy) set.add(c.referredBy);
-    }
-    return [...set].sort((a, b) => a.localeCompare(b));
-  }, [data]);
 
   const reload = () =>
-    void load(status, committedSearch, unitId, referredBy, true);
+    void load(status, committedSearch, unitId, referredBy, sector, true);
   const totals = data?.totals;
   const filtered =
     Boolean(status) ||
     committedSearch.length > 0 ||
     Boolean(unitId) ||
-    Boolean(referredBy);
+    Boolean(referredBy) ||
+    Boolean(sector);
 
   return (
     <AdminShell
@@ -240,7 +248,7 @@ function ClientsScreen() {
       </div>
 
       <div className="mt-6 rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {/* Status filter is hidden on the board: the columns ARE the
               status breakdown, and filtering to one status would collapse
               the board to a single column — a worse list. */}
@@ -269,6 +277,30 @@ function ClientsScreen() {
               </div>
             </label>
           )}
+
+          <label className="block">
+            <span className="mb-2 block text-[13px] font-medium text-gray-700">
+              Sector
+            </span>
+            <div className="relative">
+              <select
+                value={sector}
+                onChange={(e) => setSector(e.target.value)}
+                className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
+              >
+                <option value="">All sectors</option>
+                {sectorOptions.map((sec) => (
+                  <option key={sec} value={sec}>
+                    {sec}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400"
+                strokeWidth={2.25}
+              />
+            </div>
+          </label>
 
           <label className="block">
             <span className="mb-2 block text-[13px] font-medium text-gray-700">
@@ -356,6 +388,7 @@ function ClientsScreen() {
                 setSearch('');
                 setUnitId('');
                 setReferredBy('');
+                setSector('');
               }}
               className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
             >

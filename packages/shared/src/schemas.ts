@@ -559,6 +559,7 @@ export const CreateClientSchema = z
     unit_id: z.string().uuid().optional(),
     referred_by: z.string().trim().max(160).optional(),
     is_member: z.boolean().optional(),
+    sector: z.string().trim().max(60).optional(),
     source: z.string().trim().max(60).optional(),
   })
   .strict();
@@ -579,6 +580,7 @@ export const UpdateClientSchema = z
     unit_id: z.string().uuid().nullable().optional(),
     referred_by: z.string().trim().max(160).nullable().optional(),
     is_member: z.boolean().nullable().optional(),
+    sector: z.string().trim().max(60).nullable().optional(),
   })
   .strict();
 
