@@ -39,6 +39,9 @@ const toClient = (r: repo.ClientRow): ClientRecord => ({
   unitCode: r.unit_code,
   unitName: r.unit_name,
   sector: r.sector,
+  referredBy: r.referred_by,
+  isMember: r.is_member,
+  source: r.source,
   createdAt: r.created_at.toISOString(),
   updatedAt: r.updated_at.toISOString(),
   interactionCount: r.interaction_count,
@@ -64,6 +67,11 @@ export const listClients = handle(async (req, res) => {
     search: q.search,
     unitId: q.unit_id,
     sector: q.sector,
+    referredBy: q.referred_by,
+    /* Absent means "either"; the wire carries strings because it is a query
+     * string, so the tri-state is preserved rather than collapsed. */
+    isMember: q.is_member === undefined ? undefined : q.is_member === 'true',
+    source: q.source,
   };
 
   const [rows, totals] = await Promise.all([
@@ -120,6 +128,9 @@ export const createClient = handle(async (req, res) => {
     status: input.status,
     followUpOn: input.follow_up_on ?? null,
     unitId: input.unit_id ?? null,
+    referredBy: blankToNull(input.referred_by),
+    isMember: input.is_member ?? null,
+    source: input.source?.trim() || 'MANUAL',
     createdBy: actor,
   });
 
@@ -149,6 +160,8 @@ export const updateClient = handle(async (req, res) => {
     follow_up_on: input.follow_up_on,
     ticket_id: input.ticket_id,
     unit_id: input.unit_id,
+    referred_by: input.referred_by,
+    is_member: input.is_member,
   };
 
   const ok = await repo.updateClient(id, patch);

@@ -87,6 +87,7 @@ function ClientsScreen() {
   const [search, setSearch] = useState('');
   const [committedSearch, setCommittedSearch] = useState('');
   const [unitId, setUnitId] = useState('');
+  const [referredBy, setReferredBy] = useState('');
 
   /* Board is the default: the five statuses are a pipeline, and the
    * question this screen exists to answer ("who is stuck where, who needs
@@ -113,6 +114,7 @@ function ClientsScreen() {
       s: ClientStatus | '',
       term: string,
       unit: string,
+      owner: string,
       isRefresh = false,
     ) => {
       if (isRefresh) setRefreshing(true);
@@ -121,6 +123,7 @@ function ClientsScreen() {
       if (s) params.set('status', s);
       if (term) params.set('search', term);
       if (unit) params.set('unit_id', unit);
+      if (owner) params.set('referred_by', owner);
 
       try {
         const qs = params.toString();
@@ -136,8 +139,8 @@ function ClientsScreen() {
   );
 
   useEffect(() => {
-    void load(status, committedSearch, unitId);
-  }, [load, status, committedSearch, unitId]);
+    void load(status, committedSearch, unitId, referredBy);
+  }, [load, status, committedSearch, unitId, referredBy]);
 
   /* Loaded once. The unit roster does not change during a session, and
    * re-fetching it on every filter change would be 30 rows of waste. */
@@ -153,10 +156,25 @@ function ClientsScreen() {
     })();
   }, []);
 
-  const reload = () => void load(status, committedSearch, unitId, true);
+  /* Owners come from the DATA, not a roster: these are volunteers named on
+   * a WhatsApp list, most of whom have no account in this system, so there
+   * is nowhere else to get the list from. */
+  const owners = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of data?.clients ?? []) {
+      if (c.referredBy) set.add(c.referredBy);
+    }
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [data]);
+
+  const reload = () =>
+    void load(status, committedSearch, unitId, referredBy, true);
   const totals = data?.totals;
   const filtered =
-    Boolean(status) || committedSearch.length > 0 || Boolean(unitId);
+    Boolean(status) ||
+    committedSearch.length > 0 ||
+    Boolean(unitId) ||
+    Boolean(referredBy);
 
   return (
     <AdminShell
@@ -276,6 +294,35 @@ function ClientsScreen() {
             </div>
           </label>
 
+          <label className="block">
+            <span className="mb-2 block text-[13px] font-medium text-gray-700">
+              Contact owner
+            </span>
+            <div className="relative">
+              <select
+                value={referredBy}
+                onChange={(e) => setReferredBy(e.target.value)}
+                className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
+              >
+                <option value="">Anyone</option>
+                {/* A filter value that is no longer in the loaded set would
+                    otherwise vanish from its own dropdown. */}
+                {referredBy && !owners.includes(referredBy) && (
+                  <option value={referredBy}>{referredBy}</option>
+                )}
+                {owners.map((o) => (
+                  <option key={o} value={o}>
+                    {o}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                className="pointer-events-none absolute right-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400"
+                strokeWidth={2.25}
+              />
+            </div>
+          </label>
+
           <div>
             <label
               htmlFor="client-search"
@@ -308,6 +355,7 @@ function ClientsScreen() {
                 setStatus('');
                 setSearch('');
                 setUnitId('');
+                setReferredBy('');
               }}
               className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-3.5 py-2 text-[12px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97]"
             >
@@ -613,6 +661,14 @@ function BoardCard({
           </p>
         )}
 
+        {/* Who is chasing this person is the single most useful thing on a
+            card when the list runs to a few hundred names. */}
+        {client.referredBy && (
+          <p className="mt-1 truncate text-[11px] text-gray-500">
+            Owner: {client.referredBy}
+          </p>
+        )}
+
         <div className="mt-2 flex flex-wrap items-center gap-1.5">
           {client.followUpOn && (
             <span
@@ -622,6 +678,11 @@ function BoardCard({
             >
               {overdue ? 'Chase' : 'Follow up'}{' '}
               {formatDateOnly(client.followUpOn)}
+            </span>
+          )}
+          {client.isMember === true && (
+            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+              Member
             </span>
           )}
           <span className="text-[10px] text-gray-400">
@@ -738,7 +799,17 @@ function ClientRow({
           </div>
 
           <p className="mt-0.5 truncate text-[12px] text-gray-500">
-            {[client.organisation, client.mobile, client.email]
+            {[
+              client.organisation,
+              client.mobile,
+              client.email,
+              client.referredBy ? `Owner: ${client.referredBy}` : null,
+              client.isMember === true
+                ? 'KCF member'
+                : client.isMember === false
+                  ? 'Non-member'
+                  : null,
+            ]
               .filter(Boolean)
               .join(' · ') || 'No contact details recorded'}
           </p>
@@ -790,6 +861,10 @@ function AddClientSheet({
   const [status, setStatus] = useState<ClientStatus>('PROSPECT');
   const [followUp, setFollowUp] = useState('');
   const [unitId, setUnitId] = useState('');
+  const [referredBy, setReferredBy] = useState('');
+  /* '' = not known, a real third state distinct from "not a member" —
+   * which is why the column is nullable (019). */
+  const [isMember, setIsMember] = useState<'' | 'yes' | 'no'>('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -811,6 +886,8 @@ function AddClientSheet({
         status,
         ...(followUp ? { follow_up_on: followUp } : {}),
         ...(unitId ? { unit_id: unitId } : {}),
+        ...(referredBy.trim() ? { referred_by: referredBy.trim() } : {}),
+        ...(isMember ? { is_member: isMember === 'yes' } : {}),
       });
       toast.success('Client added');
       onCreated();
@@ -928,6 +1005,34 @@ function AddClientSheet({
               onChange={(e) => setFollowUp(e.target.value)}
               className={inputCls}
             />
+          </SheetField>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <SheetField
+            label="Contact owner"
+            hint="Who will call them"
+          >
+            <input
+              value={referredBy}
+              onChange={(e) => setReferredBy(e.target.value)}
+              placeholder="e.g. Sabir"
+              className={inputCls}
+            />
+          </SheetField>
+
+          <SheetField label="KCF member">
+            <select
+              value={isMember}
+              onChange={(e) =>
+                setIsMember(e.target.value as '' | 'yes' | 'no')
+              }
+              className={inputCls}
+            >
+              <option value="">Not known</option>
+              <option value="yes">Member</option>
+              <option value="no">Not a member</option>
+            </select>
           </SheetField>
         </div>
 
@@ -1066,6 +1171,39 @@ function ClientDetailSheet({
                 }
                 className={inputCls}
               />
+            </SheetField>
+
+            <SheetField label="Contact owner" hint="Who will call them">
+              <input
+                defaultValue={client.referredBy ?? ''}
+                onBlur={(e) => {
+                  const next = e.target.value.trim();
+                  if (next !== (client.referredBy ?? '')) {
+                    void patch({ referred_by: next || null });
+                  }
+                }}
+                placeholder="e.g. Sabir"
+                className={inputCls}
+              />
+            </SheetField>
+
+            <SheetField label="KCF member">
+              <select
+                value={
+                  client.isMember === null ? '' : client.isMember ? 'yes' : 'no'
+                }
+                onChange={(e) =>
+                  void patch({
+                    is_member:
+                      e.target.value === '' ? null : e.target.value === 'yes',
+                  })
+                }
+                className={inputCls}
+              >
+                <option value="">Not known</option>
+                <option value="yes">Member</option>
+                <option value="no">Not a member</option>
+              </select>
             </SheetField>
 
             <SheetField label="Unit" hint="Who is working this client">

@@ -1045,6 +1045,29 @@ unreachable; attribution lives on the rows instead of in a scope filter.
 `PATCH` is a genuine patch — only supplied keys are written — so two
 superusers editing different fields cannot clobber each other.
 
+**Last event's purchaser list (migration 019).** `clients` gained
+`referred_by`, `is_member` and `source`, and `db:import-clients` loads the
+153 VIP/VVIP buyers from the previous event so the same people can be worked
+again. No new tab: this IS the Clients screen's job, and a second screen
+would have split one pipeline in two.
+
+`referred_by` is deliberately **free text, not an FK** — unlike
+`clients.unit_id` (017), which is a real reference. These are volunteers
+named on a WhatsApp list ("Sabir", "klrb", "Shihab Hly"); most have no
+account and never will, so an FK would mean inventing one each or dropping
+the information. `is_member` is **nullable on purpose**: member, not a
+member, and not-yet-known are three distinct states.
+
+> **Names are transliterated from Kannada, and that is a decision.** The
+> field is searched and typed on an English keyboard, so a Kannada-only name
+> would be unreachable. The transliterations are best-effort and will
+> contain errors — `source = 'LAST_EVENT_2025'` marks them as imported
+> rather than hand-entered so they can be found and corrected.
+>
+> `unit_id` is left NULL: the source names **sectors**, and a sector holds
+> several units. Guessing one would file a client under a unit head who
+> never spoke to them. The sector goes in the first timeline entry instead.
+
 **Activities (migration 018).** `/admin/activities` +
 `backend/src/modules/activities/`. The organiser's OWN task list — "confirm
 catering headcount", "call the printer" — with a title, notes, priority, due

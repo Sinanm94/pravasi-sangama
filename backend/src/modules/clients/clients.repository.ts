@@ -34,6 +34,9 @@ export interface ClientRow {
   unit_code: string | null;
   unit_name: string | null;
   sector: string | null;
+  referred_by: string | null;
+  is_member: boolean | null;
+  source: string;
   created_at: Date;
   updated_at: Date;
   interaction_count: number;
@@ -53,6 +56,9 @@ export interface ClientFilters {
   search?: string | undefined;
   unitId?: string | undefined;
   sector?: string | undefined;
+  referredBy?: string | undefined;
+  isMember?: boolean | undefined;
+  source?: string | undefined;
 }
 
 /**
@@ -75,6 +81,20 @@ function clientWhere(f: ClientFilters): { sql: string; params: unknown[] } {
   /* Sector lives on `units`, never copied onto `clients` (migration 017), so
    * it filters through the join rather than off a duplicated column. */
   if (f.sector) add((i) => `u.sector = $${i}`, f.sector);
+
+  /* Matched case- and whitespace-insensitively, and indexed the same way
+   * (019): these names are typed by hand off a WhatsApp list, so "Sabir"
+   * and "sabir " are the same volunteer. */
+  if (f.referredBy)
+    add(
+      (i) => `lower(trim(c.referred_by)) = lower(trim($${i}))`,
+      f.referredBy,
+    );
+
+  if (f.isMember !== undefined)
+    add((i) => `c.is_member = $${i}::boolean`, f.isMember);
+
+  if (f.source) add((i) => `c.source = $${i}`, f.source);
 
   if (f.search) {
     // % and _ are ILIKE wildcards; escaping them keeps a literal search for
@@ -118,6 +138,7 @@ export async function listClients(
             to_char(c.follow_up_on, 'YYYY-MM-DD') AS follow_up_on,
             c.ticket_id, t.ticket_number,
             c.unit_id, u.unit_code, u.name AS unit_name, u.sector,
+            c.referred_by, c.is_member, c.source,
             c.created_at, c.updated_at,
             i.interaction_count, i.last_interaction_at
        FROM clients c
@@ -187,6 +208,7 @@ export async function findClientById(id: string): Promise<ClientRow | null> {
             to_char(c.follow_up_on, 'YYYY-MM-DD') AS follow_up_on,
             c.ticket_id, t.ticket_number,
             c.unit_id, u.unit_code, u.name AS unit_name, u.sector,
+            c.referred_by, c.is_member, c.source,
             c.created_at, c.updated_at,
             i.interaction_count, i.last_interaction_at
        FROM clients c
@@ -227,14 +249,17 @@ export async function createClient(params: {
   status: ClientStatus;
   followUpOn: string | null;
   unitId: string | null;
+  referredBy: string | null;
+  isMember: boolean | null;
+  source: string;
   createdBy: string;
 }): Promise<{ id: string }> {
   const { rows } = await query<{ id: string }>(
     `INSERT INTO clients
        (name, mobile, email, organisation, intended_tier, status,
-        follow_up_on, unit_id, created_by)
+        follow_up_on, unit_id, referred_by, is_member, source, created_by)
      VALUES ($1, $2, $3, $4, $5::ticket_type, $6::client_status, $7::DATE,
-             $8::uuid, $9)
+             $8::uuid, $9, $10::boolean, $11, $12)
      RETURNING id`,
     [
       params.name,
@@ -245,6 +270,9 @@ export async function createClient(params: {
       params.status,
       params.followUpOn,
       params.unitId,
+      params.referredBy,
+      params.isMember,
+      params.source,
       params.createdBy,
     ],
   );
@@ -272,6 +300,7 @@ export async function updateClient(
     follow_up_on: '::DATE',
     ticket_id: '::uuid',
     unit_id: '::uuid',
+    is_member: '::boolean',
   };
 
   const sets: string[] = [];

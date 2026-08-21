@@ -684,6 +684,12 @@ export interface ClientRecord {
   unitName: string | null;
   /** Read through the unit, never stored on the client (migration 017). */
   sector: string | null;
+  /** Volunteer who owns this relationship — the source list's "c/o". */
+  referredBy: string | null;
+  /** KCF member. NULL is distinct from false: nobody has checked yet. */
+  isMember: boolean | null;
+  /** Where the record came from, e.g. MANUAL or LAST_EVENT_2025. */
+  source: string;
   createdAt: string;
   updatedAt: string;
   /** Count only, for the list. The full timeline comes from the detail call. */

@@ -557,6 +557,9 @@ export const CreateClientSchema = z
     /** ISO date, no time — "chase them on this day". */
     follow_up_on: z.string().date().optional(),
     unit_id: z.string().uuid().optional(),
+    referred_by: z.string().trim().max(160).optional(),
+    is_member: z.boolean().optional(),
+    source: z.string().trim().max(60).optional(),
   })
   .strict();
 
@@ -574,6 +577,8 @@ export const UpdateClientSchema = z
     follow_up_on: z.string().date().nullable().optional(),
     ticket_id: z.string().uuid().nullable().optional(),
     unit_id: z.string().uuid().nullable().optional(),
+    referred_by: z.string().trim().max(160).nullable().optional(),
+    is_member: z.boolean().nullable().optional(),
   })
   .strict();
 
@@ -603,6 +608,10 @@ export const ClientQuerySchema = z.object({
   search: z.string().trim().max(120).optional(),
   unit_id: z.string().uuid().optional(),
   sector: z.string().trim().max(60).optional(),
+  referred_by: z.string().trim().max(160).optional(),
+  /** 'true' | 'false' on the wire; absent means "either". */
+  is_member: z.enum(['true', 'false']).optional(),
+  source: z.string().trim().max(60).optional(),
   limit: z.coerce.number().int().positive().max(500).default(200),
 });
 
