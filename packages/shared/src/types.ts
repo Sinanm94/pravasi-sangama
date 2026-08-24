@@ -769,3 +769,32 @@ export interface ActivityListResponse {
     doneRecently: number;
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* Client analytics                                                    */
+/* ------------------------------------------------------------------ */
+
+/** One bar: a sector, contact owner or tier, split by pipeline stage. */
+export interface ClientAnalyticsBucket {
+  bucket: string;
+  total: number;
+  prospect: number;
+  awaiting: number;
+  confirmed: number;
+  ticketed: number;
+  declined: number;
+}
+
+export interface ClientAnalyticsResponse {
+  /** What `buckets` is grouped by — echoed so the UI cannot mislabel it. */
+  groupBy: 'sector' | 'owner' | 'tier';
+  buckets: ClientAnalyticsBucket[];
+  pipeline: Array<{ status: ClientStatus; count: number }>;
+  /** Three states: NULL ("not known") is real and never folded into false. */
+  membership: { member: number; nonMember: number; unknown: number };
+  totals: {
+    total: number;
+    /** CONFIRMED + TICKETED over total, as a whole-number percentage. */
+    conversionRate: number;
+  };
+}

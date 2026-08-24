@@ -425,3 +425,120 @@ export async function listClientOwners(): Promise<string[]> {
   );
   return rows.map((r) => r.owner);
 }
+
+/* ------------------------------------------------------------------ */
+/* Analytics                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface ClientAnalyticsRow {
+  bucket: string;
+  total: number;
+  prospect: number;
+  awaiting: number;
+  confirmed: number;
+  ticketed: number;
+  declined: number;
+}
+
+/**
+ * Pipeline counts grouped by sector, owner or tier.
+ *
+ * Takes the SAME filters as the list and runs them through the SAME
+ * `clientWhere()` builder, so a chart can never describe a different set of
+ * rows than the table beside it.
+ *
+ * `groupBy` is NOT interpolated from user input: the caller passes one of
+ * three fixed keys which this maps to a checked SQL expression. A
+ * client-supplied string in GROUP BY would be an injection hole, and a
+ * whitelist is the only safe way to vary a column name.
+ */
+export async function analyseClients(
+  filters: ClientFilters,
+  groupBy: 'sector' | 'owner' | 'tier',
+): Promise<ClientAnalyticsRow[]> {
+  const { sql, params } = clientWhere(filters);
+
+  const EXPRESSIONS = {
+    sector: `upper(trim(COALESCE(u.sector, c.sector)))`,
+    owner: `trim(c.referred_by)`,
+    tier: `c.intended_tier::text`,
+  } as const;
+
+  const expr = EXPRESSIONS[groupBy];
+
+  const { rows } = await query<ClientAnalyticsRow>(
+    `SELECT COALESCE(NULLIF(${expr}, ''), 'Unassigned') AS bucket,
+            COUNT(*)::INT AS total,
+            COUNT(*) FILTER (WHERE c.status = 'PROSPECT')::INT       AS prospect,
+            COUNT(*) FILTER (WHERE c.status = 'AWAITING_REPLY')::INT AS awaiting,
+            COUNT(*) FILTER (WHERE c.status = 'CONFIRMED')::INT      AS confirmed,
+            COUNT(*) FILTER (WHERE c.status = 'TICKETED')::INT       AS ticketed,
+            COUNT(*) FILTER (WHERE c.status = 'DECLINED')::INT       AS declined
+       FROM clients c
+       LEFT JOIN units u ON u.id = c.unit_id
+       ${sql}
+      GROUP BY 1
+      /* Biggest first: the question is "where is the volume", and an
+       * alphabetical axis buries that. */
+      ORDER BY total DESC, bucket ASC`,
+    params,
+  );
+  return rows;
+}
+
+export interface ClientPipelineRow {
+  status: string;
+  count: number;
+}
+
+/** Overall pipeline shape, for the stage KPI row. */
+export async function clientPipeline(
+  filters: ClientFilters,
+): Promise<ClientPipelineRow[]> {
+  const { sql, params } = clientWhere(filters);
+
+  const { rows } = await query<ClientPipelineRow>(
+    `SELECT c.status::text AS status, COUNT(*)::INT AS count
+       FROM clients c
+       LEFT JOIN units u ON u.id = c.unit_id
+       ${sql}
+      GROUP BY c.status`,
+    params,
+  );
+  return rows;
+}
+
+/**
+ * Membership split, which drives the ASK rather than being a label: a
+ * member is being invited back, a non-member is being sold to.
+ *
+ * THREE buckets, not two — NULL ("not yet known") is a real state, and
+ * folding it into "not a member" would overstate how much is actually
+ * known about the roster.
+ */
+export async function clientMembership(
+  filters: ClientFilters,
+): Promise<{ member: number; nonMember: number; unknown: number }> {
+  const { sql, params } = clientWhere(filters);
+
+  const { rows } = await query<{
+    member: number;
+    nonmember: number;
+    unknown: number;
+  }>(
+    `SELECT COUNT(*) FILTER (WHERE c.is_member IS TRUE)::INT  AS member,
+            COUNT(*) FILTER (WHERE c.is_member IS FALSE)::INT AS nonMember,
+            COUNT(*) FILTER (WHERE c.is_member IS NULL)::INT  AS unknown
+       FROM clients c
+       LEFT JOIN units u ON u.id = c.unit_id
+       ${sql}`,
+    params,
+  );
+
+  const r = rows[0];
+  return {
+    member: r?.member ?? 0,
+    nonMember: r?.nonmember ?? 0,
+    unknown: r?.unknown ?? 0,
+  };
+}

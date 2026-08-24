@@ -669,3 +669,22 @@ export const ActivityQuerySchema = z.object({
 });
 
 export type ActivityQuery = z.infer<typeof ActivityQuerySchema>;
+
+/* ------------------------------------------------------------------ */
+/* Client analytics                                                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Same filters as the client list, plus what to group the chart by.
+ *
+ * Built by omitting `limit` from ClientQuerySchema rather than restating
+ * the filters: a filter added to the list must apply to the charts too, or
+ * the two drift into describing different sets.
+ */
+export const ClientAnalyticsQuerySchema = ClientQuerySchema.omit({
+  limit: true,
+}).extend({
+  group_by: z.enum(['sector', 'owner', 'tier']).default('sector'),
+});
+
+export type ClientAnalyticsQuery = z.infer<typeof ClientAnalyticsQuerySchema>;

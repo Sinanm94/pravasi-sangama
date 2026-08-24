@@ -1,9 +1,11 @@
 import type { Request, RequestHandler, Response } from 'express';
 import {
+  ClientAnalyticsQuerySchema,
   ClientQuerySchema,
   CreateClientInteractionSchema,
   CreateClientSchema,
   UpdateClientSchema,
+  type ClientAnalyticsResponse,
   type ClientDetailResponse,
   type ClientInteraction,
   type ClientListResponse,
@@ -106,6 +108,60 @@ export const listClientFilterOptions = handle(async (_req, res) => {
   ]);
 
   res.status(200).json({ sectors, owners });
+});
+
+/* ------------------------------------------------------------------ */
+/* GET /api/clients/analytics                                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Charts for the client pipeline.
+ *
+ * Accepts the SAME filters as the list and passes them through the same
+ * `clientWhere()` builder, so narrowing to a sector narrows the charts with
+ * it — a chart can never describe a different set than the table beside it.
+ */
+export const clientAnalytics = handle(async (req, res) => {
+  const q = ClientAnalyticsQuerySchema.parse(req.query);
+
+  const filters = {
+    status: q.status,
+    search: q.search,
+    unitId: q.unit_id,
+    sector: q.sector,
+    referredBy: q.referred_by,
+    isMember: q.is_member === undefined ? undefined : q.is_member === 'true',
+    source: q.source,
+  };
+
+  const [buckets, pipeline, membership] = await Promise.all([
+    repo.analyseClients(filters, q.group_by),
+    repo.clientPipeline(filters),
+    repo.clientMembership(filters),
+  ]);
+
+  const total = pipeline.reduce((n, p) => n + p.count, 0);
+
+  /* CONFIRMED and TICKETED both count as won: a confirmed guest has said
+   * yes and simply has no pass yet, so treating them as unconverted would
+   * make the rate DROP every time a ticket is actually issued. */
+  const won = pipeline
+    .filter((p) => p.status === 'CONFIRMED' || p.status === 'TICKETED')
+    .reduce((n, p) => n + p.count, 0);
+
+  const body: ClientAnalyticsResponse = {
+    groupBy: q.group_by,
+    buckets,
+    pipeline: pipeline as ClientAnalyticsResponse['pipeline'],
+    membership,
+    totals: {
+      total,
+      // Guarded: an empty filter result must read 0%, never NaN.
+      conversionRate: total === 0 ? 0 : Math.round((won / total) * 100),
+    },
+  };
+
+  res.status(200).json(body);
 });
 
 /* ------------------------------------------------------------------ */

@@ -26,6 +26,40 @@ export const TIER_COLORS: Record<TicketType, string> = {
   SVIP: '#c9a227', // gold, lifted
 };
 
+/**
+ * Client pipeline stages.
+ *
+ * A SEPARATE palette from TIER_COLORS, not a reuse: those encode ticket
+ * tier (identity), these encode pipeline stage (progress), and sharing one
+ * ramp would make "VIP" and "Confirmed" the same colour in one dashboard.
+ *
+ * Verified with the palette validator against surface #ffffff, for the four
+ * meaningful stages (PROSPECT is deliberately excluded from the check — see
+ * below):
+ *
+ *   Lightness band      PASS   all four inside L 0.43–0.77
+ *   Chroma floor        PASS   all four >= 0.1
+ *   CVD separation      PASS   worst adjacent ΔE 11.0 (deutan), 14.2 (tritan)
+ *   Normal-vision floor PASS   worst adjacent ΔE 24.1
+ *   Contrast            WARN   gold 2.42:1 → relieved by the legend + table view
+ *
+ * The first attempt used the emerald/red already in STATUS_TONE and FAILED
+ * at ΔE 5.6 (deutan) — a deuteranope could not separate CONFIRMED from
+ * DECLINED, which is the single most important distinction on this screen.
+ * They were re-stepped rather than kept for consistency with the badges.
+ *
+ * PROSPECT is intentionally near-gray and fails the chroma floor on
+ * purpose: it is the "not started" baseline, and a saturated hue would give
+ * the largest, least interesting bucket the most visual weight.
+ */
+export const CLIENT_STAGE_COLORS = {
+  PROSPECT: '#8a8f9e', // neutral — untouched, deliberately recessive
+  AWAITING_REPLY: '#c9a227', // gold — waiting on them
+  CONFIRMED: '#2e9c6e', // green — they said yes
+  TICKETED: '#2f5aa8', // navy — pass issued
+  DECLINED: '#a8324a', // maroon — they said no
+} as const;
+
 /** Single-series bars keep the true brand violet — no adjacent hue to
  *  separate from, and at 7.5:1 it carries strong contrast against white. */
 export const BAR_VIOLET = '#5E17EB';

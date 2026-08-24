@@ -1045,6 +1045,32 @@ unreachable; attribution lives on the rows instead of in a scope filter.
 `PATCH` is a genuine patch — only supplied keys are written — so two
 superusers editing different fields cannot clobber each other.
 
+**Client analytics.** A third view on `/admin/clients` (Board · List ·
+Insights), served by `GET /api/clients/analytics`. It takes the **same
+filters** as the list and runs them through the same `clientWhere()` builder,
+so narrowing to a sector narrows the charts with it and the two can never
+describe different sets — the discipline the ticket ledger already uses.
+
+Forms were chosen before colour: pipeline-by-sector is an ordered
+part-to-whole, so a **horizontal stacked bar** (sector and volunteer names
+are long and would need rotating on a vertical axis); the five stage counts
+are headline numbers, so a **KPI row**, not a five-slice pie; conversion is
+one number, so a **hero figure**.
+
+> `CLIENT_STAGE_COLORS` in `chartTheme.ts` is a **separate palette from
+> `TIER_COLORS`** — those encode ticket tier, these encode pipeline stage,
+> and sharing a ramp would paint "VIP" and "Confirmed" the same colour on one
+> dashboard. The first attempt reused the emerald/red from `STATUS_TONE` and
+> **failed CVD validation at ΔE 5.6 (deutan)** — a deuteranope could not
+> separate CONFIRMED from DECLINED, the most consequential distinction on the
+> screen. Re-stepped to ΔE 11.0. Run the validator rather than eyeballing it.
+>
+> `PROSPECT` is deliberately near-gray and fails the chroma floor on purpose:
+> it is the "not started" baseline, and a saturated hue would give the
+> largest, least interesting bucket the most visual weight. The gold contrast
+> WARN is relieved by the always-present legend and the table view beneath
+> the charts.
+
 **Last event's purchaser list (migration 019).** `clients` gained
 `referred_by`, `is_member` and `source`, and `db:import-clients` loads the
 153 VIP/VVIP buyers from the previous event so the same people can be worked

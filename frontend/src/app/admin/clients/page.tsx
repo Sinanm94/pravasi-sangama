@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import {
   AlertCircle,
   ArrowLeft,
+  BarChart3,
   ArrowRight,
   CalendarClock,
   ChevronDown,
@@ -34,12 +35,14 @@ import {
   type ClientInteractionKind,
   type ClientListResponse,
   type ClientRecord,
+  type ClientAnalyticsResponse,
   type ClientStatus,
   type AdminFilterOptions,
   type TicketType,
 } from '@pravasi/shared';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
+import ClientInsights from '@/components/admin/ClientInsights';
 import {
   apiDelete,
   apiGet,
@@ -95,7 +98,15 @@ function ClientsScreen() {
    * chasing") is a shape question that columns answer at a glance. The list
    * stays for scanning many rows and reading contact details, which columns
    * are bad at. */
-  const [view, setView] = useState<'board' | 'list'>('board');
+  const [view, setView] = useState<'board' | 'list' | 'insights'>('board');
+
+  /* Analytics is fetched only when its view is open — the charts run three
+   * aggregate queries, and paying for them while someone works the board
+   * is waste. */
+  const [analytics, setAnalytics] = useState<ClientAnalyticsResponse | null>(
+    null,
+  );
+  const [groupBy, setGroupBy] = useState<'sector' | 'owner' | 'tier'>('sector');
 
   /* Units for the picker and the filter. Reuses the superuser ledger's
    * existing options endpoint rather than adding a second one — it already
@@ -173,6 +184,33 @@ function ClientsScreen() {
     })();
   }, []);
 
+
+  /* Charts take the SAME filters as the list, so narrowing to a sector
+   * narrows both and the two can never describe different sets. */
+  useEffect(() => {
+    if (view !== 'insights') return;
+
+    const params = new URLSearchParams({ group_by: groupBy });
+    if (status) params.set('status', status);
+    if (committedSearch) params.set('search', committedSearch);
+    if (unitId) params.set('unit_id', unitId);
+    if (referredBy) params.set('referred_by', referredBy);
+    if (sector) params.set('sector', sector);
+
+    void (async () => {
+      try {
+        setAnalytics(
+          await apiGet<ClientAnalyticsResponse>(
+            `/clients/analytics?${params.toString()}`,
+          ),
+        );
+      } catch (err) {
+        toast.error('Could not load charts', {
+          description: errorMessage(err),
+        });
+      }
+    })();
+  }, [view, groupBy, status, committedSearch, unitId, referredBy, sector]);
 
   const reload = () =>
     void load(status, committedSearch, unitId, referredBy, sector, true);
@@ -416,6 +454,18 @@ function ClientsScreen() {
               }
             />
           </Card>
+        ) : view === 'insights' ? (
+          analytics === null ? (
+            <Card>
+              <ListSkeleton rows={4} />
+            </Card>
+          ) : (
+            <ClientInsights
+              data={analytics}
+              groupBy={groupBy}
+              onGroupByChange={setGroupBy}
+            />
+          )
         ) : view === 'board' ? (
           <ClientBoard
             clients={data.clients}
@@ -464,8 +514,8 @@ function ViewToggle({
   view,
   onChange,
 }: {
-  view: 'board' | 'list';
-  onChange: (v: 'board' | 'list') => void;
+  view: 'board' | 'list' | 'insights';
+  onChange: (v: 'board' | 'list' | 'insights') => void;
 }) {
   return (
     <div
@@ -477,6 +527,7 @@ function ViewToggle({
         [
           ['board', 'Board', Columns3],
           ['list', 'List', Rows3],
+          ['insights', 'Insights', BarChart3],
         ] as const
       ).map(([value, label, Icon]) => {
         const active = view === value;
