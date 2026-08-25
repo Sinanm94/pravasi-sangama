@@ -3,8 +3,10 @@ import { generateSecurePassword } from '../lib/passwordGen.js';
 import { closePool, withTransaction } from './index.js';
 
 /**
- * Provisions 3 real Super User accounts (`ADMIN01`–`ADMIN03`) — full system
- * access, the top of §2's hierarchy, "exactly three superusers" per spec §4.
+ * Provisions the real Super User accounts (`ADMIN01`–`ADMIN04`) — full
+ * system access, the top of §2's hierarchy. Spec §4 originally said
+ * "exactly three"; a fourth was added on 2026-08-25 at the project owner's
+ * request. `SUPERUSER_COUNT` below is the authority on how many.
  *
  * NOT db:seed's `admin1`/`admin2`/`admin3`. Those are disposable dev
  * fixtures sharing one hardcoded password (`SUPERUSER_PASSWORD` in seed.ts),
@@ -13,7 +15,8 @@ import { closePool, withTransaction } from './index.js';
  * guard, same reasoning as provision-unit-admins.ts and
  * provision-scanners.ts.
  *
- * ⚠ This script DEACTIVATES every superuser that is not ADMIN01–ADMIN03,
+ * ⚠ This script DEACTIVATES every superuser outside the set it just
+ * created (currently ADMIN01–ADMIN04),
  * including those dev fixtures — see the note above that UPDATE below. It
  * used to leave them alone and let the two sets coexist; that was the hole
  * that kept `admin1` / `SuperAdmin@2026` (a password committed to this
@@ -39,7 +42,16 @@ import { closePool, withTransaction } from './index.js';
  * Run with: npm run db:provision-superusers -w @pravasi/backend
  */
 
-const SUPERUSER_COUNT = 3;
+/**
+ * FOUR accounts as of 2026-08-25 (was three, spec §4's original figure).
+ *
+ * The count lives HERE rather than in a hand-created row because the UPDATE
+ * further down deactivates every superuser not in this run's allowlist — an
+ * account added with direct SQL would work until the next run of this
+ * script and then silently switch off. Raising this number is the supported
+ * way to add one, exactly as the header says.
+ */
+const SUPERUSER_COUNT = 4;
 const PASSWORD_LENGTH = 8;
 
 interface ProvisionedSuperuser {
