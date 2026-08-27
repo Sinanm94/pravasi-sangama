@@ -165,6 +165,101 @@ export const clientAnalytics = handle(async (req, res) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* GET /api/clients/export — CSV report                                */
+/* ------------------------------------------------------------------ */
+
+/** A backstop against an unbounded response, not a page size. */
+const EXPORT_ROW_LIMIT = 100_000;
+
+/**
+ * RFC 4180: a field containing a comma, quote or newline is quoted, and an
+ * internal quote is doubled — not backslash-escaped, which is a CSV myth
+ * that corrupts the file for every spreadsheet reader.
+ *
+ * This matters more here than on the ticket ledger: client names and
+ * timeline notes are free text typed by hand, so commas and quotes are the
+ * norm rather than the exception.
+ */
+function csvEscape(value: string | number): string {
+  const str = String(value);
+  return /[",\r\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+const CLIENT_CSV_COLUMNS: Array<{
+  header: string;
+  value: (c: repo.ClientRow) => string | number;
+}> = [
+  { header: 'Name', value: (c) => c.name },
+  { header: 'Organisation', value: (c) => c.organisation ?? '' },
+  { header: 'Mobile', value: (c) => c.mobile ?? '' },
+  { header: 'Email', value: (c) => c.email ?? '' },
+  { header: 'Tier Discussed', value: (c) => c.intended_tier ?? '' },
+  { header: 'Status', value: (c) => c.status },
+  { header: 'Sector', value: (c) => c.sector ?? '' },
+  { header: 'Unit', value: (c) => c.unit_name ?? '' },
+  { header: 'Unit Code', value: (c) => c.unit_code ?? '' },
+  { header: 'Contact Owner', value: (c) => c.referred_by ?? '' },
+  {
+    header: 'KCF Member',
+    // Three states, so not a bare boolean — blank means "not yet known".
+    value: (c) => (c.is_member === null ? '' : c.is_member ? 'Yes' : 'No'),
+  },
+  { header: 'Follow Up On', value: (c) => c.follow_up_on ?? '' },
+  { header: 'Updates Logged', value: (c) => c.interaction_count },
+  {
+    header: 'Last Update',
+    value: (c) => c.last_interaction_at?.toISOString() ?? '',
+  },
+  { header: 'Ticket Number', value: (c) => c.ticket_number ?? '' },
+  { header: 'Source', value: (c) => c.source },
+  { header: 'Created At (UTC)', value: (c) => c.created_at.toISOString() },
+];
+
+/**
+ * Exports the client list as CSV.
+ *
+ * Shares `ClientQuerySchema` and the same repository call as the JSON list,
+ * so the report contains exactly the rows the screen was showing — an
+ * export that silently returned a different set than the filters on screen
+ * would be worse than no export.
+ *
+ * The row cap is fixed here rather than taken from `limit`: a report is not
+ * paginated, and letting the client set it would make the file's
+ * completeness depend on a query parameter nobody sees.
+ */
+export const exportClients = handle(async (req, res) => {
+  const q = ClientQuerySchema.parse(req.query);
+
+  const rows = await repo.listClients(
+    {
+      status: q.status,
+      search: q.search,
+      unitId: q.unit_id,
+      sector: q.sector,
+      referredBy: q.referred_by,
+      isMember: q.is_member === undefined ? undefined : q.is_member === 'true',
+      source: q.source,
+    },
+    EXPORT_ROW_LIMIT,
+  );
+
+  const header = CLIENT_CSV_COLUMNS.map((c) => csvEscape(c.header)).join(',');
+  const body = rows.map((r) =>
+    CLIENT_CSV_COLUMNS.map((c) => csvEscape(c.value(r))).join(','),
+  );
+
+  /* A UTF-8 BOM so Excel opens transliterated names correctly instead of
+   * mangling them — without it Excel assumes the system codepage. */
+  const csv = `\uFEFF${[header, ...body].join('\r\n')}`;
+
+  res.set({
+    'Content-Type': 'text/csv; charset=utf-8',
+    'Content-Disposition': 'attachment; filename="pravasi-clients-report.csv"',
+  });
+  res.status(200).send(csv);
+});
+
+/* ------------------------------------------------------------------ */
 /* GET /api/clients/:id — record plus full timeline                    */
 /* ------------------------------------------------------------------ */
 
@@ -242,6 +337,20 @@ export const updateClient = handle(async (req, res) => {
     is_member: input.is_member,
     sector: input.sector,
   };
+
+  /* Assigning a UNIT clears the client's own sector.
+   *
+   * `units.sector` is authoritative whenever a unit is set — every read is
+   * COALESCE(u.sector, c.sector) — so a leftover c.sector is invisible but
+   * would resurface the moment the unit is removed again, silently
+   * restoring a sector that may no longer be right. Clearing it keeps
+   * exactly one answer to "which sector is this client in".
+   *
+   * Only when the caller did not ALSO set a sector explicitly: an explicit
+   * value is a deliberate override and is not second-guessed here. */
+  if (input.unit_id && input.sector === undefined) {
+    patch.sector = null;
+  }
 
   const ok = await repo.updateClient(id, patch);
   if (!ok) throw notFound('No such client');

@@ -405,11 +405,25 @@ export async function superuserDisplayName(
  */
 export async function listClientSectors(): Promise<string[]> {
   const { rows } = await query<{ sector: string }>(
-    `SELECT DISTINCT upper(trim(COALESCE(u.sector, c.sector))) AS sector
-       FROM clients c
-       LEFT JOIN units u ON u.id = c.unit_id
-      WHERE COALESCE(u.sector, c.sector) IS NOT NULL
-        AND trim(COALESCE(u.sector, c.sector)) <> ''
+    /* UNION of the sectors that EXIST (units) and the sectors clients are
+     * actually filed under.
+     *
+     * Deriving from clients alone was a bug: a sector with no client yet —
+     * MUROOJ, for one — simply had no dropdown entry, so nobody could file
+     * the first client into it. The units half makes every real sector
+     * selectable from day one.
+     *
+     * The clients half is still needed for groupings that are real but have
+     * no unit at all, such as SPONSORS on the imported roster. */
+    `SELECT DISTINCT sector FROM (
+       SELECT upper(trim(u.sector)) AS sector
+         FROM units u
+        WHERE u.sector IS NOT NULL AND trim(u.sector) <> ''
+       UNION
+       SELECT upper(trim(c.sector)) AS sector
+         FROM clients c
+        WHERE c.sector IS NOT NULL AND trim(c.sector) <> ''
+     ) AS all_sectors
       ORDER BY sector ASC`,
   );
   return rows.map((r) => r.sector);

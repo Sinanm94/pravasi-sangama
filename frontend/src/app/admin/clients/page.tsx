@@ -12,6 +12,7 @@ import {
   ChevronDown,
   Clock,
   Columns3,
+  Download,
   Loader2,
   MessageSquarePlus,
   Plus,
@@ -45,6 +46,7 @@ import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
 import ClientInsights from '@/components/admin/ClientInsights';
 import {
   apiDelete,
+  apiDownload,
   apiGet,
   apiPatch,
   apiPost,
@@ -122,6 +124,7 @@ function ClientsScreen() {
 
   const [adding, setAdding] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const id = setTimeout(() => setCommittedSearch(search.trim()), 300);
@@ -214,6 +217,44 @@ function ClientsScreen() {
 
   const reload = () =>
     void load(status, committedSearch, unitId, referredBy, sector, true);
+
+  /* The report contains exactly the rows on screen: same filters, same
+   * query. An export that quietly returned a different set than the
+   * filters above it would be worse than having no export. */
+  const downloadReport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (status) params.set('status', status);
+      if (committedSearch) params.set('search', committedSearch);
+      if (unitId) params.set('unit_id', unitId);
+      if (referredBy) params.set('referred_by', referredBy);
+      if (sector) params.set('sector', sector);
+      const qs = params.toString();
+
+      const outcome = await apiDownload(
+        `/clients/export${qs ? `?${qs}` : ''}`,
+        'pravasi-clients-report.csv',
+      );
+
+      /* Name the file and say where it went — a silent download on a phone
+       * lands somewhere the person then has to go hunting for. */
+      if (outcome.via === 'download') {
+        toast.success('Report downloaded', {
+          description: `${outcome.filename} — check your browser's Downloads.`,
+          duration: 8000,
+        });
+      } else if (outcome.via === 'share') {
+        toast.success('Report ready', { description: outcome.filename });
+      }
+    } catch (err) {
+      toast.error('Could not download the report', {
+        description: errorMessage(err),
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
   const totals = data?.totals;
   const filtered =
     Boolean(status) ||
@@ -244,6 +285,19 @@ function ClientsScreen() {
               strokeWidth={2.25}
             />
             Refresh
+          </button>
+          <button
+            type="button"
+            onClick={() => void downloadReport()}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-4 py-2 text-[13px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97] disabled:opacity-60"
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />
+            ) : (
+              <Download className="h-4 w-4" strokeWidth={2.25} />
+            )}
+            Report
           </button>
           <button
             type="button"
@@ -1229,96 +1283,23 @@ function ClientDetailSheet({
         </div>
       ) : (
         <div className="p-6">
-          {/* Where things stand — editable inline, because the whole point of
-              this screen is that the state changes as the conversation does. */}
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <SheetField label="Status">
-              <select
-                value={client.status}
-                onChange={(e) => void patch({ status: e.target.value })}
-                className={inputCls}
-              >
-                {CLIENT_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {CLIENT_STATUS_LABELS[s]}
-                  </option>
-                ))}
-              </select>
-            </SheetField>
+          {/* Every field is a DRAFT until Save.
 
-            <SheetField label="Follow up on">
-              <input
-                type="date"
-                value={client.followUpOn ?? ''}
-                onChange={(e) =>
-                  void patch({ follow_up_on: e.target.value || null })
-                }
-                className={inputCls}
-              />
-            </SheetField>
+              This used to patch on every change, which meant five separate
+              requests and five refetches to edit one client — and because
+              each refetch re-rendered the sheet, the person editing had to
+              reopen it between fields. Draft-then-save also makes a typo
+              recoverable: Cancel discards it, where an instant patch had
+              already written it. */}
+          <ClientEditor
+            client={client}
+            units={units}
+            onSaved={async () => {
+              await load();
+              onChanged();
+            }}
+          />
 
-            <SheetField label="Contact owner" hint="Who will call them">
-              <input
-                defaultValue={client.referredBy ?? ''}
-                onBlur={(e) => {
-                  const next = e.target.value.trim();
-                  if (next !== (client.referredBy ?? '')) {
-                    void patch({ referred_by: next || null });
-                  }
-                }}
-                placeholder="e.g. Sabir"
-                className={inputCls}
-              />
-            </SheetField>
-
-            <SheetField label="KCF member">
-              <select
-                value={
-                  client.isMember === null ? '' : client.isMember ? 'yes' : 'no'
-                }
-                onChange={(e) =>
-                  void patch({
-                    is_member:
-                      e.target.value === '' ? null : e.target.value === 'yes',
-                  })
-                }
-                className={inputCls}
-              >
-                <option value="">Not known</option>
-                <option value="yes">Member</option>
-                <option value="no">Not a member</option>
-              </select>
-            </SheetField>
-
-            <SheetField label="Unit" hint="Who is working this client">
-              <select
-                value={client.unitId ?? ''}
-                onChange={(e) => void patch({ unit_id: e.target.value || null })}
-                className={inputCls}
-              >
-                <option value="">No unit</option>
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.sector} · {u.name} ({u.unitCode})
-                  </option>
-                ))}
-              </select>
-            </SheetField>
-          </div>
-
-          <p className="mt-3 text-[12px] text-gray-500">
-            {[
-              client.organisation,
-              client.mobile,
-              client.email,
-              client.intendedTier
-                ? `${TICKET_TYPE_LABELS[client.intendedTier]} discussed`
-                : null,
-              client.ticketNumber ? `Ticket ${client.ticketNumber}` : null,
-            ]
-              .filter(Boolean)
-              .join(' · ') || 'No contact details recorded'}
-          </p>
 
           {/* Add an update */}
           <form
@@ -1531,6 +1512,307 @@ function DeleteClientZone({
     </div>
   );
 }
+
+/* ================================================================== */
+/* Client editor — draft, then save                                    */
+/* ================================================================== */
+
+/**
+ * Every field of a client, edited as a DRAFT and written in one PATCH.
+ *
+ * The previous version patched on every `onChange`, which meant editing one
+ * client cost five requests and five refetches, and each refetch re-rendered
+ * the sheet under the person using it. It also made a mistyped value
+ * unrecoverable — it was already saved before you noticed.
+ *
+ * Only fields that actually CHANGED are sent, so this keeps the property
+ * that two superusers editing different fields cannot clobber each other
+ * (§ clients PATCH is a genuine patch).
+ */
+function ClientEditor({
+  client,
+  units,
+  onSaved,
+}: {
+  client: ClientRecord;
+  units: AdminFilterOptions['units'];
+  onSaved: () => Promise<void> | void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  /** The draft. Seeded from the record every time editing opens. */
+  const blank = () => ({
+    name: client.name,
+    organisation: client.organisation ?? '',
+    mobile: client.mobile ?? '',
+    email: client.email ?? '',
+    intendedTier: client.intendedTier ?? '',
+    status: client.status,
+    followUpOn: client.followUpOn ?? '',
+    referredBy: client.referredBy ?? '',
+    isMember:
+      client.isMember === null ? '' : client.isMember ? 'yes' : 'no',
+    unitId: client.unitId ?? '',
+  });
+
+  const [draft, setDraft] = useState(blank);
+
+  const open = () => {
+    // Re-seed on open so a cancelled edit never leaves stale values behind.
+    setDraft(blank());
+    setEditing(true);
+  };
+
+  const set = (k: keyof ReturnType<typeof blank>, v: string) =>
+    setDraft((d) => ({ ...d, [k]: v }));
+
+  async function save() {
+    if (draft.name.trim().length < 2) {
+      toast.error('Enter a name');
+      return;
+    }
+
+    /* Only what changed. Sending the whole row would let this save revert a
+     * field another superuser edited a moment ago. */
+    const patch: Record<string, unknown> = {};
+    const cmp = (
+      key: string,
+      next: string | null,
+      current: string | null,
+    ) => {
+      if (next !== current) patch[key] = next;
+    };
+
+    cmp('name', draft.name.trim(), client.name);
+    cmp('organisation', draft.organisation.trim() || null, client.organisation);
+    cmp('mobile', draft.mobile.trim() || null, client.mobile);
+    cmp('email', draft.email.trim() || null, client.email);
+    cmp('intended_tier', draft.intendedTier || null, client.intendedTier);
+    cmp('status', draft.status, client.status);
+    cmp('follow_up_on', draft.followUpOn || null, client.followUpOn);
+    cmp('referred_by', draft.referredBy.trim() || null, client.referredBy);
+    cmp('unit_id', draft.unitId || null, client.unitId);
+
+    const nextMember =
+      draft.isMember === '' ? null : draft.isMember === 'yes';
+    if (nextMember !== client.isMember) patch.is_member = nextMember;
+
+    if (Object.keys(patch).length === 0) {
+      setEditing(false);
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await apiPatch(`/clients/${client.id}`, patch);
+      await onSaved();
+      setEditing(false);
+      toast.success('Client updated');
+    } catch (err) {
+      toast.error('Could not update', { description: errorMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!editing) {
+    return (
+      <div className="rounded-2xl bg-gray-50 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[15px] font-medium text-gray-900">
+              {client.name}
+            </p>
+            <p className="mt-1 text-[12px] leading-relaxed text-gray-500">
+              {[
+                client.organisation,
+                client.mobile,
+                client.email,
+                client.referredBy ? `Owner: ${client.referredBy}` : null,
+                client.sector,
+                client.unitCode,
+                client.intendedTier
+                  ? `${TICKET_TYPE_LABELS[client.intendedTier]} discussed`
+                  : null,
+                client.isMember === true
+                  ? 'KCF member'
+                  : client.isMember === false
+                    ? 'Non-member'
+                    : null,
+                client.ticketNumber ? `Ticket ${client.ticketNumber}` : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || 'No details recorded'}
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.04em] ${
+                  STATUS_TONE[client.status]
+                }`}
+              >
+                {CLIENT_STATUS_LABELS[client.status]}
+              </span>
+              {client.followUpOn && (
+                <span className="text-[11px] text-gray-500">
+                  Follow up {formatDateOnly(client.followUpOn)}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={open}
+            className="shrink-0 rounded-full bg-white px-4 py-2 text-[13px] font-semibold text-gray-700 ring-1 ring-gray-900/[0.06] transition-all duration-200 hover:bg-gray-100 active:scale-[0.97]"
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl bg-gray-50 p-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <SheetField label="Name" required>
+          <input
+            value={draft.name}
+            onChange={(e) => set('name', e.target.value)}
+            className={inputCls}
+            autoFocus
+          />
+        </SheetField>
+
+        <SheetField label="Organisation">
+          <input
+            value={draft.organisation}
+            onChange={(e) => set('organisation', e.target.value)}
+            className={inputCls}
+          />
+        </SheetField>
+
+        <SheetField label="Mobile">
+          <input
+            value={draft.mobile}
+            onChange={(e) => set('mobile', e.target.value)}
+            inputMode="tel"
+            className={inputCls}
+          />
+        </SheetField>
+
+        <SheetField label="Email">
+          <input
+            value={draft.email}
+            onChange={(e) => set('email', e.target.value)}
+            inputMode="email"
+            className={inputCls}
+          />
+        </SheetField>
+
+        <SheetField label="Status">
+          <select
+            value={draft.status}
+            onChange={(e) => set('status', e.target.value)}
+            className={inputCls}
+          >
+            {CLIENT_STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {CLIENT_STATUS_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        </SheetField>
+
+        <SheetField label="Tier discussed">
+          <select
+            value={draft.intendedTier}
+            onChange={(e) => set('intendedTier', e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Not decided</option>
+            {PREMIUM_TICKET_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {TICKET_TYPE_LABELS[t]}
+              </option>
+            ))}
+          </select>
+        </SheetField>
+
+        <SheetField label="Contact owner" hint="Who will call them">
+          <input
+            value={draft.referredBy}
+            onChange={(e) => set('referredBy', e.target.value)}
+            placeholder="e.g. Sabir"
+            className={inputCls}
+          />
+        </SheetField>
+
+        <SheetField label="KCF member">
+          <select
+            value={draft.isMember}
+            onChange={(e) => set('isMember', e.target.value)}
+            className={inputCls}
+          >
+            <option value="">Not known</option>
+            <option value="yes">Member</option>
+            <option value="no">Not a member</option>
+          </select>
+        </SheetField>
+
+        <SheetField label="Unit" hint="Sets the sector too">
+          <select
+            value={draft.unitId}
+            onChange={(e) => set('unitId', e.target.value)}
+            className={inputCls}
+          >
+            <option value="">No unit</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.sector} · {u.name} ({u.unitCode})
+              </option>
+            ))}
+          </select>
+        </SheetField>
+
+        <SheetField label="Follow up on">
+          <input
+            type="date"
+            value={draft.followUpOn}
+            onChange={(e) => set('followUpOn', e.target.value)}
+            className={inputCls}
+          />
+        </SheetField>
+      </div>
+
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => setEditing(false)}
+          disabled={busy}
+          className="rounded-full bg-white px-4 py-2.5 text-[13px] font-medium text-gray-600 ring-1 ring-gray-900/[0.06] transition-colors hover:bg-gray-100 active:scale-[0.97] disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void save()}
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-[13px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.97] disabled:opacity-60"
+          style={{ backgroundColor: VIOLET }}
+        >
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+          Update
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/* Client editor ends                                                  */
+/* ================================================================== */
 
 /* ------------------------------------------------------------------ */
 /* Local primitives — promote on a second consumer (§6.4)              */

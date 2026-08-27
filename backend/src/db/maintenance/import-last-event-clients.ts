@@ -142,12 +142,12 @@ const CLIENTS: readonly SeedClient[] = [
   { name: 'Siddique Uppala', tier: 'VVIP', member: true, sector: 'Olaya' },
   { name: 'Khader Mandekolu', tier: 'VVIP', member: true, sector: 'Olaya' },
 
-  /* ── Rabwa sector ─────────────────────────────────────────────── */
-  { name: 'Akbar Sharif', tier: 'VIP', member: true, sector: 'Rabwa', referredBy: 'Saleemaka' },
-  { name: 'Azeez Moodigere', tier: 'VIP', member: true, sector: 'Rabwa' },
-  { name: 'Mustafa Madani', tier: 'VIP', member: true, sector: 'Rabwa' },
-  { name: 'Javeed Bai', tier: 'VIP', member: true, sector: 'Rabwa', referredBy: 'Asif Handel' },
-  { name: 'Sharif Kolpe', tier: 'VIP', member: true, sector: 'Rabwa', referredBy: 'Saleem Bai' },
+  /* ── Rabva sector ─────────────────────────────────────────────── */
+  { name: 'Akbar Sharif', tier: 'VIP', member: true, sector: 'RABVA', referredBy: 'Saleemaka' },
+  { name: 'Azeez Moodigere', tier: 'VIP', member: true, sector: 'RABVA' },
+  { name: 'Mustafa Madani', tier: 'VIP', member: true, sector: 'RABVA' },
+  { name: 'Javeed Bai', tier: 'VIP', member: true, sector: 'RABVA', referredBy: 'Asif Handel' },
+  { name: 'Sharif Kolpe', tier: 'VIP', member: true, sector: 'RABVA', referredBy: 'Saleem Bai' },
 
   /* ── Batha sector ─────────────────────────────────────────────── */
   { name: 'Nazeer Haji Kashipatna', tier: 'VVIP', member: true, sector: 'Batha' },
