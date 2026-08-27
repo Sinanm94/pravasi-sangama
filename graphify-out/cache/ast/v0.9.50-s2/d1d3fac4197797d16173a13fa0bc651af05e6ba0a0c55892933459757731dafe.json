@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_backend_src_db_migrations_008_retire_legacy_gates_sql", "label": "008_retire_legacy_gates.sql", "file_type": "code", "source_file": "backend/src/db/migrations/008_retire_legacy_gates.sql", "source_location": null}], "edges": []}

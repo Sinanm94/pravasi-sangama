@@ -1094,6 +1094,21 @@ member, and not-yet-known are three distinct states.
 > several units. Guessing one would file a client under a unit head who
 > never spoke to them. The sector goes in the first timeline entry instead.
 
+**`SPONSORS` is a real sector value with no units under it, on explicit
+instruction from the project owner.** The reporting need is sector, unit and
+member/non-member — nothing finer — and the owner was explicit that "no
+sponsor is required at lower level": across the 8 real sectors and 4
+centralised units, Sponsors sits as one top-level bucket, not a peer of
+`BATHA` or `MALAZ` with its own units underneath. The frontend enforces this
+pairing rather than merely documenting it — `/admin/clients`'s Sector and
+Unit filters clear each other on selecting `SPONSORS`/a unit respectively,
+and the Unit control disables while `SPONSORS` is selected, because the two
+together is a contradiction no client can honestly satisfy (and was the
+concrete bug reported: Sector=SPONSORS + a leftover Unit selection silently
+ANDs to zero rows). `ClientEditor`'s Unit field still allows assigning a real
+unit to a Sponsors-classified client — that is a legitimate reclassification,
+not the bug — but names what it is about to do first.
+
 **Activities (migration 018).** `/admin/activities` +
 `backend/src/modules/activities/`. The organiser's OWN task list — "confirm
 catering headcount", "call the printer" — with a title, notes, priority, due

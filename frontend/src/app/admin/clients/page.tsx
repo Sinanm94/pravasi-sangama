@@ -377,7 +377,15 @@ function ClientsScreen() {
             <div className="relative">
               <select
                 value={sector}
-                onChange={(e) => setSector(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setSector(next);
+                  /* SPONSORS has no units under it (§ Clients) — a
+                     leftover unit selection from before switching sectors
+                     would silently AND against it and always return zero
+                     rows, which is the bug this fixes. */
+                  if (next === 'SPONSORS') setUnitId('');
+                }}
                 className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
               >
                 <option value="">All sectors</option>
@@ -401,15 +409,33 @@ function ClientsScreen() {
             <div className="relative">
               <select
                 value={unitId}
-                onChange={(e) => setUnitId(e.target.value)}
-                className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setUnitId(next);
+                  // A unit implies a real sector; Sponsors is not one.
+                  if (next && sector === 'SPONSORS') setSector('');
+                }}
+                disabled={sector === 'SPONSORS'}
+                title={
+                  sector === 'SPONSORS'
+                    ? 'Sponsors sits above the sector/unit structure and has no units'
+                    : undefined
+                }
+                className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <option value="">All units</option>
-                {units.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.sector} · {u.name} ({u.unitCode})
-                  </option>
-                ))}
+                <option value="">
+                  {sector === 'SPONSORS' ? 'No units under Sponsors' : 'All units'}
+                </option>
+                {/* Narrowed to the selected sector once one is picked — the
+                    unfiltered list of all 30 units regardless of sector was
+                    what made the wrong pairing easy to create by accident. */}
+                {units
+                  .filter((u) => !sector || u.sector === sector)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.sector} · {u.name} ({u.unitCode})
+                    </option>
+                  ))}
               </select>
               <ChevronDown
                 className="pointer-events-none absolute right-4 top-1/2 h-[18px] w-[18px] -translate-y-1/2 text-gray-400"
@@ -1761,13 +1787,22 @@ function ClientEditor({
           </select>
         </SheetField>
 
-        <SheetField label="Unit" hint="Sets the sector too">
+        <SheetField
+          label="Unit"
+          hint={
+            client.sector === 'SPONSORS' && !draft.unitId
+              ? 'Currently classified as Sponsors — picking a unit moves them out of it'
+              : 'Sets the sector too'
+          }
+        >
           <select
             value={draft.unitId}
             onChange={(e) => set('unitId', e.target.value)}
             className={inputCls}
           >
-            <option value="">No unit</option>
+            <option value="">
+              {client.sector === 'SPONSORS' ? 'No unit — Sponsors' : 'No unit'}
+            </option>
             {units.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.sector} · {u.name} ({u.unitCode})

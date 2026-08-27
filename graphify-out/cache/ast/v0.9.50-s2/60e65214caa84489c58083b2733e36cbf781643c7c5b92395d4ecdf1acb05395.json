@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_backend_src_db_migrations_011_agent_invite_pin_readable_sql", "label": "011_agent_invite_pin_readable.sql", "file_type": "code", "source_file": "backend/src/db/migrations/011_agent_invite_pin_readable.sql", "source_location": null}], "edges": []}
