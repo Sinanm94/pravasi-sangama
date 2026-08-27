@@ -20,6 +20,7 @@
     "db:purge-test-agents": "tsx src/db/maintenance/purge-test-agents.ts",
     "db:seed-activities": "tsx src/db/maintenance/seed-activities.ts",
     "db:import-clients": "tsx src/db/maintenance/import-last-event-clients.ts",
+    "db:add-missing-units": "tsx src/db/maintenance/add-missing-units.ts",
     "db:rotate": "tsx src/db/rotate-credentials.ts",
     "db:bulk-rotate-passwords": "tsx src/db/bulk-rotate-passwords.ts",
     "db:reset": "npm run db:migrate && npm run db:seed",

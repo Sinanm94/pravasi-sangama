@@ -31,6 +31,22 @@ import { closePool, withTransaction } from './index.js';
  * sitting on its provisioned password so you know what is left. Rotate
  * before the event, not after.
  *
+ * ⚠ DO NOT RE-RUN THIS ONCE CREDENTIALS ARE DISTRIBUTED.
+ *
+ * Every insert here is `ON CONFLICT DO UPDATE`, so a second run rewrites
+ * `unit_admins.password_hash` AND both `units.agent_invite_pin*` columns
+ * for all 30 units — resetting every rotated password and every invite PIN
+ * back to the literals in this file. Unit heads would be reciting PINs that
+ * no longer work, and any password rotated via `db:bulk-rotate-passwords`
+ * would silently revert to the value committed to this repository.
+ *
+ * That is correct for FIRST-TIME provisioning and destructive afterwards.
+ * To add a unit that is missing without touching the rest, use:
+ *
+ *   npm run db:add-missing-units -w @pravasi/backend
+ *
+ * which is `ON CONFLICT DO NOTHING` and leaves existing rows alone.
+ *
  * Run with: npm run db:provision-units -w @pravasi/backend
  */
 
