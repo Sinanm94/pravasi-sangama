@@ -73,6 +73,28 @@ const KIND_TONE: Record<ClientInteractionKind, string> = {
   RESPONSE: 'bg-emerald-50 text-emerald-700',
 };
 
+/**
+ * Sectors that sit above the real sector/unit structure rather than being
+ * one of the 8 event sectors (§ Clients, migrations 019/022).
+ *
+ * SPONSORS has no unit at all. SPONSORS-RIYADH ZONE and DAYEE-RIYADH ZONE
+ * both point at the SAME single unit, "Riyadh Zone" (migration 022) —
+ * unlike SPONSORS, these two DO have a unit under them, just one shared
+ * unit rather than several real ones, so it is auto-selected the moment
+ * either sector is picked rather than left for a redundant click.
+ *
+ * Looked up by `unitCode`, NOT `unit.sector`, because one unit cannot hold
+ * two different sector strings at once but must resolve from both of these
+ * — a plain `u.sector === sector` match (which is how every OTHER sector
+ * narrows its unit list) would only ever match one of the two labels.
+ */
+const NO_UNIT_SECTORS = new Set(['SPONSORS']);
+const RIYADH_ZONE_SECTORS = new Set([
+  'SPONSORS-RIYADH ZONE',
+  'DAYEE-RIYADH ZONE',
+]);
+const RIYADH_ZONE_UNIT_CODE = 'RZN01';
+
 export default function ClientsPage() {
   return (
     <ProtectedRoute allow={['SUPERUSER']}>
@@ -380,11 +402,22 @@ function ClientsScreen() {
                 onChange={(e) => {
                   const next = e.target.value;
                   setSector(next);
-                  /* SPONSORS has no units under it (§ Clients) — a
-                     leftover unit selection from before switching sectors
-                     would silently AND against it and always return zero
-                     rows, which is the bug this fixes. */
-                  if (next === 'SPONSORS') setUnitId('');
+
+                  if (NO_UNIT_SECTORS.has(next)) {
+                    /* A leftover unit selection from before switching
+                       sectors would silently AND against a sector that has
+                       no units, always returning zero rows — the concrete
+                       bug this branch fixes. */
+                    setUnitId('');
+                  } else if (RIYADH_ZONE_SECTORS.has(next)) {
+                    /* Exactly one unit exists under either Riyadh Zone
+                       sector, so it is selected automatically rather than
+                       making the person pick the only option on offer. */
+                    const rz = units.find(
+                      (u) => u.unitCode === RIYADH_ZONE_UNIT_CODE,
+                    );
+                    setUnitId(rz?.id ?? '');
+                  }
                 }}
                 className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10"
               >
@@ -412,25 +445,36 @@ function ClientsScreen() {
                 onChange={(e) => {
                   const next = e.target.value;
                   setUnitId(next);
-                  // A unit implies a real sector; Sponsors is not one.
-                  if (next && sector === 'SPONSORS') setSector('');
+                  /* A unit implies a real sector; SPONSORS is the only one
+                     that is not — the Riyadh Zone sectors DO have a unit
+                     (their one shared unit), so picking it must not clear
+                     them the way it clears SPONSORS. */
+                  if (next && NO_UNIT_SECTORS.has(sector)) setSector('');
                 }}
-                disabled={sector === 'SPONSORS'}
+                disabled={NO_UNIT_SECTORS.has(sector)}
                 title={
-                  sector === 'SPONSORS'
+                  NO_UNIT_SECTORS.has(sector)
                     ? 'Sponsors sits above the sector/unit structure and has no units'
                     : undefined
                 }
                 className="w-full cursor-pointer appearance-none rounded-xl border border-gray-200 bg-white py-3 pl-4 pr-11 text-[15px] text-gray-900 transition-all duration-200 focus:border-[#5E17EB]/40 focus:outline-none focus:ring-4 focus:ring-[#5E17EB]/10 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <option value="">
-                  {sector === 'SPONSORS' ? 'No units under Sponsors' : 'All units'}
+                  {NO_UNIT_SECTORS.has(sector) ? 'No units under Sponsors' : 'All units'}
                 </option>
                 {/* Narrowed to the selected sector once one is picked — the
                     unfiltered list of all 30 units regardless of sector was
-                    what made the wrong pairing easy to create by accident. */}
+                    what made the wrong pairing easy to create by accident.
+                    The Riyadh Zone sectors are matched by unitCode, not by
+                    sector equality — see RIYADH_ZONE_UNIT_CODE above. */}
                 {units
-                  .filter((u) => !sector || u.sector === sector)
+                  .filter((u) =>
+                    !sector
+                      ? true
+                      : RIYADH_ZONE_SECTORS.has(sector)
+                        ? u.unitCode === RIYADH_ZONE_UNIT_CODE
+                        : u.sector === sector,
+                  )
                   .map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.sector} · {u.name} ({u.unitCode})

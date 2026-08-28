@@ -1109,6 +1109,28 @@ ANDs to zero rows). `ClientEditor`'s Unit field still allows assigning a real
 unit to a Sponsors-classified client — that is a legitimate reclassification,
 not the bug — but names what it is about to do first.
 
+**`SPONSORS-RIYADH ZONE` and `DAYEE-RIYADH ZONE`** (migration 022) are two
+further sectors above the real structure, added the same way, but they are
+**not** SPONSORS' shape — where SPONSORS has no unit, these two share ONE
+real unit, `Riyadh Zone` (`unit_code = 'RZN01'`), auto-selected the instant
+either sector is chosen so picking the sole option is never a required extra
+click. That unit is a real `units` row for exactly one reason: two labels
+need to resolve to it, and a `clients.sector`-only bucket (SPONSORS' shape)
+cannot be pointed at by a unit filter at all. It is otherwise inert — no
+`agent_invite_pin_hash`, so no agent can ever register under it; it exists
+purely so these two sectors' clients can carry a `unit_id`.
+
+> `units.sector` cannot hold two strings, so `Riyadh Zone`'s own `sector`
+> column is a single display value (`'RIYADH ZONE'`) that neither client
+> sector label equals. The usual `unit.sector === sector` match that narrows
+> every other sector's unit list would therefore find nothing for these two
+> — the frontend resolves this one unit by `unit_code = 'RZN01'` instead
+> (`RIYADH_ZONE_UNIT_CODE` in `admin/clients/page.tsx`). `ALWAYS_OFFERED_SECTORS`
+> in `clients.repository.ts` is the parallel fix on the read side: neither
+> new label has a `units` row of its own to be derived from the way MUROOJ
+> is, so both are hardcoded into the sector-options query alongside SPONSORS
+> rather than waiting for a client to exist under them first.
+
 **Activities (migration 018).** `/admin/activities` +
 `backend/src/modules/activities/`. The organiser's OWN task list — "confirm
 catering headcount", "call the printer" — with a title, notes, priority, due

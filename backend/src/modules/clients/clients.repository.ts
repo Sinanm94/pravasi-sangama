@@ -403,18 +403,36 @@ export async function superuserDisplayName(
  * includes groupings like 'Sponsors' that are not event sectors at all, and
  * a hardcoded list would silently hide them.
  */
+/**
+ * Sectors with no unit of their own that must be selectable even before any
+ * client has ever been filed under them (§ Clients, migrations 019/022).
+ *
+ * SPONSORS only shows up today because the imported roster already has a
+ * client on it — the same MUROOJ-before-any-client gap `listClientSectors`
+ * closes for real sectors below would otherwise reopen for these two,
+ * since neither has a `units` row of its own to be derived from (Riyadh
+ * Zone's `units.sector` is a single 'RIYADH ZONE' string, which cannot
+ * simultaneously equal both of these). Hardcoded rather than another table
+ * because this is a fixed, named, rarely-changing set — the same judgement
+ * call as SEATS_PER_TIER, not a case for a new schema.
+ */
+const ALWAYS_OFFERED_SECTORS = [
+  'SPONSORS',
+  'SPONSORS-RIYADH ZONE',
+  'DAYEE-RIYADH ZONE',
+] as const;
+
 export async function listClientSectors(): Promise<string[]> {
   const { rows } = await query<{ sector: string }>(
-    /* UNION of the sectors that EXIST (units) and the sectors clients are
-     * actually filed under.
+    /* UNION of the sectors that EXIST (units), the sectors clients are
+     * actually filed under, and the fixed always-offered set above.
      *
-     * Deriving from clients alone was a bug: a sector with no client yet —
-     * MUROOJ, for one — simply had no dropdown entry, so nobody could file
-     * the first client into it. The units half makes every real sector
-     * selectable from day one.
-     *
-     * The clients half is still needed for groupings that are real but have
-     * no unit at all, such as SPONSORS on the imported roster. */
+     * Deriving from units/clients alone was a bug: a sector with no client
+     * yet — MUROOJ, for one — simply had no dropdown entry, so nobody
+     * could file the first client into it. The units half makes every
+     * real sector selectable from day one; the always-offered half does
+     * the same for the sectors that intentionally have no unit (or share
+     * one unit) and so are invisible to both other halves. */
     `SELECT DISTINCT sector FROM (
        SELECT upper(trim(u.sector)) AS sector
          FROM units u
@@ -423,8 +441,11 @@ export async function listClientSectors(): Promise<string[]> {
        SELECT upper(trim(c.sector)) AS sector
          FROM clients c
         WHERE c.sector IS NOT NULL AND trim(c.sector) <> ''
+       UNION
+       SELECT unnest($1::text[]) AS sector
      ) AS all_sectors
       ORDER BY sector ASC`,
+    [ALWAYS_OFFERED_SECTORS],
   );
   return rows.map((r) => r.sector);
 }
