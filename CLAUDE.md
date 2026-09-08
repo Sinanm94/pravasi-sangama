@@ -920,8 +920,15 @@ pravasi-sangama/
   `Content-Disposition: attachment` header instead of JSON. The frontend
   can't reuse `apiGet` for it — that always calls `res.json()`, which throws
   on a CSV body — so `apiClient.ts` has a parallel `apiDownload()` that reads
-  the browser-download filename from the response header and triggers it via
-  an off-DOM anchor click.
+  the browser-download filename from the response header. On a phone it hands
+  the file to the **OS share sheet** (`navigator.share({ files })`, gated on
+  `canShare` since desktop Chrome exposes `share` but rejects file payloads),
+  so a field admin taps WhatsApp and the CSV is attached. Off a phone it
+  falls back to an off-DOM anchor download, and — when the caller passes
+  `whatsappOnFallback` — also opens `wa.me/?text=…` so the just-downloaded
+  file can be attached by hand, the same two-step `ShareTicketModal` uses for
+  the ticket image. `shareTitle` / `shareText` are per-call, not the one
+  hardcoded string it used to send for every export.
 - `backend/src/modules/unit-admin/` — a unit admin's own approvals queue and
   ticket ledger (§3.3). `decideAgent` reuses `admin.repository.decideAgent`
   /`writeAudit` rather than a parallel implementation of the race-safe UPDATE
@@ -1151,8 +1158,20 @@ server stamps `NOW()` — accepting a client-supplied timestamp would import
 whatever a shared phone's clock says.
 
 Shared across all three superusers with the owner on the row, same reasoning
-as premium clients. Totals on the cards are computed over the UNFILTERED
+as premium clients. The three summary cards — **Total / Pending / Done** —
+and the `overdue` count behind the subtitle are computed over the UNFILTERED
 set, so "3 overdue" means the same thing whichever tab is selected.
+`ActivityListResponse.totals` is `{ total, open, overdue, done }`: `open` is
+"pending" (`done_at IS NULL`), `done` is all-time (`done_at IS NOT NULL`) —
+not the old "closed in the last 7 days".
+
+**`GET /api/activities/export`** is the Clients tab's CSV Report button
+duplicated onto Activities: same `ActivityQuerySchema` and `listActivities`
+call as the JSON list (so the file is exactly the rows on screen), its own
+fixed `EXPORT_ROW_LIMIT`, `text/csv` + `Content-Disposition`, and the same
+`apiDownload()` Web-Share/WhatsApp path (§8, `modules/admin`). `csvEscape` is
+a third local copy alongside `clients`/`admin` rather than a shared helper —
+the maintainers have kept these per-module.
 
 **Scan log.** `GET /api/admin/scans` + `/admin/scans` records every scan
 ATTEMPT, not just admissions — a DUPLICATE burst at one gate is the

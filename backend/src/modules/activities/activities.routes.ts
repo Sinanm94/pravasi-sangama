@@ -14,8 +14,9 @@ export const activityRoutes: Router = Router();
 
 activityRoutes.use(requireSuperuser);
 
-/* Before /:id, or "assignees" is parsed as an activity id. */
+/* Before /:id, or "assignees" / "export" is parsed as an activity id. */
 activityRoutes.get('/assignees', controller.listAssignees);
+activityRoutes.get('/export', controller.exportActivities);
 
 activityRoutes.get('/', controller.listActivities);
 activityRoutes.post('/', controller.createActivity);

@@ -761,12 +761,17 @@ export interface ActivityRecord {
 
 export interface ActivityListResponse {
   activities: ActivityRecord[];
+  /** Computed over the UNFILTERED set — the cards say "how much is there
+   *  overall", so "12 done" reads the same whichever tab is selected. */
   totals: {
+    /** Every task, open or done — the headline count. */
+    total: number;
+    /** Not done yet (done_at IS NULL). Shown as "Pending". */
     open: number;
     /** due_on is today or earlier and still open. */
     overdue: number;
-    /** Closed within the last 7 days — "what did we get through". */
-    doneRecently: number;
+    /** Done (done_at IS NOT NULL), all-time. */
+    done: number;
   };
 }
 

@@ -102,35 +102,34 @@ export async function listActivities(
 
 export async function summariseActivities(
   filters: ActivityFilters,
-): Promise<{ open: number; overdue: number; doneRecently: number }> {
+): Promise<{ total: number; open: number; overdue: number; done: number }> {
   const { sql, params } = activityWhere(filters);
 
   const { rows } = await query<{
+    total: number;
     open: number;
     overdue: number;
-    donerecently: number;
+    done: number;
   }>(
-    `SELECT COUNT(*) FILTER (WHERE a.done_at IS NULL)::INT AS open,
+    `SELECT COUNT(*)::INT AS total,
+            COUNT(*) FILTER (WHERE a.done_at IS NULL)::INT AS open,
             COUNT(*) FILTER (
               WHERE a.done_at IS NULL
                 AND a.due_on IS NOT NULL
                 AND a.due_on <= CURRENT_DATE
             )::INT AS overdue,
-            COUNT(*) FILTER (
-              WHERE a.done_at >= NOW() - INTERVAL '7 days'
-            )::INT AS doneRecently
+            COUNT(*) FILTER (WHERE a.done_at IS NOT NULL)::INT AS done
        FROM activities a
        ${sql}`,
     params,
   );
 
-  /* pg lowercases unquoted output names, so `doneRecently` arrives as
-   * `donerecently`. Mapped here rather than quoting the alias. */
   const r = rows[0];
   return {
+    total: r?.total ?? 0,
     open: r?.open ?? 0,
     overdue: r?.overdue ?? 0,
-    doneRecently: r?.donerecently ?? 0,
+    done: r?.done ?? 0,
   };
 }
 

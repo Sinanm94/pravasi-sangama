@@ -1,12 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   AlertCircle,
-  CalendarClock,
   CheckCircle2,
   Circle,
+  Download,
   ListTodo,
   Loader2,
   Plus,
@@ -27,12 +28,14 @@ import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import AdminShell, { Card, EmptyState } from '@/components/admin/AdminShell';
 import {
   apiDelete,
+  apiDownload,
   apiGet,
   apiPatch,
   apiPost,
   errorMessage,
 } from '@/lib/apiClient';
 import { useDismissOnBack } from '@/lib/useDismissOnBack';
+import { springSurface } from '@/lib/motion';
 
 const VIOLET = '#5E17EB';
 
@@ -71,6 +74,7 @@ function ActivitiesScreen() {
 
   const [assignees, setAssignees] = useState<Assignee[]>([]);
   const [adding, setAdding] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const id = setTimeout(() => setCommittedSearch(search.trim()), 300);
@@ -123,6 +127,48 @@ function ActivitiesScreen() {
   const reload = () => void load(state, committedSearch, true);
   const totals = data?.totals;
 
+  /* Same filters as the list, same query — the report is exactly the rows on
+   * screen. On a phone the OS share sheet hands the CSV straight to WhatsApp;
+   * on desktop it downloads and opens WhatsApp with the message ready. Mirror
+   * of the Clients tab's Report button. */
+  const downloadReport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (state) params.set('state', state);
+      if (committedSearch) params.set('search', committedSearch);
+      const qs = params.toString();
+
+      const outcome = await apiDownload(
+        `/activities/export${qs ? `?${qs}` : ''}`,
+        {
+          fallbackFilename: 'pravasi-activities-report.csv',
+          shareTitle: 'Pravasi Sangama 2026 — Activities report',
+          shareText: 'Pravasi Sangama 2026 — Activities report',
+          whatsappOnFallback: true,
+        },
+      );
+
+      if (outcome.via === 'share') {
+        toast.success('Report ready', { description: outcome.filename });
+      } else if (outcome.via === 'download') {
+        toast.success('Report downloaded', {
+          description: outcome.whatsappTab
+            ? `${outcome.filename} — attach it in the WhatsApp tab that just opened.`
+            : `${outcome.filename} — check your browser's Downloads.`,
+          duration: 8000,
+        });
+      }
+      // 'cancelled' — the user dismissed the share sheet. Say nothing.
+    } catch (err) {
+      toast.error('Could not download the report', {
+        description: errorMessage(err),
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   /* One helper for every mutation: they all end the same way, and a shared
    * error path means none of them can silently no-op. */
   const mutate = async (fn: () => Promise<unknown>, failure: string) => {
@@ -158,6 +204,19 @@ function ActivitiesScreen() {
           </button>
           <button
             type="button"
+            onClick={() => void downloadReport()}
+            disabled={exporting}
+            className="inline-flex items-center gap-2 rounded-full bg-gray-100 px-4 py-2 text-[13px] font-medium text-gray-600 transition-all duration-200 hover:bg-gray-200/80 hover:text-gray-900 active:scale-[0.97] disabled:opacity-60"
+          >
+            {exporting ? (
+              <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />
+            ) : (
+              <Download className="h-4 w-4" strokeWidth={2.25} />
+            )}
+            Report
+          </button>
+          <button
+            type="button"
             onClick={() => setAdding(true)}
             className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold text-white transition-all duration-200 hover:opacity-90 active:scale-[0.97]"
             style={{ backgroundColor: VIOLET }}
@@ -181,19 +240,23 @@ function ActivitiesScreen() {
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <StatCard icon={ListTodo} label="Open" value={totals?.open} hint="Still to do" />
         <StatCard
-          icon={CalendarClock}
-          label="Overdue"
-          value={totals?.overdue}
-          hint="Due date has passed"
-          urgent
+          icon={ListTodo}
+          label="Total Activities"
+          value={totals?.total}
+          hint="Every task, open or done"
+        />
+        <StatCard
+          icon={Circle}
+          label="Pending"
+          value={totals?.open}
+          hint="Still to do"
         />
         <StatCard
           icon={CheckCircle2}
-          label="Done this week"
-          value={totals?.doneRecently}
-          hint="Closed in the last 7 days"
+          label="Done"
+          value={totals?.done}
+          hint="Completed"
         />
       </div>
 
@@ -658,39 +721,40 @@ function Field({
   );
 }
 
+/** Mirrors the Clients tab's summary card — same surface, type scale and the
+ *  skeleton-then-fade on first load. */
 function StatCard({
   icon: Icon,
   label,
   value,
   hint,
-  urgent,
 }: {
   icon: typeof ListTodo;
   label: string;
   value: number | undefined;
   hint: string;
-  urgent?: boolean;
 }) {
   return (
-    <div className="rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
-      <div className="flex items-start justify-between">
-        <p className="text-[13px] font-medium text-gray-700">{label}</p>
-        <Icon
-          className={`h-[18px] w-[18px] ${
-            urgent && (value ?? 0) > 0 ? 'text-red-500' : 'text-gray-300'
-          }`}
-          strokeWidth={2.25}
-        />
+    <div className="rounded-3xl bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.04]">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[13px] font-medium text-gray-500">{label}</p>
+        <Icon className="h-4 w-4 shrink-0 text-gray-300" strokeWidth={2.25} />
       </div>
-      <p
-        className="mt-2 text-[32px] font-semibold leading-none tracking-[-0.02em]"
-        style={{
-          color: urgent && (value ?? 0) > 0 ? '#dc2626' : VIOLET,
-        }}
-      >
-        {value === undefined ? '—' : value.toLocaleString()}
-      </p>
-      <p className="mt-1.5 text-[12px] text-gray-400">{hint}</p>
+      {value === undefined ? (
+        <div className="mt-4 h-[34px] w-20 animate-pulse rounded-lg bg-gray-100" />
+      ) : (
+        <motion.p
+          key={value}
+          initial={{ opacity: 0.4 }}
+          animate={{ opacity: 1 }}
+          transition={springSurface}
+          className="mt-4 text-[34px] font-semibold leading-none tracking-[-0.02em] tabular-nums"
+          style={{ color: VIOLET }}
+        >
+          {value.toLocaleString()}
+        </motion.p>
+      )}
+      <p className="mt-2.5 text-[12px] text-gray-400">{hint}</p>
     </div>
   );
 }

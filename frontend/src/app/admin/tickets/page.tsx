@@ -172,7 +172,11 @@ function LedgerScreen() {
     try {
       const outcome = await apiDownload(
         `/admin/tickets/export${buildQueryString(filters, committedSearch)}`,
-        'pravasi-tickets-report.csv',
+        {
+          fallbackFilename: 'pravasi-tickets-report.csv',
+          shareTitle: 'Pravasi Sangama 2026 — Ticket ledger',
+          shareText: 'Pravasi Sangama 2026 — Ticket ledger export',
+        },
       );
 
       /* Say where the file went. A silent download is the complaint this

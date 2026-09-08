@@ -102,12 +102,36 @@ export interface DownloadOutcome {
   /** `share` — handed to the OS share sheet. `download` — written to the
    *  browser's download location. `cancelled` — user dismissed the sheet. */
   via: 'share' | 'download' | 'cancelled';
+  /** A WhatsApp share tab was opened alongside a fallback download, so the
+   *  user can attach the file that just landed (see `whatsappOnFallback`). */
+  whatsappTab?: boolean;
+}
+
+export interface ApiDownloadOptions {
+  /** Used only when the response carries no `Content-Disposition` filename. */
+  fallbackFilename: string;
+  /** Title on the OS share sheet. Defaults to the filename. */
+  shareTitle?: string;
+  /** Message on the OS share sheet, and — when the sheet is unavailable —
+   *  the text pre-filled into the WhatsApp tab. */
+  shareText?: string;
+  /**
+   * When the OS share sheet cannot take a file — desktop has none, and iOS
+   * refuses some types — download the file and open WhatsApp with the
+   * message pre-filled so the user attaches it themselves. `wa.me` takes
+   * text only, never a file; this is the same two-step `ShareTicketModal`
+   * uses for the ticket image on desktop.
+   */
+  whatsappOnFallback?: boolean;
 }
 
 export async function apiDownload(
   path: string,
-  fallbackFilename: string,
+  options: ApiDownloadOptions,
 ): Promise<DownloadOutcome> {
+  const { fallbackFilename, shareTitle, shareText, whatsappOnFallback } =
+    options;
+
   let res: Response;
   try {
     res = await fetch(`${API_BASE}${path}`, { credentials: 'include' });
@@ -153,8 +177,8 @@ export async function apiDownload(
     try {
       await navigator.share({
         files: [file],
-        title: filename,
-        text: 'Pravasi Sangama ticket report',
+        title: shareTitle ?? filename,
+        ...(shareText ? { text: shareText } : {}),
       });
       return { filename, via: 'share' };
     } catch (err) {
@@ -178,7 +202,22 @@ export async function apiDownload(
   link.remove();
   URL.revokeObjectURL(objectUrl);
 
-  return { filename, via: 'download' };
+  /* Desktop has no file share sheet and no way to attach a file to a wa.me
+   * link. Open WhatsApp (Web on desktop, the app on mobile) with the message
+   * pre-filled so the user attaches the file that just downloaded — clunky,
+   * but the only path that exists off a phone. `wa.me/?text=` with no number
+   * lets them pick any chat or group, which is the point here. */
+  let whatsappTab = false;
+  if (whatsappOnFallback && typeof window !== 'undefined') {
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(shareText ?? filename)}`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+    whatsappTab = true;
+  }
+
+  return { filename, via: 'download', whatsappTab };
 }
 
 /** Message for a toast. Never assume the caller checked the type. */

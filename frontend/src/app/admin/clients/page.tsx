@@ -254,21 +254,29 @@ function ClientsScreen() {
       if (sector) params.set('sector', sector);
       const qs = params.toString();
 
-      const outcome = await apiDownload(
-        `/clients/export${qs ? `?${qs}` : ''}`,
-        'pravasi-clients-report.csv',
-      );
+      const outcome = await apiDownload(`/clients/export${qs ? `?${qs}` : ''}`, {
+        fallbackFilename: 'pravasi-clients-report.csv',
+        shareTitle: 'Pravasi Sangama 2026 — Clients report',
+        shareText: 'Pravasi Sangama 2026 — Clients report',
+        /* Field admins send these into WhatsApp groups from their phones —
+         * the OS share sheet does that directly; on desktop we open WhatsApp
+         * with the message ready and the file freshly downloaded to attach. */
+        whatsappOnFallback: true,
+      });
 
       /* Name the file and say where it went — a silent download on a phone
        * lands somewhere the person then has to go hunting for. */
-      if (outcome.via === 'download') {
+      if (outcome.via === 'share') {
+        toast.success('Report ready', { description: outcome.filename });
+      } else if (outcome.via === 'download') {
         toast.success('Report downloaded', {
-          description: `${outcome.filename} — check your browser's Downloads.`,
+          description: outcome.whatsappTab
+            ? `${outcome.filename} — attach it in the WhatsApp tab that just opened.`
+            : `${outcome.filename} — check your browser's Downloads.`,
           duration: 8000,
         });
-      } else if (outcome.via === 'share') {
-        toast.success('Report ready', { description: outcome.filename });
       }
+      // 'cancelled' — the user dismissed the share sheet. Say nothing.
     } catch (err) {
       toast.error('Could not download the report', {
         description: errorMessage(err),
